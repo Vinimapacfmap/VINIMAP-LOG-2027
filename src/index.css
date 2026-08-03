@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "leaflet/dist/leaflet.css";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* Custom modern scrollbars for tables & data containers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Smooth transition animation for Leaflet markers (gliding movement between coordinates) */
+.leaflet-marker-icon,
+.custom-rider-icon,
+.custom-rider-icon-leaflet {
+  transition: transform 0.85s cubic-bezier(0.25, 1, 0.5, 1), left 0.85s cubic-bezier(0.25, 1, 0.5, 1), top 0.85s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+/* Disable transitions during map zoom or pan animations to prevent map rendering glitches */
+.leaflet-zoom-anim .leaflet-marker-icon,
+.leaflet-pan-anim .leaflet-marker-icon,
+.leaflet-zoom-anim .custom-rider-icon,
+.leaflet-zoom-anim .custom-rider-icon-leaflet {
+  transition: none !important;
+}
