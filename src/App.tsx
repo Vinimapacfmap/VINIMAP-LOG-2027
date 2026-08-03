@@ -49,6 +49,7 @@ import { RevenueByPartnerChart } from './components/RevenueByPartnerChart';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from './data/financialMock';
 import { AdminLogin } from './components/AdminLogin';
 import { supabase, isSupabaseConfigured } from './supabase';
+import { fetchAllStateFromSupabase } from './lib/supabaseService';
 import { FinancialTransaction } from './types';
 
 import { onSnapshot, collection } from 'firebase/firestore';
@@ -74,7 +75,8 @@ import {
   dbSaveCompanyHub,
   dbDeleteCompanyHub,
   INITIAL_COMPANY_HUBS,
-  dbApplyLoadedState
+  dbApplyLoadedState,
+  getIsFirestoreQuotaExceeded
 } from './lib/dbService';
 
 import { 
@@ -510,15 +512,72 @@ export default function App() {
     listenerCleanupRegistry.current.clear();
   }, []);
 
-  // Synchronize with Firestore in real-time
+  // Synchronize with Firestore / Supabase / Local Storage
   useEffect(() => {
+    let isCancelled = false;
+
+    const loadFallbackData = async () => {
+      if (isCancelled) return;
+      // 1. Try loading from Supabase if configured
+      if (isSupabaseConfigured) {
+        try {
+          const sbState = await fetchAllStateFromSupabase();
+          if (isCancelled) return;
+          if (sbState.orders && sbState.orders.length > 0) setOrders(sbState.orders);
+          if (sbState.clients && sbState.clients.length > 0) setClientPartners(sbState.clients);
+          if (sbState.riders && sbState.riders.length > 0) setRiders(sbState.riders);
+          if (sbState.logs && sbState.logs.length > 0) setLogs(sbState.logs);
+          if (sbState.txs && sbState.txs.length > 0) setFinancialTransactions(sbState.txs);
+          if (sbState.hubs && sbState.hubs.length > 0) setCompanyHubs(sbState.hubs);
+          console.log('[Supabase Sync] Dados carregados do Supabase com sucesso.');
+          return;
+        } catch (e) {
+          console.warn('Could not load fallback state from Supabase:', e);
+        }
+      }
+
+      // 2. Try loading from Local Storage contingency backup
+      try {
+        const storedBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+        if (storedBackup) {
+          const parsed = JSON.parse(storedBackup);
+          if (isCancelled) return;
+          if (parsed.orders && parsed.orders.length > 0) setOrders(parsed.orders);
+          if (parsed.clientPartners && parsed.clientPartners.length > 0) setClientPartners(parsed.clientPartners);
+          if (parsed.deliveryRiders && parsed.deliveryRiders.length > 0) setRiders(parsed.deliveryRiders);
+          if (parsed.financialTransactions && parsed.financialTransactions.length > 0) setFinancialTransactions(parsed.financialTransactions);
+          if (parsed.companyHubs && parsed.companyHubs.length > 0) setCompanyHubs(parsed.companyHubs);
+          console.log('[Local Storage Contingency] Dados de contingência locais restaurados.');
+          return;
+        }
+      } catch (e) {
+        console.warn('Could not load localStorage contingency backup:', e);
+      }
+
+      // 3. Fallback to initial mock data if React state is empty
+      if (isCancelled) return;
+      setOrders(prev => prev.length === 0 ? INITIAL_ORDERS : prev);
+      setClientPartners(prev => prev.length === 0 ? INITIAL_CLIENT_PARTNERS : prev);
+      setRiders(prev => prev.length === 0 ? INITIAL_RIDERS : prev);
+      setLogs(prev => prev.length === 0 ? INITIAL_LOGS : prev);
+      setFinancialTransactions(prev => prev.length === 0 ? INITIAL_FINANCIAL_TRANSACTIONS : prev);
+      setCompanyHubs(prev => prev.length === 0 ? INITIAL_COMPANY_HUBS : prev);
+    };
+
     // 1. Ensure any stale or previous listeners are actively cleaned up
     cleanupAllFirestoreListeners();
 
-    // 2. Seed if empty
+    // 2. If quota is already known to be exceeded, skip Firestore listeners and load fallback
+    if (getIsFirestoreQuotaExceeded()) {
+      console.warn('Quota diária do Firestore atingida. Alternando automaticamente para modo Supabase e Local.');
+      loadFallbackData();
+      return () => { isCancelled = true; };
+    }
+
+    // 3. Seed if empty
     seedInitialDataIfEmpty(orders);
 
-    // 3. Setup real-time listeners with registered tracking wrappers
+    // 4. Setup real-time listeners with registered tracking wrappers
     const unsubOrders = registerSnapshotListener(
       onSnapshot(collection(db, 'orders'), (snapshot) => {
         const docs: Order[] = [];
@@ -528,6 +587,7 @@ export default function App() {
         setOrders(docs);
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'orders');
+        loadFallbackData();
       })
     );
 
@@ -540,6 +600,7 @@ export default function App() {
         setClientPartners(docs);
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'clientPartners');
+        loadFallbackData();
       })
     );
 
@@ -552,6 +613,7 @@ export default function App() {
         setRiders(docs);
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'deliveryRiders');
+        loadFallbackData();
       })
     );
 
@@ -565,6 +627,7 @@ export default function App() {
         setLogs(docs);
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'activityLogs');
+        loadFallbackData();
       })
     );
 
@@ -577,6 +640,7 @@ export default function App() {
         setFinancialTransactions(docs);
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'financialTransactions');
+        loadFallbackData();
       })
     );
 
@@ -608,6 +672,7 @@ export default function App() {
         }
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'companyHubs');
+        loadFallbackData();
       })
     );
 
@@ -619,6 +684,7 @@ export default function App() {
     window.addEventListener('pagehide', handleUnloadOrHide);
 
     return () => {
+      isCancelled = true;
       window.removeEventListener('beforeunload', handleUnloadOrHide);
       window.removeEventListener('pagehide', handleUnloadOrHide);
       unsubOrders();

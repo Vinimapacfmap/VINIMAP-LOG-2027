@@ -256,8 +256,42 @@ export interface FirestoreErrorInfo {
   }
 }
 
+export function isQuotaError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code;
+  return (
+    code === 'resource-exhausted' ||
+    msg.includes('resource-exhausted') ||
+    msg.includes('Quota limit exceeded') ||
+    msg.includes('quota metric') ||
+    msg.includes('Free daily write units per project') ||
+    msg.includes('Free daily read units per project')
+  );
+}
+
+let isFirestoreQuotaExceededState = false;
+
+export function getIsFirestoreQuotaExceeded(): boolean {
+  if (isFirestoreQuotaExceededState) return true;
+  if (typeof window !== 'undefined') {
+    return window.sessionStorage.getItem('firestore_quota_exceeded') === 'true';
+  }
+  return false;
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): void {
   const errMessage = error instanceof Error ? error.message : String(error);
+  if (isQuotaError(error)) {
+    isFirestoreQuotaExceededState = true;
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.setItem('firestore_quota_exceeded', 'true');
+      } catch (_) {}
+    }
+    console.warn(`Firestore quota reached [${operationType}] on "${path}". Operating in Local Storage & Supabase mode.`);
+    return;
+  }
   const errInfo: FirestoreErrorInfo = {
     error: errMessage,
     authInfo: {
@@ -279,6 +313,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Helper functions for seeding
 export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force: boolean = false) {
+  if (getIsFirestoreQuotaExceeded()) {
+    console.log('Quota diária do Firestore excedida. Pulando restauração remota do Firestore.');
+    return;
+  }
   try {
     // Check local storage flag first to avoid unnecessary remote checks when purged
     if (!force && typeof window !== 'undefined' && window.localStorage.getItem('system_purged') === 'true') {
@@ -306,6 +344,10 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
           }
         }
       } catch (err) {
+        if (isQuotaError(err)) {
+          handleFirestoreError(err, OperationType.GET, 'systemConfig/state');
+          return;
+        }
         console.warn('Could not check systemConfig/state:', err);
         return;
       }
@@ -314,7 +356,14 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem('system_purged');
       }
-      await setDoc(stateDocRef, { initialized: true, purged: false, updatedAt: new Date().toISOString() });
+      try {
+        await setDoc(stateDocRef, { initialized: true, purged: false, updatedAt: new Date().toISOString() });
+      } catch (e) {
+        if (isQuotaError(e)) {
+          handleFirestoreError(e, OperationType.WRITE, 'systemConfig/state');
+          return;
+        }
+      }
     }
 
     // Mark as initialized in Firestore if stateDoc didn't exist yet
@@ -518,70 +567,74 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
 
 // Order CRUD operations
 export async function dbSaveOrder(order: Order) {
+  // 1. Always save to Supabase independently
   try {
-    const cleanedPayload = removeUndefinedFields(order);
-    console.log(`[dbSaveOrder BEFORE SAVE] Order #${order.id} payload:`, {
-      orderId: order.id,
-      status: order.status,
-      protocolNumber: order.protocolNumber || null,
-      recipientName: order.recipientName || null,
-      recipientDoc: order.recipientDoc || null,
-      hasSignatureUrl: !!order.signatureUrl,
-      signatureUrlLength: order.signatureUrl?.length || 0,
-      signaturePreview: order.signatureUrl ? (order.signatureUrl.length > 50 ? order.signatureUrl.substring(0, 50) + '...' : order.signatureUrl) : null,
-      hasDeliveryPhotoUrl: !!order.deliveryPhotoUrl,
-      deliveryPhotoUrlLength: order.deliveryPhotoUrl?.length || 0,
-      deliveryPhotoPreview: order.deliveryPhotoUrl ? (order.deliveryPhotoUrl.length > 50 ? order.deliveryPhotoUrl.substring(0, 50) + '...' : order.deliveryPhotoUrl) : null,
-      deliveryDate: order.deliveryDate || null,
-      deliveryTime: order.deliveryTime || null
-    });
-
-    await setDoc(doc(db, 'orders', order.id), cleanedPayload);
-    await sbSaveOrder(order).catch(err => console.warn('Supabase save order error:', err));
-
-    console.log(`[dbSaveOrder AFTER SAVE SUCCESS] Order #${order.id} successfully written to Firestore.`);
+    await sbSaveOrder(order);
   } catch (err) {
-    console.error(`[dbSaveOrder ERROR] Failed to write Order #${order.id} to Firestore:`, err);
-    handleFirestoreError(err, OperationType.WRITE, `orders/${order.id}`);
+    console.warn('Supabase save order warning:', err);
+  }
+
+  // 2. Save to Firestore if quota is not exceeded
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      const cleanedPayload = removeUndefinedFields(order);
+      await setDoc(doc(db, 'orders', order.id), cleanedPayload);
+      console.log(`[dbSaveOrder SUCCESS] Order #${order.id} written to Firestore.`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `orders/${order.id}`);
+    }
   }
 }
 
 export async function dbDeleteOrder(orderId: string) {
   try {
-    await deleteDoc(doc(db, 'orders', orderId));
-    await sbDeleteOrder(orderId).catch(err => console.warn('Supabase delete order error:', err));
+    await sbDeleteOrder(orderId);
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `orders/${orderId}`);
+    console.warn('Supabase delete order warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await deleteDoc(doc(db, 'orders', orderId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `orders/${orderId}`);
+    }
   }
 }
 
 export async function dbBulkSaveOrders(orders: Order[]) {
-  try {
-    const batch = writeBatch(db);
-    orders.forEach(order => {
-      batch.set(doc(db, 'orders', order.id), removeUndefinedFields(order));
-    });
-    await batch.commit();
-    for (const order of orders) {
-      await sbSaveOrder(order).catch(err => console.warn('Supabase bulk save order error:', err));
+  for (const order of orders) {
+    await sbSaveOrder(order).catch(err => console.warn('Supabase bulk save order error:', err));
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      const batch = writeBatch(db);
+      orders.forEach(order => {
+        batch.set(doc(db, 'orders', order.id), removeUndefinedFields(order));
+      });
+      await batch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'orders');
     }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'orders');
   }
 }
 
 export async function dbBulkDeleteOrders(orderIds: string[]) {
-  try {
-    const batch = writeBatch(db);
-    orderIds.forEach(id => {
-      batch.delete(doc(db, 'orders', id));
-    });
-    await batch.commit();
-    for (const id of orderIds) {
-      await sbDeleteOrder(id).catch(err => console.warn('Supabase bulk delete order error:', err));
+  for (const id of orderIds) {
+    await sbDeleteOrder(id).catch(err => console.warn('Supabase bulk delete order error:', err));
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      const batch = writeBatch(db);
+      orderIds.forEach(id => {
+        batch.delete(doc(db, 'orders', id));
+      });
+      await batch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'orders');
     }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, 'orders');
   }
 }
 
@@ -645,19 +698,33 @@ export async function dbQueryOrdersByPartner(partnerName: string, maxLimit = 100
 // Client CRUD operations
 export async function dbSaveClientPartner(client: ClientPartner) {
   try {
-    await setDoc(doc(db, 'clientPartners', client.id), removeUndefinedFields(client));
-    await sbSaveClientPartner(client).catch(err => console.warn('Supabase save client error:', err));
+    await sbSaveClientPartner(client);
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `clientPartners/${client.id}`);
+    console.warn('Supabase save client warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await setDoc(doc(db, 'clientPartners', client.id), removeUndefinedFields(client));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `clientPartners/${client.id}`);
+    }
   }
 }
 
 export async function dbDeleteClientPartner(clientId: string) {
   try {
-    await deleteDoc(doc(db, 'clientPartners', clientId));
-    await sbDeleteClientPartner(clientId).catch(err => console.warn('Supabase delete client error:', err));
+    await sbDeleteClientPartner(clientId);
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `clientPartners/${clientId}`);
+    console.warn('Supabase delete client warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await deleteDoc(doc(db, 'clientPartners', clientId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `clientPartners/${clientId}`);
+    }
   }
 }
 
@@ -667,6 +734,7 @@ export async function validateRiderDeviceSession(
   riderId: string,
   currentDeviceId: string
 ): Promise<{ allowed: boolean; activeRiderName?: string; reason?: string }> {
+  if (getIsFirestoreQuotaExceeded()) return { allowed: true };
   try {
     if (!inputDeviceOrPhone) return { allowed: true };
     const cleanInput = inputDeviceOrPhone.trim().toLowerCase();
@@ -701,61 +769,82 @@ export async function dbSaveDeliveryRider(
   rider: DeliveryRider,
   options?: { checkDeviceSession?: boolean; currentDeviceId?: string }
 ) {
-  try {
-    if (options?.checkDeviceSession && rider.isLoggedIn && options.currentDeviceId) {
-      const deviceCheck = await validateRiderDeviceSession(
-        rider.deviceNumber || rider.phone,
-        rider.id,
-        options.currentDeviceId
-      );
-      if (!deviceCheck.allowed) {
-        const error = new Error('Dispositivo já logado');
-        (error as any).code = 'DEVICE_ALREADY_LOGGED_IN';
-        throw error;
-      }
+  if (options?.checkDeviceSession && rider.isLoggedIn && options.currentDeviceId) {
+    const deviceCheck = await validateRiderDeviceSession(
+      rider.deviceNumber || rider.phone,
+      rider.id,
+      options.currentDeviceId
+    );
+    if (!deviceCheck.allowed) {
+      const error = new Error('Dispositivo já logado');
+      (error as any).code = 'DEVICE_ALREADY_LOGGED_IN';
+      throw error;
     }
+  }
 
-    await setDoc(doc(db, 'deliveryRiders', rider.id), removeUndefinedFields(rider));
-    await sbSaveDeliveryRider(rider).catch(err => console.warn('Supabase save rider error:', err));
+  try {
+    await sbSaveDeliveryRider(rider);
   } catch (err) {
-    if ((err as any)?.code === 'DEVICE_ALREADY_LOGGED_IN' || (err as any)?.message === 'Dispositivo já logado') {
-      throw err;
+    console.warn('Supabase save rider warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await setDoc(doc(db, 'deliveryRiders', rider.id), removeUndefinedFields(rider));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `deliveryRiders/${rider.id}`);
     }
-    handleFirestoreError(err, OperationType.WRITE, `deliveryRiders/${rider.id}`);
   }
 }
 
 export async function dbDeleteDeliveryRider(riderId: string) {
   try {
-    await deleteDoc(doc(db, 'deliveryRiders', riderId));
-    await sbDeleteDeliveryRider(riderId).catch(err => console.warn('Supabase delete rider error:', err));
+    await sbDeleteDeliveryRider(riderId);
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `deliveryRiders/${riderId}`);
+    console.warn('Supabase delete rider warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await deleteDoc(doc(db, 'deliveryRiders', riderId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `deliveryRiders/${riderId}`);
+    }
   }
 }
 
 // Activity Log operations
 export async function dbAddActivityLog(log: ActivityLog) {
   try {
-    await setDoc(doc(db, 'activityLogs', log.id), removeUndefinedFields(log));
-    await sbAddActivityLog(log).catch(err => console.warn('Supabase save log error:', err));
+    await sbAddActivityLog(log);
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `activityLogs/${log.id}`);
+    console.warn('Supabase save log warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await setDoc(doc(db, 'activityLogs', log.id), removeUndefinedFields(log));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activityLogs/${log.id}`);
+    }
   }
 }
 
 export async function dbBulkSaveActivityLogs(logs: ActivityLog[]) {
-  try {
-    const batch = writeBatch(db);
-    logs.forEach(log => {
-      batch.set(doc(db, 'activityLogs', log.id), removeUndefinedFields(log));
-    });
-    await batch.commit();
-    for (const log of logs) {
-      await sbAddActivityLog(log).catch(err => console.warn('Supabase save log error:', err));
+  for (const log of logs) {
+    await sbAddActivityLog(log).catch(err => console.warn('Supabase save log error:', err));
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      const batch = writeBatch(db);
+      logs.forEach(log => {
+        batch.set(doc(db, 'activityLogs', log.id), removeUndefinedFields(log));
+      });
+      await batch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'activityLogs');
     }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'activityLogs');
   }
 }
 
@@ -793,19 +882,33 @@ export async function dbQueryRecentLogs(maxLimit = 50): Promise<ActivityLog[]> {
 // Financial Transaction operations
 export async function dbSaveFinancialTransaction(tx: FinancialTransaction) {
   try {
-    await setDoc(doc(db, 'financialTransactions', tx.id), removeUndefinedFields(tx));
-    await sbSaveFinancialTransaction(tx).catch(err => console.warn('Supabase save transaction error:', err));
+    await sbSaveFinancialTransaction(tx);
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `financialTransactions/${tx.id}`);
+    console.warn('Supabase save transaction warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await setDoc(doc(db, 'financialTransactions', tx.id), removeUndefinedFields(tx));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `financialTransactions/${tx.id}`);
+    }
   }
 }
 
 export async function dbDeleteFinancialTransaction(txId: string) {
   try {
-    await deleteDoc(doc(db, 'financialTransactions', txId));
-    await sbDeleteFinancialTransaction(txId).catch(err => console.warn('Supabase delete transaction error:', err));
+    await sbDeleteFinancialTransaction(txId);
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `financialTransactions/${txId}`);
+    console.warn('Supabase delete transaction warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await deleteDoc(doc(db, 'financialTransactions', txId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `financialTransactions/${txId}`);
+    }
   }
 }
 
@@ -827,19 +930,33 @@ export const INITIAL_COMPANY_HUBS: CompanyHub[] = [
 
 export async function dbSaveCompanyHub(hub: CompanyHub) {
   try {
-    await setDoc(doc(db, 'companyHubs', hub.id), removeUndefinedFields(hub));
-    await sbSaveCompanyHub(hub).catch(err => console.warn('Supabase save hub error:', err));
+    await sbSaveCompanyHub(hub);
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `companyHubs/${hub.id}`);
+    console.warn('Supabase save hub warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await setDoc(doc(db, 'companyHubs', hub.id), removeUndefinedFields(hub));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `companyHubs/${hub.id}`);
+    }
   }
 }
 
 export async function dbDeleteCompanyHub(hubId: string) {
   try {
-    await deleteDoc(doc(db, 'companyHubs', hubId));
-    await sbDeleteCompanyHub(hubId).catch(err => console.warn('Supabase delete hub error:', err));
+    await sbDeleteCompanyHub(hubId);
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `companyHubs/${hubId}`);
+    console.warn('Supabase delete hub warning:', err);
+  }
+
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await deleteDoc(doc(db, 'companyHubs', hubId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `companyHubs/${hubId}`);
+    }
   }
 }
 
