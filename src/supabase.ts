@@ -24,33 +24,52 @@ function isValidHttpUrl(urlString?: string | null): boolean {
   }
 }
 
+function isValidAnonKey(key?: string | null): boolean {
+  if (!key || typeof key !== 'string') return false;
+  const trimmed = key.trim();
+  return (
+    trimmed !== '' &&
+    trimmed !== 'undefined' &&
+    trimmed !== 'null' &&
+    !trimmed.includes('your-anon-key') &&
+    !trimmed.includes('YOUR_SUPABASE') &&
+    !trimmed.includes('placeholder')
+  );
+}
+
 // Retrieve environment variables safely across environments (Node process.env, Vite import.meta.env, window.localStorage)
 const getRawSupabaseUrl = (): string => {
-  if (typeof process !== 'undefined' && process.env && process.env.SUPABASE_URL) {
-    return process.env.SUPABASE_URL;
-  }
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL) {
-    return (import.meta as any).env.VITE_SUPABASE_URL;
-  }
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      return localStorage.getItem('SUPABASE_URL') || '';
+      const stored = localStorage.getItem('SUPABASE_URL');
+      if (stored && isValidHttpUrl(stored)) {
+        return stored.trim();
+      }
     } catch (_) {}
+  }
+  if (typeof process !== 'undefined' && process.env && process.env.SUPABASE_URL && isValidHttpUrl(process.env.SUPABASE_URL)) {
+    return process.env.SUPABASE_URL.trim();
+  }
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL && isValidHttpUrl((import.meta as any).env.VITE_SUPABASE_URL)) {
+    return (import.meta as any).env.VITE_SUPABASE_URL.trim();
   }
   return '';
 };
 
 const getRawSupabaseKey = (): string => {
-  if (typeof process !== 'undefined' && process.env && process.env.SUPABASE_ANON_KEY) {
-    return process.env.SUPABASE_ANON_KEY;
-  }
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_ANON_KEY) {
-    return (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
-  }
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      return localStorage.getItem('SUPABASE_ANON_KEY') || '';
+      const stored = localStorage.getItem('SUPABASE_ANON_KEY');
+      if (stored && isValidAnonKey(stored)) {
+        return stored.trim();
+      }
     } catch (_) {}
+  }
+  if (typeof process !== 'undefined' && process.env && process.env.SUPABASE_ANON_KEY && isValidAnonKey(process.env.SUPABASE_ANON_KEY)) {
+    return process.env.SUPABASE_ANON_KEY.trim();
+  }
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_ANON_KEY && isValidAnonKey((import.meta as any).env.VITE_SUPABASE_ANON_KEY)) {
+    return (import.meta as any).env.VITE_SUPABASE_ANON_KEY.trim();
   }
   return '';
 };

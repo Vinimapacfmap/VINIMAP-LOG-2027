@@ -108,15 +108,15 @@ export default function SupabasePanel({
         return;
       }
 
-      // Query table 'company_hubs' to test table & API access
-      const { data, error } = await testClient.from('company_hubs').select('id').limit(1);
+      // Query table 'orders' (tabela de pedidos) to test table, API access, and RLS permissions
+      const { data, error } = await testClient.from('orders').select('id, client_name, status').limit(1);
 
       if (!error) {
         setTestDiagnostic({
           status: 'success',
-          title: 'Conexão Supabase Estabelecida com Sucesso!',
-          message: 'O banco de dados respondeu perfeitamente e as tabelas do ViniMap foram encontradas.',
-          actionHint: 'Sua integração está pronta! Salve as configurações para ativar o sincronismo.'
+          title: 'Conexão e Permissões RLS Validadas na Tabela de Pedidos (orders)!',
+          message: `A consulta simples na tabela de pedidos foi concluída com sucesso (${data?.length ?? 0} registros lidos). Suas credenciais e permissões de RLS estão 100% corretas.`,
+          actionHint: 'Sua integração com o Supabase está pronta para uso! Salve as configurações para ativar o sincronismo.'
         });
       } else {
         const errMsg = error.message || String(error);
@@ -128,16 +128,16 @@ export default function SupabasePanel({
         ) {
           setTestDiagnostic({
             status: 'warning',
-            title: 'Credenciais Válidas! Tabelas Ainda Não Criadas',
-            message: 'O servidor do Supabase respondeu com sucesso, mas as tabelas do ViniMap ainda não foram criadas no PostgreSQL.',
-            actionHint: 'Copie o código SQL ao lado e cole no "SQL Editor" do seu Supabase para criar as tabelas com 1 clique.'
+            title: 'Credenciais Válidas! Tabela de Pedidos (orders) Não Criada',
+            message: 'O servidor do Supabase respondeu com sucesso, mas a tabela "orders" ainda não existe no seu banco PostgreSQL.',
+            actionHint: 'Copie o código SQL ao lado e cole no "SQL Editor" do seu Supabase para criar a tabela de pedidos e demais tabelas.'
           });
         } else if (errMsg.includes('row-level security') || errMsg.includes('RLS') || error.code === '42501') {
           setTestDiagnostic({
             status: 'warning',
-            title: 'Regras de Segurança (RLS) Bloqueando Acesso',
-            message: 'Conexão efetuada, mas as tabelas estão com RLS ativado bloqueando leitura/escrita anônima.',
-            actionHint: 'Copie e execute o código SQL ao lado no SQL Editor para desabilitar o RLS e autorizar o sincronismo.'
+            title: 'Regras de Segurança (RLS) Bloqueando Acesso em "orders"',
+            message: 'A conexão foi aceita, porém o RLS (Row Level Security) está ativo e bloqueou a leitura da tabela de pedidos.',
+            actionHint: 'Copie e execute a instrução SQL "ALTER TABLE orders DISABLE ROW LEVEL SECURITY;" ou configure a política de leitura no Supabase.'
           });
         } else if (errMsg.includes('JWT') || errMsg.includes('API key') || error.code === 'PGRST301') {
           setTestDiagnostic({
@@ -149,9 +149,9 @@ export default function SupabasePanel({
         } else {
           setTestDiagnostic({
             status: 'error',
-            title: 'Erro de Resposta do Supabase',
-            message: `O servidor retornou: ${errMsg}`,
-            actionHint: 'Confirme se a URL corresponde exatamente ao projeto no seu painel Supabase.'
+            title: 'Erro de Resposta da Tabela de Pedidos (orders)',
+            message: `O Supabase retornou o seguinte erro ao consultar "orders": ${errMsg}`,
+            actionHint: 'Confirme se a URL e as permissões de acesso da tabela de pedidos estão corretas.'
           });
         }
       }
@@ -166,12 +166,14 @@ export default function SupabasePanel({
     }
   };
 
-  const handleSaveConfig = () => {
-    if (inputUrl && inputKey) {
-      const trimmedUrl = inputUrl.trim();
-      const trimmedKey = inputKey.trim();
+  const handleSaveConfig = (urlToSave?: string, keyToSave?: string) => {
+    setErrorMsg(null);
+    const targetUrl = (urlToSave !== undefined ? urlToSave : inputUrl).trim();
+    const targetKey = (keyToSave !== undefined ? keyToSave : inputKey).trim();
+
+    if (targetUrl && targetKey) {
       try {
-        const parsed = new URL(trimmedUrl);
+        const parsed = new URL(targetUrl);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
           setErrorMsg('A URL do Supabase deve ser um endereço válido iniciado por http:// ou https://');
           return;
@@ -181,8 +183,8 @@ export default function SupabasePanel({
         return;
       }
 
-      localStorage.setItem('SUPABASE_URL', trimmedUrl);
-      localStorage.setItem('SUPABASE_ANON_KEY', trimmedKey);
+      localStorage.setItem('SUPABASE_URL', targetUrl);
+      localStorage.setItem('SUPABASE_ANON_KEY', targetKey);
     } else {
       localStorage.removeItem('SUPABASE_URL');
       localStorage.removeItem('SUPABASE_ANON_KEY');
@@ -449,10 +451,24 @@ NOTIFY pgrst, 'reload schema';`;
             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-tight ${
               isSupabaseConfigured 
                 ? 'bg-emerald-50 text-emerald-600' 
+                : testDiagnostic?.status === 'success'
+                ? 'bg-blue-50 text-blue-700 border border-blue-200'
                 : 'bg-amber-50 text-amber-600'
             }`}>
-              <span className={`w-2 h-2 rounded-full ${isSupabaseConfigured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></span>
-              <span>{isSupabaseConfigured ? 'CONECTADO / CONFIGURADO' : 'AGUARDANDO CONFIGURAÇÃO'}</span>
+              <span className={`w-2 h-2 rounded-full ${
+                isSupabaseConfigured 
+                  ? 'bg-emerald-500 animate-pulse' 
+                  : testDiagnostic?.status === 'success'
+                  ? 'bg-blue-600 animate-bounce'
+                  : 'bg-amber-400'
+              }`}></span>
+              <span>
+                {isSupabaseConfigured 
+                  ? 'CONECTADO / CONFIGURADO' 
+                  : testDiagnostic?.status === 'success'
+                  ? 'TESTADO COM SUCESSO — PENDENTE DE SALVAR'
+                  : 'AGUARDANDO CONFIGURAÇÃO'}
+              </span>
             </div>
           </div>
 
@@ -525,11 +541,41 @@ NOTIFY pgrst, 'reload schema';`;
                 </div>
                 <p className="leading-relaxed">{testDiagnostic.message}</p>
                 {testDiagnostic.actionHint && (
-                  <div className="mt-2 pt-2 border-t border-black/10 font-medium text-[11px] flex items-center gap-1.5">
-                    <Info size={13} className="shrink-0" />
-                    <span><b>Ação Recomendada:</b> {testDiagnostic.actionHint}</span>
+                  <div className="mt-2 pt-2 border-t border-black/10 font-medium text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Info size={13} className="shrink-0" />
+                      <span><b>Ação Recomendada:</b> {testDiagnostic.actionHint}</span>
+                    </div>
+
+                    {testDiagnostic.status === 'success' && (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveConfig(inputUrl, inputKey)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-lg shadow-sm flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition-all"
+                      >
+                        <CheckCircle2 size={14} />
+                        <span>Salvar Credenciais e Ativar Agora</span>
+                      </button>
+                    )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Error Message Box */}
+            {errorMsg && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert size={16} className="text-red-600 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setErrorMsg(null)} 
+                  className="text-red-500 hover:text-red-700 font-bold text-xs"
+                >
+                  ✕
+                </button>
               </div>
             )}
 
@@ -544,6 +590,7 @@ NOTIFY pgrst, 'reload schema';`;
                       onChange={e => {
                         setInputUrl(e.target.value);
                         setTestDiagnostic(null);
+                        setErrorMsg(null);
                       }}
                       placeholder="https://xxxxxx.supabase.co"
                       className="w-full bg-white border border-slate-200 text-sm p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
@@ -557,6 +604,7 @@ NOTIFY pgrst, 'reload schema';`;
                       onChange={e => {
                         setInputKey(e.target.value);
                         setTestDiagnostic(null);
+                        setErrorMsg(null);
                       }}
                       placeholder="eyJh..."
                       className="w-full bg-white border border-slate-200 text-sm p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
@@ -573,12 +621,12 @@ NOTIFY pgrst, 'reload schema';`;
                     {testingConn ? (
                       <>
                         <RefreshCw size={13} className="animate-spin" />
-                        <span>Testando Conexão...</span>
+                        <span>Consultando tabela orders...</span>
                       </>
                     ) : (
                       <>
                         <Zap size={13} className="text-amber-400" />
-                        <span>Testar Conexão em Tempo Real</span>
+                        <span>Testar Conexão e RLS (Tabela orders)</span>
                       </>
                     )}
                   </button>
@@ -590,13 +638,14 @@ NOTIFY pgrst, 'reload schema';`;
                         setInputKey(supabaseKey);
                         setIsEditingConfig(false);
                         setTestDiagnostic(null);
+                        setErrorMsg(null);
                       }}
                       className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
                     >
                       Cancelar
                     </button>
                     <button 
-                      onClick={handleSaveConfig}
+                      onClick={() => handleSaveConfig(inputUrl, inputKey)}
                       className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
                     >
                       Salvar e Recarregar
@@ -640,7 +689,7 @@ NOTIFY pgrst, 'reload schema';`;
                     ) : (
                       <Zap size={13} className="text-amber-500" />
                     )}
-                    <span>Testar Conexão Ativa</span>
+                    <span>Testar Conexão e RLS (Tabela orders)</span>
                   </button>
                   <button
                     type="button"
