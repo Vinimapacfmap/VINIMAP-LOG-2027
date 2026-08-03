@@ -66,11 +66,20 @@ const getRawSupabaseUrl = (): string => {
       }
     } catch (_) {}
   }
-  if (typeof process !== 'undefined' && process.env && process.env.SUPABASE_URL && isValidHttpUrl(process.env.SUPABASE_URL)) {
-    return process.env.SUPABASE_URL.trim();
+  const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+  if (metaEnv.VITE_SUPABASE_URL && isValidHttpUrl(metaEnv.VITE_SUPABASE_URL)) {
+    return metaEnv.VITE_SUPABASE_URL.trim();
   }
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL && isValidHttpUrl((import.meta as any).env.VITE_SUPABASE_URL)) {
-    return (import.meta as any).env.VITE_SUPABASE_URL.trim();
+  if (metaEnv.SUPABASE_URL && isValidHttpUrl(metaEnv.SUPABASE_URL)) {
+    return metaEnv.SUPABASE_URL.trim();
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env.VITE_SUPABASE_URL && isValidHttpUrl(process.env.VITE_SUPABASE_URL)) {
+      return process.env.VITE_SUPABASE_URL.trim();
+    }
+    if (process.env.SUPABASE_URL && isValidHttpUrl(process.env.SUPABASE_URL)) {
+      return process.env.SUPABASE_URL.trim();
+    }
   }
   return '';
 };
@@ -84,11 +93,20 @@ const getRawSupabaseKey = (): string => {
       }
     } catch (_) {}
   }
-  if (typeof process !== 'undefined' && process.env && process.env.SUPABASE_ANON_KEY && isValidAnonKey(process.env.SUPABASE_ANON_KEY)) {
-    return process.env.SUPABASE_ANON_KEY.trim();
+  const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+  if (metaEnv.VITE_SUPABASE_ANON_KEY && isValidAnonKey(metaEnv.VITE_SUPABASE_ANON_KEY)) {
+    return metaEnv.VITE_SUPABASE_ANON_KEY.trim();
   }
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_ANON_KEY && isValidAnonKey((import.meta as any).env.VITE_SUPABASE_ANON_KEY)) {
-    return (import.meta as any).env.VITE_SUPABASE_ANON_KEY.trim();
+  if (metaEnv.SUPABASE_ANON_KEY && isValidAnonKey(metaEnv.SUPABASE_ANON_KEY)) {
+    return metaEnv.SUPABASE_ANON_KEY.trim();
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env.VITE_SUPABASE_ANON_KEY && isValidAnonKey(process.env.VITE_SUPABASE_ANON_KEY)) {
+      return process.env.VITE_SUPABASE_ANON_KEY.trim();
+    }
+    if (process.env.SUPABASE_ANON_KEY && isValidAnonKey(process.env.SUPABASE_ANON_KEY)) {
+      return process.env.SUPABASE_ANON_KEY.trim();
+    }
   }
   return '';
 };
@@ -101,6 +119,58 @@ export const supabaseAnonKey = (rawAnonKey && rawAnonKey !== 'undefined' && rawA
 
 // Check if valid keys are configured
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+export function getSupabaseConfig() {
+  return {
+    url: supabaseUrl,
+    key: supabaseAnonKey,
+  };
+}
+
+export async function testSupabaseConnection(): Promise<{ success: boolean; message: string }> {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return {
+      success: false,
+      message: 'Supabase URL ou Key não configurados no ambiente ou localStorage.',
+    };
+  }
+
+  const client = createCustomSupabaseClient(supabaseUrl, supabaseAnonKey);
+  if (!client) {
+    return {
+      success: false,
+      message: 'Falha ao instanciar o cliente Supabase. Verifique os valores informados.',
+    };
+  }
+
+  try {
+    const res = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/`, {
+      method: 'GET',
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+      },
+    });
+
+    if (res.ok || res.status === 400 || res.status === 404) {
+      return {
+        success: true,
+        message: 'Conexão com o Supabase estabelecida com sucesso!',
+      };
+    } else {
+      const text = await res.text().catch(() => '');
+      return {
+        success: false,
+        message: `HTTP ${res.status}: ${text || res.statusText}`,
+      };
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Erro de rede/CORS ao conectar com o Supabase.',
+    };
+  }
+}
 
 export function createCustomSupabaseClient(url: string, key: string): SupabaseClient | null {
   if (!isValidHttpUrl(url) || !key || key.trim() === '' || key.includes('your-anon-key')) {
