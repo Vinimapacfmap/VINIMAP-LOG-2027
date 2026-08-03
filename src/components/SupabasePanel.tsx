@@ -11,9 +11,13 @@ import {
   Code, 
   Terminal, 
   Info,
-  Server
+  Server,
+  Zap,
+  HelpCircle,
+  ExternalLink,
+  ShieldAlert
 } from 'lucide-react';
-import { isSupabaseConfigured } from '../supabase';
+import { isSupabaseConfigured, createCustomSupabaseClient } from '../supabase';
 import { 
   syncAllStateToSupabase, 
   fetchAllStateFromSupabase,
@@ -61,11 +65,106 @@ export default function SupabasePanel({
   const [inputKey, setInputKey] = useState(localStorage.getItem('SUPABASE_ANON_KEY') || '');
   const [isEditingConfig, setIsEditingConfig] = useState(!isSupabaseConfigured);
 
+  // Live connection test state
+  const [testingConn, setTestingConn] = useState(false);
+  const [testDiagnostic, setTestDiagnostic] = useState<{
+    status: 'success' | 'warning' | 'error';
+    title: string;
+    message: string;
+    actionHint?: string;
+  } | null>(null);
+
   const supabaseUrl = process.env.SUPABASE_URL || localStorage.getItem('SUPABASE_URL') || '';
   const supabaseKey = process.env.SUPABASE_ANON_KEY || localStorage.getItem('SUPABASE_ANON_KEY') || '';
   const maskedKey = supabaseKey 
     ? `${supabaseKey.substring(0, 8)}...${supabaseKey.substring(supabaseKey.length - 8)}`
     : '';
+
+  const handleTestConnection = async (urlToTest?: string, keyToTest?: string) => {
+    const url = (urlToTest !== undefined ? urlToTest : inputUrl).trim();
+    const key = (keyToTest !== undefined ? keyToTest : inputKey).trim();
+
+    if (!url || !key) {
+      setTestDiagnostic({
+        status: 'error',
+        title: 'Credenciais Incompletas',
+        message: 'Preencha a URL do Projeto Supabase e a Anon Key para testar a conexão.'
+      });
+      return;
+    }
+
+    setTestingConn(true);
+    setTestDiagnostic(null);
+
+    try {
+      const testClient = createCustomSupabaseClient(url, key);
+      if (!testClient) {
+        setTestDiagnostic({
+          status: 'error',
+          title: 'URL do Supabase Inválida',
+          message: 'A URL inserida deve ter um formato válido iniciado por http:// ou https:// (ex: https://xyz123.supabase.co).'
+        });
+        setTestingConn(false);
+        return;
+      }
+
+      // Query table 'company_hubs' to test table & API access
+      const { data, error } = await testClient.from('company_hubs').select('id').limit(1);
+
+      if (!error) {
+        setTestDiagnostic({
+          status: 'success',
+          title: 'Conexão Supabase Estabelecida com Sucesso!',
+          message: 'O banco de dados respondeu perfeitamente e as tabelas do ViniMap foram encontradas.',
+          actionHint: 'Sua integração está pronta! Salve as configurações para ativar o sincronismo.'
+        });
+      } else {
+        const errMsg = error.message || String(error);
+        if (
+          errMsg.includes('does not exist') || 
+          errMsg.includes('Could not find') || 
+          error.code === 'PGRST204' || 
+          error.code === '42P01'
+        ) {
+          setTestDiagnostic({
+            status: 'warning',
+            title: 'Credenciais Válidas! Tabelas Ainda Não Criadas',
+            message: 'O servidor do Supabase respondeu com sucesso, mas as tabelas do ViniMap ainda não foram criadas no PostgreSQL.',
+            actionHint: 'Copie o código SQL ao lado e cole no "SQL Editor" do seu Supabase para criar as tabelas com 1 clique.'
+          });
+        } else if (errMsg.includes('row-level security') || errMsg.includes('RLS') || error.code === '42501') {
+          setTestDiagnostic({
+            status: 'warning',
+            title: 'Regras de Segurança (RLS) Bloqueando Acesso',
+            message: 'Conexão efetuada, mas as tabelas estão com RLS ativado bloqueando leitura/escrita anônima.',
+            actionHint: 'Copie e execute o código SQL ao lado no SQL Editor para desabilitar o RLS e autorizar o sincronismo.'
+          });
+        } else if (errMsg.includes('JWT') || errMsg.includes('API key') || error.code === 'PGRST301') {
+          setTestDiagnostic({
+            status: 'error',
+            title: 'Chave Anon API Key Recusada',
+            message: 'A chave anon inserida é inválida ou incorreta para este projeto.',
+            actionHint: 'Verifique no Supabase em Project Settings > API > Project API keys e copie o token "anon public".'
+          });
+        } else {
+          setTestDiagnostic({
+            status: 'error',
+            title: 'Erro de Resposta do Supabase',
+            message: `O servidor retornou: ${errMsg}`,
+            actionHint: 'Confirme se a URL corresponde exatamente ao projeto no seu painel Supabase.'
+          });
+        }
+      }
+    } catch (err: any) {
+      setTestDiagnostic({
+        status: 'error',
+        title: 'Erro ao Conectar com a URL',
+        message: `Não foi possível alcançar a URL especificada: ${err.message || String(err)}`
+      });
+    } finally {
+      setTestingConn(false);
+    }
+  };
 
   const handleSaveConfig = () => {
     if (inputUrl && inputKey) {
@@ -358,6 +457,82 @@ NOTIFY pgrst, 'reload schema';`;
           </div>
 
           <div className="space-y-4">
+            {/* Quick Step-by-Step Setup Guide */}
+            <div className="bg-gradient-to-r from-blue-50/80 via-slate-50 to-indigo-50/60 p-4 rounded-xl border border-blue-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
+                  <Zap size={14} className="text-blue-600" />
+                  <span>Guia Rápido de Configuração Supabase (3 Passos)</span>
+                </span>
+                <a 
+                  href="https://supabase.com/dashboard" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  <span>Abrir Painel Supabase</span>
+                  <ExternalLink size={11} />
+                </a>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px]">
+                <div className="bg-white/80 p-3 rounded-lg border border-slate-200/60 space-y-1">
+                  <div className="font-bold text-blue-700 flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] flex items-center justify-center font-black">1</span>
+                    <span>Copiar Credenciais</span>
+                  </div>
+                  <p className="text-slate-500 text-[10px] leading-relaxed">
+                    No Supabase, vá em <b>Project Settings &gt; API</b> e copie a <b>URL do Projeto</b> e a chave <b>anon public</b>.
+                  </p>
+                </div>
+
+                <div className="bg-white/80 p-3 rounded-lg border border-slate-200/60 space-y-1">
+                  <div className="font-bold text-blue-700 flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] flex items-center justify-center font-black">2</span>
+                    <span>Executar Script SQL</span>
+                  </div>
+                  <p className="text-slate-500 text-[10px] leading-relaxed">
+                    Clique em <b>Copiar SQL</b> (à direita) e cole no menu <b>SQL Editor</b> do Supabase para criar as tabelas do ViniMap.
+                  </p>
+                </div>
+
+                <div className="bg-white/80 p-3 rounded-lg border border-slate-200/60 space-y-1">
+                  <div className="font-bold text-blue-700 flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] flex items-center justify-center font-black">3</span>
+                    <span>Testar &amp; Conectar</span>
+                  </div>
+                  <p className="text-slate-500 text-[10px] leading-relaxed">
+                    Cole as duas chaves abaixo, clique em <b>Testar Conexão em Tempo Real</b> para validar e depois salve!
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Diagnostic Alert Result Box */}
+            {testDiagnostic && (
+              <div className={`p-4 rounded-xl border text-xs space-y-2 animate-fadeIn ${
+                testDiagnostic.status === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : testDiagnostic.status === 'warning'
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : 'bg-red-50 border-red-200 text-red-900'
+              }`}>
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  {testDiagnostic.status === 'success' && <CheckCircle2 className="text-emerald-600 shrink-0" size={18} />}
+                  {testDiagnostic.status === 'warning' && <AlertCircle className="text-amber-600 shrink-0" size={18} />}
+                  {testDiagnostic.status === 'error' && <ShieldAlert className="text-red-600 shrink-0" size={18} />}
+                  <span>{testDiagnostic.title}</span>
+                </div>
+                <p className="leading-relaxed">{testDiagnostic.message}</p>
+                {testDiagnostic.actionHint && (
+                  <div className="mt-2 pt-2 border-t border-black/10 font-medium text-[11px] flex items-center gap-1.5">
+                    <Info size={13} className="shrink-0" />
+                    <span><b>Ação Recomendada:</b> {testDiagnostic.actionHint}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {isEditingConfig ? (
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
                 <div className="space-y-3">
@@ -366,61 +541,114 @@ NOTIFY pgrst, 'reload schema';`;
                     <input 
                       type="text" 
                       value={inputUrl}
-                      onChange={e => setInputUrl(e.target.value)}
+                      onChange={e => {
+                        setInputUrl(e.target.value);
+                        setTestDiagnostic(null);
+                      }}
                       placeholder="https://xxxxxx.supabase.co"
                       className="w-full bg-white border border-slate-200 text-sm p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Anon API Key</label>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Anon API Key (Public)</label>
                     <input 
                       type="password" 
                       value={inputKey}
-                      onChange={e => setInputKey(e.target.value)}
+                      onChange={e => {
+                        setInputKey(e.target.value);
+                        setTestDiagnostic(null);
+                      }}
                       placeholder="eyJh..."
                       className="w-full bg-white border border-slate-200 text-sm p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                     />
                   </div>
                 </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <button 
-                    onClick={() => {
-                      setInputUrl(supabaseUrl);
-                      setInputKey(supabaseKey);
-                      setIsEditingConfig(false);
-                    }}
-                    className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60">
+                  <button
+                    type="button"
+                    onClick={() => handleTestConnection()}
+                    disabled={testingConn}
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    Cancelar
+                    {testingConn ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" />
+                        <span>Testando Conexão...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={13} className="text-amber-400" />
+                        <span>Testar Conexão em Tempo Real</span>
+                      </>
+                    )}
                   </button>
-                  <button 
-                    onClick={handleSaveConfig}
-                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
-                  >
-                    Salvar e Recarregar
-                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => {
+                        setInputUrl(supabaseUrl);
+                        setInputKey(supabaseKey);
+                        setIsEditingConfig(false);
+                        setTestDiagnostic(null);
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      onClick={handleSaveConfig}
+                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
+                    >
+                      Salvar e Recarregar
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative group">
-                <button 
-                  onClick={() => setIsEditingConfig(true)}
-                  className="absolute -top-3 -right-2 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 p-1.5 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
-                  title="Editar Configurações"
-                >
-                  <Code size={14} />
-                </button>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Supabase Project URL</span>
-                  <span className="text-xs font-mono font-bold text-slate-700 truncate block">
-                    {supabaseUrl || 'Não configurado (.env / secrets)'}
-                  </span>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative group">
+                  <button 
+                    onClick={() => setIsEditingConfig(true)}
+                    className="absolute -top-3 -right-2 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 p-1.5 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
+                    title="Editar Configurações"
+                  >
+                    <Code size={14} />
+                  </button>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Supabase Project URL</span>
+                    <span className="text-xs font-mono font-bold text-slate-700 truncate block">
+                      {supabaseUrl || 'Não configurado'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Anon API Key</span>
+                    <span className="text-xs font-mono font-bold text-slate-700 truncate block">
+                      {maskedKey || 'Não configurada'}
+                    </span>
+                  </div>
                 </div>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Anon API Key</span>
-                  <span className="text-xs font-mono font-bold text-slate-700 truncate block">
-                    {maskedKey || 'Não configurada (.env / secrets)'}
-                  </span>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleTestConnection(supabaseUrl, supabaseKey)}
+                    disabled={testingConn || !isSupabaseConfigured}
+                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {testingConn ? (
+                      <RefreshCw size={13} className="animate-spin" />
+                    ) : (
+                      <Zap size={13} className="text-amber-500" />
+                    )}
+                    <span>Testar Conexão Ativa</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingConfig(true)}
+                    className="px-3.5 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                  >
+                    Alterar Credenciais
+                  </button>
                 </div>
               </div>
             )}

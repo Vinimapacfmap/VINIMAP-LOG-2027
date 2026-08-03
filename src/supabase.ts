@@ -64,16 +64,23 @@ export const supabaseAnonKey = (rawAnonKey && rawAnonKey !== 'undefined' && rawA
 // Check if valid keys are configured
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-// Safely initialize the Supabase client or null if not configured
+export function createCustomSupabaseClient(url: string, key: string): SupabaseClient | null {
+  if (!isValidHttpUrl(url) || !key || key.trim() === '' || key.includes('your-anon-key')) {
+    return null;
+  }
+  try {
+    return createClient(url.trim(), key.trim());
+  } catch (err) {
+    console.warn('Failed to create custom Supabase client:', err);
+    return null;
+  }
+}
+
+// Safely initialize the default Supabase client or null if not configured
 let clientInstance: SupabaseClient | null = null;
 
 if (isSupabaseConfigured) {
-  try {
-    clientInstance = createClient(supabaseUrl, supabaseAnonKey);
-  } catch (err) {
-    console.warn('Supabase client initialization failed:', err);
-    clientInstance = null;
-  }
+  clientInstance = createCustomSupabaseClient(supabaseUrl, supabaseAnonKey);
 }
 
 export const supabase = clientInstance;
