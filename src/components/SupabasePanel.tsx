@@ -61,12 +61,59 @@ export default function SupabasePanel({
   const [fetchResult, setFetchResult] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [inputUrl, setInputUrl] = useState(localStorage.getItem('SUPABASE_URL') || '');
-  const [inputKey, setInputKey] = useState(localStorage.getItem('SUPABASE_ANON_KEY') || '');
+  const getInitialUrl = () => {
+    const rawUrl = localStorage.getItem('SUPABASE_URL') || '';
+    if (rawUrl.startsWith('sb_publishable_') || rawUrl.startsWith('sb_secret_') || rawUrl.startsWith('eyJ')) {
+      return '';
+    }
+    return rawUrl;
+  };
+
+  const getInitialKey = () => {
+    const rawKey = localStorage.getItem('SUPABASE_ANON_KEY') || '';
+    const rawUrl = localStorage.getItem('SUPABASE_URL') || '';
+    if (!rawKey && (rawUrl.startsWith('sb_publishable_') || rawUrl.startsWith('sb_secret_') || rawUrl.startsWith('eyJ'))) {
+      return rawUrl;
+    }
+    return rawKey;
+  };
+
+  const [inputUrl, setInputUrl] = useState(getInitialUrl);
+  const [inputKey, setInputKey] = useState(getInitialKey);
   const [isEditingConfig, setIsEditingConfig] = useState(!isSupabaseConfigured);
+
+  const handleUrlInputChange = (val: string) => {
+    setErrorMsg(null);
+    setTestDiagnostic(null);
+    const trimmed = val.trim();
+    if (trimmed.startsWith('sb_publishable_') || trimmed.startsWith('sb_secret_') || trimmed.startsWith('eyJ')) {
+      setInputKey(trimmed);
+      setInputUrl('');
+      setSaveSuccessToast('Chave de API detectada! Movida automaticamente para o campo "Anon API Key". Digite a URL do projeto (ex: https://xxxx.supabase.co) no campo de URL.');
+      setTimeout(() => setSaveSuccessToast(null), 7000);
+      return;
+    }
+    setInputUrl(val);
+  };
+
+  const handleKeyInputChange = (val: string) => {
+    setErrorMsg(null);
+    setTestDiagnostic(null);
+    const trimmed = val.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      setInputUrl(trimmed);
+      setInputKey('');
+      setSaveSuccessToast('URL do Supabase detectada! Movida automaticamente para o campo "Supabase Project URL". Cole a sua Anon API Key no campo abaixo.');
+      setTimeout(() => setSaveSuccessToast(null), 7000);
+      return;
+    }
+    setInputKey(val);
+  };
 
   // Live connection test state
   const [testingConn, setTestingConn] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [saveSuccessToast, setSaveSuccessToast] = useState<string | null>(null);
   const [testDiagnostic, setTestDiagnostic] = useState<{
     status: 'success' | 'warning' | 'error';
     title: string;
@@ -166,30 +213,93 @@ export default function SupabasePanel({
     }
   };
 
-  const handleSaveConfig = (urlToSave?: string, keyToSave?: string) => {
+  const handleSaveConfig = (urlToSave?: unknown, keyToSave?: unknown) => {
     setErrorMsg(null);
-    const targetUrl = (urlToSave !== undefined ? urlToSave : inputUrl).trim();
-    const targetKey = (keyToSave !== undefined ? keyToSave : inputKey).trim();
+    setSaveSuccessToast(null);
 
-    if (targetUrl && targetKey) {
+    // Safely extract parameters whether passed explicitly as strings or triggered from event handlers
+    let targetUrl = (typeof urlToSave === 'string' ? urlToSave : inputUrl).trim();
+    let targetKey = (typeof keyToSave === 'string' ? keyToSave : inputKey).trim();
+
+    // Auto-detect if user accidentally swapped fields or put the API key into the URL box
+    const isUrlKey = targetUrl.startsWith('sb_publishable_') || targetUrl.startsWith('sb_secret_') || targetUrl.startsWith('eyJ');
+    const isKeyUrl = targetKey.startsWith('http://') || targetKey.startsWith('https://');
+
+    if (isUrlKey && isKeyUrl) {
+      const temp = targetUrl;
+      targetUrl = targetKey;
+      targetKey = temp;
+      setInputUrl(targetUrl);
+      setInputKey(targetKey);
+    } else if (isUrlKey) {
+      targetKey = targetUrl;
+      targetUrl = '';
+      setInputUrl('');
+      setInputKey(targetKey);
+      setErrorMsg(`A chave "${targetKey.length > 20 ? targetKey.substring(0, 20) + '...' : targetKey}" é a sua Anon API Key e foi movida para o campo "Anon API Key (Public)". Por favor, informe a URL do seu projeto Supabase no primeiro campo (ex: https://xxxxxx.supabase.co).`);
+      return;
+    } else if (isKeyUrl) {
+      targetUrl = targetKey;
+      targetKey = '';
+      setInputUrl(targetUrl);
+      setInputKey('');
+      setErrorMsg(`A URL "${targetUrl}" foi movida para o campo "Supabase Project URL". Por favor, informe a sua Anon API Key no campo abaixo.`);
+      return;
+    }
+
+    console.log('[SupabasePanel handleSaveConfig] Save triggered.', {
+      targetUrl,
+      keyLength: targetKey.length
+    });
+
+    if (targetUrl || targetKey) {
+      if (!targetUrl || !targetKey) {
+        const missingField = !targetUrl ? 'URL do Supabase' : 'Anon API Key';
+        console.warn(`[SupabasePanel handleSaveConfig] Validation error: ${missingField} is missing.`);
+        setErrorMsg(`Por favor, preencha o campo ${missingField} antes de salvar as credenciais.`);
+        return;
+      }
+
       try {
         const parsed = new URL(targetUrl);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          console.warn('[SupabasePanel handleSaveConfig] Validation error: Invalid protocol in URL:', targetUrl);
           setErrorMsg('A URL do Supabase deve ser um endereço válido iniciado por http:// ou https://');
           return;
         }
-      } catch (_) {
+      } catch (err) {
+        console.warn('[SupabasePanel handleSaveConfig] Validation error: Cannot parse URL:', err);
         setErrorMsg('URL do Supabase inválida. Exemplo válido: https://xxxxxx.supabase.co');
         return;
       }
 
-      localStorage.setItem('SUPABASE_URL', targetUrl);
-      localStorage.setItem('SUPABASE_ANON_KEY', targetKey);
+      setIsSavingConfig(true);
+      try {
+        localStorage.setItem('SUPABASE_URL', targetUrl);
+        localStorage.setItem('SUPABASE_ANON_KEY', targetKey);
+        console.log('[SupabasePanel handleSaveConfig] SUPABASE_URL and SUPABASE_ANON_KEY successfully written to localStorage.');
+        
+        setSaveSuccessToast('Credenciais do Supabase salvas com sucesso! Ativando integração...');
+        
+        setTimeout(() => {
+          console.log('[SupabasePanel handleSaveConfig] Reloading window to apply new Supabase configuration...');
+          window.location.reload();
+        }, 600);
+      } catch (err) {
+        setIsSavingConfig(false);
+        console.error('[SupabasePanel handleSaveConfig] Storage save error:', err);
+        setErrorMsg(`Erro ao salvar no armazenamento do navegador: ${err instanceof Error ? err.message : String(err)}`);
+      }
     } else {
+      setIsSavingConfig(true);
+      console.log('[SupabasePanel handleSaveConfig] Clearing Supabase credentials from localStorage.');
       localStorage.removeItem('SUPABASE_URL');
       localStorage.removeItem('SUPABASE_ANON_KEY');
+      setSaveSuccessToast('Credenciais removidas. Recarregando aplicação...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     }
-    window.location.reload();
   };
 
   const sqlMigrationCode = `-- -------------------------------------------------------------
@@ -550,11 +660,21 @@ NOTIFY pgrst, 'reload schema';`;
                     {testDiagnostic.status === 'success' && (
                       <button
                         type="button"
+                        disabled={isSavingConfig || testingConn}
                         onClick={() => handleSaveConfig(inputUrl, inputKey)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-lg shadow-sm flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition-all"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs rounded-lg shadow-sm flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition-all"
                       >
-                        <CheckCircle2 size={14} />
-                        <span>Salvar Credenciais e Ativar Agora</span>
+                        {isSavingConfig ? (
+                          <>
+                            <RefreshCw size={14} className="animate-spin" />
+                            <span>Salvando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 size={14} />
+                            <span>Salvar Credenciais e Ativar Agora</span>
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
@@ -562,9 +682,20 @@ NOTIFY pgrst, 'reload schema';`;
               </div>
             )}
 
+            {/* Save Success Toast Box */}
+            {saveSuccessToast && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center justify-between gap-2 shadow-xs animate-fadeIn">
+                <div className="flex items-center gap-2 font-bold">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0 animate-bounce" />
+                  <span>{saveSuccessToast}</span>
+                </div>
+                <RefreshCw size={14} className="text-emerald-600 animate-spin shrink-0" />
+              </div>
+            )}
+
             {/* Error Message Box */}
             {errorMsg && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-center justify-between gap-2">
+              <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-center justify-between gap-2 shadow-xs animate-fadeIn">
                 <div className="flex items-center gap-2">
                   <ShieldAlert size={16} className="text-red-600 shrink-0" />
                   <span>{errorMsg}</span>
@@ -583,31 +714,27 @@ NOTIFY pgrst, 'reload schema';`;
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Supabase Project URL</label>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      Supabase Project URL <span className="text-slate-400 font-normal lowercase">(ex: https://xxxxxx.supabase.co)</span>
+                    </label>
                     <input 
                       type="text" 
                       value={inputUrl}
-                      onChange={e => {
-                        setInputUrl(e.target.value);
-                        setTestDiagnostic(null);
-                        setErrorMsg(null);
-                      }}
+                      onChange={e => handleUrlInputChange(e.target.value)}
                       placeholder="https://xxxxxx.supabase.co"
                       className="w-full bg-white border border-slate-200 text-sm p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Anon API Key (Public)</label>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      Anon API Key <span className="text-slate-400 font-normal lowercase">(ex: sb_publishable_... ou eyJ...)</span>
+                    </label>
                     <input 
-                      type="password" 
+                      type="text" 
                       value={inputKey}
-                      onChange={e => {
-                        setInputKey(e.target.value);
-                        setTestDiagnostic(null);
-                        setErrorMsg(null);
-                      }}
-                      placeholder="eyJh..."
-                      className="w-full bg-white border border-slate-200 text-sm p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                      onChange={e => handleKeyInputChange(e.target.value)}
+                      placeholder="sb_publishable_... ou eyJ..."
+                      className="w-full bg-white border border-slate-200 text-sm p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
                     />
                   </div>
                 </div>
@@ -645,10 +772,19 @@ NOTIFY pgrst, 'reload schema';`;
                       Cancelar
                     </button>
                     <button 
+                      type="button"
+                      disabled={isSavingConfig || testingConn}
                       onClick={() => handleSaveConfig(inputUrl, inputKey)}
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
+                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      Salvar e Recarregar
+                      {isSavingConfig ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" />
+                          <span>Salvando...</span>
+                        </>
+                      ) : (
+                        <span>Salvar e Recarregar</span>
+                      )}
                     </button>
                   </div>
                 </div>

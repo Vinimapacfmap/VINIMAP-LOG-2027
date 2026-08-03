@@ -10,6 +10,9 @@ function isValidHttpUrl(urlString?: string | null): boolean {
     !trimmed || 
     trimmed === 'undefined' || 
     trimmed === 'null' || 
+    trimmed.startsWith('sb_publishable_') ||
+    trimmed.startsWith('sb_secret_') ||
+    trimmed.startsWith('eyJ') ||
     trimmed.includes('your-project-id') || 
     trimmed.includes('YOUR_SUPABASE_URL') || 
     trimmed.includes('placeholder')
@@ -31,10 +34,26 @@ function isValidAnonKey(key?: string | null): boolean {
     trimmed !== '' &&
     trimmed !== 'undefined' &&
     trimmed !== 'null' &&
+    !trimmed.startsWith('http://') &&
+    !trimmed.startsWith('https://') &&
     !trimmed.includes('your-anon-key') &&
     !trimmed.includes('YOUR_SUPABASE') &&
     !trimmed.includes('placeholder')
   );
+}
+
+// Auto-clean bad localStorage entries where API keys were accidentally saved under SUPABASE_URL
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    const storedUrl = localStorage.getItem('SUPABASE_URL') || '';
+    const storedKey = localStorage.getItem('SUPABASE_ANON_KEY') || '';
+    if (storedUrl && (storedUrl.startsWith('sb_publishable_') || storedUrl.startsWith('sb_secret_') || storedUrl.startsWith('eyJ'))) {
+      if (!storedKey || !isValidAnonKey(storedKey)) {
+        localStorage.setItem('SUPABASE_ANON_KEY', storedUrl.trim());
+      }
+      localStorage.removeItem('SUPABASE_URL');
+    }
+  } catch (_) {}
 }
 
 // Retrieve environment variables safely across environments (Node process.env, Vite import.meta.env, window.localStorage)
