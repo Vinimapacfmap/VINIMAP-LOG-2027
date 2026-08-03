@@ -995,6 +995,7 @@ export async function dbDeleteCompanyHub(hubId: string) {
 
 // General Clear operations to reset demo state
 export async function dbResetToDemoState(mappedOrders: Order[]) {
+  if (getIsFirestoreQuotaExceeded()) return;
   try {
     const batch = writeBatch(db);
     
@@ -1020,6 +1021,7 @@ export async function dbResetToDemoState(mappedOrders: Order[]) {
 
 // Applies remote Supabase state to Firestore to sync active UI state
 export async function dbApplyLoadedState(state: any) {
+  if (getIsFirestoreQuotaExceeded()) return;
   try {
     const batch = writeBatch(db);
     
@@ -1050,6 +1052,21 @@ export async function dbApplyLoadedState(state: any) {
 
 // Purge helper operations for Seeder & Purge Data Manager
 export async function dbPurgeCollectionDocs(collectionName: string) {
+  // Always purge Supabase if mapped
+  const supabaseTableMap: Record<string, string> = {
+    orders: 'orders',
+    financialTransactions: 'financial_transactions',
+    activityLogs: 'activity_logs',
+    clientPartners: 'client_partners',
+    deliveryRiders: 'delivery_riders',
+    companyHubs: 'company_hubs'
+  };
+  if (supabaseTableMap[collectionName]) {
+    await sbPurgeTable(supabaseTableMap[collectionName]).catch(() => {});
+  }
+
+  if (getIsFirestoreQuotaExceeded()) return;
+
   try {
     const snap = await getDocs(collection(db, collectionName));
     if (!snap.empty) {
@@ -1062,21 +1079,12 @@ export async function dbPurgeCollectionDocs(collectionName: string) {
         await batch.commit();
       }
     }
-    
-    // Also purge Supabase if mapped
-    const supabaseTableMap: Record<string, string> = {
-      orders: 'orders',
-      financialTransactions: 'financial_transactions',
-      activityLogs: 'activity_logs',
-      clientPartners: 'client_partners',
-      deliveryRiders: 'delivery_riders',
-      companyHubs: 'company_hubs'
-    };
-    if (supabaseTableMap[collectionName]) {
-      await sbPurgeTable(supabaseTableMap[collectionName]).catch(() => {});
-    }
   } catch (err) {
-    console.warn(`Error purging collection ${collectionName}:`, err);
+    if (isQuotaError(err)) {
+      handleFirestoreError(err, OperationType.DELETE, collectionName);
+    } else {
+      console.warn(`Error purging collection ${collectionName}:`, err);
+    }
   }
 }
 
@@ -1151,10 +1159,16 @@ export async function dbPurgeAllData() {
   }
 
   // Set systemConfig/state purged = true so auto-seeder won't re-populate on reload
-  try {
-    await setDoc(doc(db, 'systemConfig', 'state'), { initialized: true, purged: true, purgedAt: new Date().toISOString() });
-  } catch (err) {
-    console.warn('Could not set systemConfig/state purged flag:', err);
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      await setDoc(doc(db, 'systemConfig', 'state'), { initialized: true, purged: true, purgedAt: new Date().toISOString() });
+    } catch (err) {
+      if (isQuotaError(err)) {
+        handleFirestoreError(err, OperationType.WRITE, 'systemConfig/state');
+      } else {
+        console.warn('Could not set systemConfig/state purged flag:', err);
+      }
+    }
   }
 
   // Clear local IndexedDB and Storage cache
@@ -1169,32 +1183,42 @@ export async function dbPurgeAllData() {
 }
 
 export async function dbBulkDeleteClients(clientIds: string[]) {
+  for (const id of clientIds) {
+    await sbDeleteClientPartner(id).catch(() => {});
+  }
+
+  if (getIsFirestoreQuotaExceeded()) return;
+
   try {
     const batch = writeBatch(db);
     clientIds.forEach(id => batch.delete(doc(db, 'clientPartners', id)));
     await batch.commit();
-    for (const id of clientIds) {
-      await sbDeleteClientPartner(id).catch(() => {});
-    }
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, 'clientPartners');
   }
 }
 
 export async function dbBulkDeleteRiders(riderIds: string[]) {
+  for (const id of riderIds) {
+    await sbDeleteDeliveryRider(id).catch(() => {});
+  }
+
+  if (getIsFirestoreQuotaExceeded()) return;
+
   try {
     const batch = writeBatch(db);
     riderIds.forEach(id => batch.delete(doc(db, 'deliveryRiders', id)));
     await batch.commit();
-    for (const id of riderIds) {
-      await sbDeleteDeliveryRider(id).catch(() => {});
-    }
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, 'deliveryRiders');
   }
 }
 
 export async function dbBulkDeleteTransactions(txIds: string[]) {
+  await sbBulkDeleteFinancialTransactions(txIds).catch(err => console.warn('Supabase bulk delete error:', err));
+
+  if (getIsFirestoreQuotaExceeded()) return;
+
   try {
     for (let i = 0; i < txIds.length; i += 400) {
       const chunk = txIds.slice(i, i + 400);
@@ -1202,33 +1226,38 @@ export async function dbBulkDeleteTransactions(txIds: string[]) {
       chunk.forEach(id => batch.delete(doc(db, 'financialTransactions', id)));
       await batch.commit();
     }
-    await sbBulkDeleteFinancialTransactions(txIds).catch(err => console.warn('Supabase bulk delete error:', err));
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, 'financialTransactions');
   }
 }
 
 export async function dbBulkSaveClients(clients: ClientPartner[]) {
+  for (const c of clients) {
+    await sbSaveClientPartner(c).catch(() => {});
+  }
+
+  if (getIsFirestoreQuotaExceeded()) return;
+
   try {
     const batch = writeBatch(db);
     clients.forEach(c => batch.set(doc(db, 'clientPartners', c.id), removeUndefinedFields(c)));
     await batch.commit();
-    for (const c of clients) {
-      await sbSaveClientPartner(c).catch(() => {});
-    }
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'clientPartners');
   }
 }
 
 export async function dbBulkSaveRiders(riders: DeliveryRider[]) {
+  for (const r of riders) {
+    await sbSaveDeliveryRider(r).catch(() => {});
+  }
+
+  if (getIsFirestoreQuotaExceeded()) return;
+
   try {
     const batch = writeBatch(db);
     riders.forEach(r => batch.set(doc(db, 'deliveryRiders', r.id), removeUndefinedFields(r)));
     await batch.commit();
-    for (const r of riders) {
-      await sbSaveDeliveryRider(r).catch(() => {});
-    }
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'deliveryRiders');
   }

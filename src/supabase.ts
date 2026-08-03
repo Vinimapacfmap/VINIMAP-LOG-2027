@@ -144,26 +144,43 @@ export async function testSupabaseConnection(): Promise<{ success: boolean; mess
   }
 
   try {
-    const res = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/`, {
+    // 1. Test query via Supabase JS Client
+    const { error } = await client.from('orders').select('id').limit(1);
+
+    if (!error) {
+      return {
+        success: true,
+        message: 'Conexão com o Supabase estabelecida e testada com sucesso!',
+      };
+    }
+
+    // Standard Postgres errors when connected with valid anon key but table missing or RLS protected
+    if (error && (error.code === '42P01' || error.code === 'PGRST301' || error.message?.includes('relation') || error.message?.includes('table'))) {
+      return {
+        success: true,
+        message: 'Conectado ao Supabase com sucesso! (Chave anon verificada)',
+      };
+    }
+
+    // 2. Fallback check against auth health endpoint which accepts anon key
+    const healthRes = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/health`, {
       method: 'GET',
       headers: {
         apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
       },
-    });
+    }).catch(() => null);
 
-    if (res.ok || res.status === 400 || res.status === 404) {
+    if (healthRes && healthRes.ok) {
       return {
         success: true,
-        message: 'Conexão com o Supabase estabelecida com sucesso!',
-      };
-    } else {
-      const text = await res.text().catch(() => '');
-      return {
-        success: false,
-        message: `HTTP ${res.status}: ${text || res.statusText}`,
+        message: 'Servidor do Supabase respondeu com sucesso!',
       };
     }
+
+    return {
+      success: false,
+      message: `Erro do Supabase (${error.code || 'API'}): ${error.message}`,
+    };
   } catch (err: any) {
     return {
       success: false,
