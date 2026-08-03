@@ -367,7 +367,16 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
     }
 
     // Mark as initialized in Firestore if stateDoc didn't exist yet
-    await setDoc(stateDocRef, { initialized: true, purged: false, createdAt: new Date().toISOString() }, { merge: true });
+    try {
+      await setDoc(stateDocRef, { initialized: true, purged: false, createdAt: new Date().toISOString() }, { merge: true });
+    } catch (e) {
+      if (isQuotaError(e)) {
+        handleFirestoreError(e, OperationType.WRITE, 'systemConfig/state');
+        return;
+      }
+    }
+
+    if (getIsFirestoreQuotaExceeded()) return;
     // 1. Seed & Sync Client Partners
     let clientsSnap;
     try {
@@ -425,6 +434,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
       }
     }
 
+    if (getIsFirestoreQuotaExceeded()) return;
+
     // 2. Seed Orders
     let ordersSnap;
     try {
@@ -432,6 +443,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, 'orders');
     }
+    if (getIsFirestoreQuotaExceeded()) return;
+
     if (ordersSnap && ordersSnap.empty) {
       console.log('Seeding orders to Firestore...');
       const batch = writeBatch(db);
@@ -446,6 +459,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
       }
     }
 
+    if (getIsFirestoreQuotaExceeded()) return;
+
     // 3. Seed Delivery Riders
     let ridersSnap;
     try {
@@ -453,6 +468,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, 'deliveryRiders');
     }
+    if (getIsFirestoreQuotaExceeded()) return;
+
     const existingRidersMap = new Map<string, DeliveryRider>();
     if (ridersSnap && !ridersSnap.empty) {
       ridersSnap.forEach(doc => {
@@ -479,6 +496,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
       }
     }
 
+    if (getIsFirestoreQuotaExceeded()) return;
+
     // 4. Seed Activity Logs
     let logsSnap;
     try {
@@ -486,6 +505,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, 'activityLogs');
     }
+    if (getIsFirestoreQuotaExceeded()) return;
+
     if (logsSnap && logsSnap.empty) {
       console.log('Seeding activity logs to Firestore...');
       const batch = writeBatch(db);
@@ -500,6 +521,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
       }
     }
 
+    if (getIsFirestoreQuotaExceeded()) return;
+
     // 5. Seed Financial Transactions
     let txsSnap;
     try {
@@ -507,6 +530,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, 'financialTransactions');
     }
+    if (getIsFirestoreQuotaExceeded()) return;
+
     if (txsSnap && txsSnap.empty) {
       console.log('Seeding financial transactions to Firestore...');
       const batch = writeBatch(db);
@@ -521,6 +546,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
       }
     }
 
+    if (getIsFirestoreQuotaExceeded()) return;
+
     // 6. Seed Company Hubs
     let hubsSnap;
     try {
@@ -528,6 +555,8 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, 'companyHubs');
     }
+    if (getIsFirestoreQuotaExceeded()) return;
+
     if (hubsSnap && hubsSnap.empty) {
       console.log('Seeding initial company hubs to Firestore...');
       const batch = writeBatch(db);
@@ -557,7 +586,11 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
           }
         }
       } catch (err) {
-        console.error('Error checking legacy main hub address/logo:', err);
+        if (isQuotaError(err)) {
+          handleFirestoreError(err, OperationType.WRITE, 'companyHubs/hub-main');
+        } else {
+          console.warn('Error checking legacy main hub address/logo:', err);
+        }
       }
     }
   } catch (err) {

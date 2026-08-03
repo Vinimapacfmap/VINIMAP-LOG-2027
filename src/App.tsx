@@ -575,7 +575,22 @@ export default function App() {
     }
 
     // 3. Seed if empty
-    seedInitialDataIfEmpty(orders);
+    seedInitialDataIfEmpty(orders).then(() => {
+      if (isCancelled) return;
+      if (getIsFirestoreQuotaExceeded()) {
+        console.warn('Quota do Firestore excedida durante inicialização. Alternando para dados locais / Supabase.');
+        cleanupAllFirestoreListeners();
+        loadFallbackData();
+      }
+    });
+
+    const handleListenerError = (error: unknown, collectionName: string) => {
+      handleFirestoreError(error, OperationType.GET, collectionName);
+      if (getIsFirestoreQuotaExceeded()) {
+        cleanupAllFirestoreListeners();
+      }
+      loadFallbackData();
+    };
 
     // 4. Setup real-time listeners with registered tracking wrappers
     const unsubOrders = registerSnapshotListener(
@@ -585,10 +600,7 @@ export default function App() {
           docs.push(doc.data() as Order);
         });
         setOrders(docs);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'orders');
-        loadFallbackData();
-      })
+      }, (error) => handleListenerError(error, 'orders'))
     );
 
     const unsubClients = registerSnapshotListener(
@@ -598,10 +610,7 @@ export default function App() {
           docs.push(doc.data() as ClientPartner);
         });
         setClientPartners(docs);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'clientPartners');
-        loadFallbackData();
-      })
+      }, (error) => handleListenerError(error, 'clientPartners'))
     );
 
     const unsubRiders = registerSnapshotListener(
@@ -611,10 +620,7 @@ export default function App() {
           docs.push(doc.data() as DeliveryRider);
         });
         setRiders(docs);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'deliveryRiders');
-        loadFallbackData();
-      })
+      }, (error) => handleListenerError(error, 'deliveryRiders'))
     );
 
     const unsubLogs = registerSnapshotListener(
@@ -625,10 +631,7 @@ export default function App() {
         });
         docs.sort((a, b) => b.time.localeCompare(a.time));
         setLogs(docs);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'activityLogs');
-        loadFallbackData();
-      })
+      }, (error) => handleListenerError(error, 'activityLogs'))
     );
 
     const unsubTxs = registerSnapshotListener(
@@ -638,10 +641,7 @@ export default function App() {
           docs.push(doc.data() as FinancialTransaction);
         });
         setFinancialTransactions(docs);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'financialTransactions');
-        loadFallbackData();
-      })
+      }, (error) => handleListenerError(error, 'financialTransactions'))
     );
 
     const unsubHubs = registerSnapshotListener(
@@ -670,10 +670,7 @@ export default function App() {
             }
           }
         }
-      }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'companyHubs');
-        loadFallbackData();
-      })
+      }, (error) => handleListenerError(error, 'companyHubs'))
     );
 
     const handleUnloadOrHide = () => {
