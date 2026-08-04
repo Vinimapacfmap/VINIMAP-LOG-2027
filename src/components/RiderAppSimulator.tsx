@@ -32,6 +32,7 @@ import {
   Battery, 
   MapPin, 
   Navigation, 
+  Compass,
   CheckCircle2, 
   AlertTriangle, 
   Sparkles, 
@@ -1546,6 +1547,18 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <AlertTriangle size={12} className="text-rose-600" />
                             <span>Registrar Ocorrência</span>
                           </button>
+
+                          {/* OPTION 5: ABRIR NO GOOGLE MAPS */}
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.address)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="col-span-2 py-2 px-3 bg-slate-900 hover:bg-black text-white rounded-xl font-extrabold text-[10px] flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                          >
+                            <MapPin size={12} className="text-emerald-400 animate-pulse" />
+                            <span>Abrir Rota de Entrega no Google Maps</span>
+                          </a>
                         </div>
                         )}
 
@@ -2544,17 +2557,19 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       )}
 
       {/* CORE WRAPPER LAYOUT */}
-      <div className={isEffectiveRealDevice ? "fixed inset-0 w-full h-full bg-slate-950/95 backdrop-blur-md z-50 font-sans antialiased flex items-center justify-center p-0 md:p-4 overflow-hidden" : `grid grid-cols-1 ${isFloating ? 'grid-cols-1' : 'lg:grid-cols-12'} gap-6`}>
+      <div className={isEffectiveRealDevice ? "fixed inset-0 w-full h-full bg-slate-900 z-50 font-sans antialiased flex flex-col overflow-hidden p-0" : `grid grid-cols-1 ${isFloating ? 'grid-cols-1' : 'lg:grid-cols-12'} gap-6`}>
         
         {/* PHONE EMULATOR SHELL (Lg: col-span-5) */}
-        <div className={isEffectiveRealDevice ? "w-full h-full md:max-w-[410px] md:h-[92vh] md:max-h-[850px] flex justify-center items-center" : `${isFloating ? 'w-full' : 'lg:col-span-5'} flex justify-center`}>
-          <div className={isEffectiveRealDevice ? "w-full h-full md:rounded-[42px] md:border-[8px] md:border-slate-800 md:shadow-2xl flex flex-col relative overflow-hidden bg-slate-900" : "relative w-[360px] h-[720px] bg-slate-950 rounded-[48px] border-[10px] border-slate-900 shadow-2xl overflow-hidden shrink-0 flex flex-col"}>
+        <div className={isEffectiveRealDevice ? "w-full h-full flex flex-col flex-1" : `${isFloating ? 'w-full' : 'lg:col-span-5'} flex justify-center`}>
+          <div className={isEffectiveRealDevice ? "w-full h-full flex flex-col relative overflow-hidden bg-slate-900" : "relative w-[360px] h-[720px] bg-slate-950 rounded-[48px] border-[10px] border-slate-900 shadow-2xl overflow-hidden shrink-0 flex flex-col"}>
             
             {/* Camera / Notch */}
-            <div className={isEffectiveRealDevice ? "hidden md:flex absolute top-2 left-1/2 transform -translate-x-1/2 w-28 h-5 bg-slate-950 rounded-full z-50 items-center justify-between px-3 border border-slate-800/60 pointer-events-none" : "absolute top-2 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-slate-950 rounded-full z-50 flex items-center justify-between px-4"}>
-              <div className="w-2 h-2 bg-slate-900 rounded-full border border-slate-800" />
-              <div className="w-8 h-1 bg-slate-900 rounded-full" />
-            </div>
+            {!isEffectiveRealDevice && (
+              <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-slate-950 rounded-full z-50 flex items-center justify-between px-4">
+                <div className="w-2.5 h-2.5 bg-slate-900 rounded-full border border-slate-800" />
+                <div className="w-10 h-1 bg-slate-900 rounded-full" />
+              </div>
+            )}
 
             {/* Simulated Phone OS Status Bar */}
             {!isEffectiveRealDevice && (
@@ -3165,39 +3180,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     {activeTab === 'home' && (
                       <div className="p-3.5 sm:p-4 space-y-3.5">
                         
-                        {/* ONLINE/OFFLINE STATUS PANEL */}
-                        <div className={`border rounded-2xl p-3.5 shadow-sm transition-all flex items-center justify-between gap-3 ${
-                          selectedRider?.status === 'Offline'
-                            ? 'bg-rose-50/70 border-rose-200'
-                            : 'bg-emerald-50/70 border-emerald-200'
-                        }`}>
-                          <div className="space-y-0.5 min-w-0">
-                            <span className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider block">Status do Plantão</span>
-                            <div className="flex items-center gap-2">
-                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                                selectedRider?.status === 'Offline' ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'
-                              }`} />
-                              <span className={`text-xs font-black uppercase truncate ${
-                                selectedRider?.status === 'Offline' ? 'text-rose-700' : 'text-emerald-800'
-                              }`}>
-                                {selectedRider?.status === 'Offline' ? '📴 OFFLINE (PAUSADO)' : '🔋 ONLINE EM SERVIÇO'}
-                              </span>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={handleStatusToggle}
-                            className={`px-3 py-2 rounded-xl text-xs font-extrabold cursor-pointer shadow-sm transition-all shrink-0 flex items-center gap-1.5 active:scale-95 ${
-                              selectedRider?.status === 'Offline'
-                                ? 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white'
-                                : 'bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white'
-                            }`}
-                          >
-                            <span>{selectedRider?.status === 'Offline' ? 'Ficar Online' : 'Pausar Plantão'}</span>
-                          </button>
-                        </div>
-
                         {/* PERFORMANCE METRICS HERO CARDS */}
                         <div className={(selectedRider?.exibirValorTurno && !selectedRider?.ocultarValoresProtocolos) ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
                           {selectedRider?.exibirValorTurno && !selectedRider?.ocultarValoresProtocolos && (
@@ -3389,6 +3371,61 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     {activeTab === 'map' && (
                       <div className="w-full h-full flex flex-col relative">
                         
+                        {/* TOP OVERLAY: REAL GPS TRACKING & GOOGLE MAPS CONTROLS */}
+                        <div className="absolute top-3 left-3 right-3 z-20 flex flex-col gap-2">
+                          <div className="bg-slate-900/90 text-white backdrop-blur-md rounded-2xl p-2.5 border border-white/10 shadow-xl flex items-center justify-between gap-2">
+                            {/* Real GPS Toggle / Locate Me Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isRealGpsActive) {
+                                  stopRealGpsTracking();
+                                } else {
+                                  startRealGpsTracking();
+                                }
+                              }}
+                              className={`px-3 py-1.5 rounded-xl text-[10px] font-extrabold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                                isRealGpsActive
+                                  ? 'bg-emerald-500 text-slate-950 font-black animate-pulse'
+                                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                              }`}
+                            >
+                              <Compass size={12} className={isRealGpsActive ? "animate-spin" : ""} />
+                              <span>{isRealGpsActive ? 'GPS Ativo (Transmitindo)' : 'Usar GPS do Celular'}</span>
+                            </button>
+
+                            {/* Open Google Maps Button */}
+                            {currentNextOrder ? (
+                              <a
+                                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentNextOrder.address)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-extrabold flex items-center gap-1.5 shadow-sm transition-all"
+                              >
+                                <Navigation size={12} />
+                                <span>Google Maps</span>
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={captureInstantLocation}
+                                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-extrabold flex items-center gap-1 border border-white/10 cursor-pointer"
+                              >
+                                <MapPin size={11} className="text-amber-400" />
+                                <span>Capturar Posição</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Real GPS live coordinates badge */}
+                          {isRealGpsActive && realGpsData && (
+                            <div className="bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-[9px] px-3 py-1 rounded-xl font-mono flex items-center justify-between backdrop-blur-md shadow-md">
+                              <span>Lat: {realGpsData.lat.toFixed(5)}, Lng: {realGpsData.lng.toFixed(5)}</span>
+                              <span className="font-bold text-emerald-400">±{Math.round(realGpsData.accuracy)}m</span>
+                            </div>
+                          )}
+                        </div>
+
                         {/* Leaflet instance inside phone */}
                         <div className="flex-1 bg-slate-200 min-h-[300px]" ref={phoneMapContainerRef} />
 
@@ -3398,23 +3435,21 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-                                <span className="text-[9px] font-bold text-slate-400 uppercase">GPS Ativo: Rota de Entrega</span>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">GPS Ativo: Próxima Entrega</span>
                               </div>
                               <h5 className="font-extrabold text-[11px] truncate mt-0.5 text-slate-800">{currentNextOrder.clientName}</h5>
                               <p className="text-[9px] text-slate-500 truncate">{currentNextOrder.address}</p>
                             </div>
 
-                            <button
-                              onClick={() => {
-                                setSelectedOrder(currentNextOrder);
-                                setCurrentScreen('details');
-                                setActiveTab('tasks');
-                              }}
-                              className="px-2.5 py-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-lg cursor-pointer flex items-center gap-1"
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentNextOrder.address)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-2 bg-slate-900 hover:bg-black text-white text-[10px] font-black rounded-xl cursor-pointer flex items-center gap-1.5 shadow-md"
                             >
-                              <Navigation size={10} />
-                              <span>Navegar</span>
-                            </button>
+                              <Navigation size={11} className="text-emerald-400" />
+                              <span>Google Maps</span>
+                            </a>
                           </div>
                         )}
                       </div>
@@ -3567,13 +3602,13 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           )}
 
                           <a
-                            href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(selectedOrder.address)}`}
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selectedOrder.address)}`}
                             target="_blank"
-                            referrerPolicy="no-referrer"
-                            className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
+                            rel="noopener noreferrer"
+                            className="w-full py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                           >
-                            <ExternalLink size={12} />
-                            <span>Abrir no OpenStreetMap Externo</span>
+                            <Navigation size={14} className="text-emerald-400 animate-pulse" />
+                            <span>Abrir Rota no Google Maps</span>
                           </a>
                         </div>
                       </div>
