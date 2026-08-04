@@ -2900,9 +2900,9 @@ export default function App() {
 
   if (isStandaloneRider) {
     return (
-      <div className="flex h-screen w-screen bg-slate-900 overflow-hidden font-sans antialiased text-slate-100">
-        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-          <main className="flex-1 overflow-y-auto p-0">
+      <div className="flex h-screen h-[100dvh] w-screen bg-slate-900 overflow-hidden font-sans antialiased text-slate-100">
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+          <main className="flex-1 overflow-hidden p-0">
             <RiderAppSimulator
               riders={riders}
               orders={orders}

@@ -2674,7 +2674,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               {/* CURRENT ACTIVE APP SCREEN */}
               {currentScreen === 'login' ? (
                 /* SCREEN 1: INDIVIDUAL DRIVER APP LOGIN WITH TELEPHONE AND PASSWORD */
-                <div className="flex-1 p-5 flex flex-col justify-between bg-gradient-to-b from-blue-800 via-blue-900 to-slate-950 text-white overflow-y-auto">
+                <div className="flex-1 p-4 sm:p-5 flex flex-col justify-between bg-gradient-to-b from-blue-900 via-slate-900 to-slate-950 text-white overflow-y-auto">
                   
                   {/* Branding Header */}
                   <div className="space-y-1.5 text-center pt-2">
@@ -2682,7 +2682,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <img src={vinimapLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
                     </div>
                     <h3 className="text-base font-black tracking-tight mt-2 text-white">Vinimap Condutor</h3>
-                    <span className="text-[9px] text-blue-200 font-bold tracking-widest uppercase block">Aplicativo Individual de Campo</span>
+                    <span className="text-[9.5px] text-blue-200 font-bold tracking-widest uppercase block">Aplicativo de Campo do Entregador</span>
                   </div>
 
                   {/* Locked Driver Device Banner */}
@@ -2798,6 +2798,45 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     className="space-y-3.5 my-3"
                   >
                     <div className="space-y-3">
+                      {/* Driver Select Dropdown */}
+                      <div>
+                        <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">
+                          Condutor Cadastrado (Selecione abaixo)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-blue-300 pointer-events-none z-10">
+                            <User size={13} />
+                          </span>
+                          <select
+                            value={selectedRiderId || ''}
+                            onChange={(e) => {
+                              const id = e.target.value;
+                              if (id) {
+                                const r = riders.find(item => item.id === id);
+                                if (r) {
+                                  changeSelectedRiderId(r.id);
+                                  setPhoneInput(r.deviceNumber || r.phone || r.name);
+                                  setPasswordInput(r.password || '1234');
+                                  setLoginError(null);
+                                }
+                              } else {
+                                changeSelectedRiderId('');
+                                setPhoneInput('');
+                                setPasswordInput('');
+                              }
+                            }}
+                            className="w-full bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-900 border border-white/20 focus:border-blue-400 rounded-xl py-2 pl-8 pr-3 text-xs text-white focus:outline-none transition-all cursor-pointer font-semibold shadow-inner"
+                          >
+                            <option value="" className="bg-slate-900 text-slate-300">-- Selecione o Condutor Cadastrado --</option>
+                            {riders.map(r => (
+                              <option key={r.id} value={r.id} className="bg-slate-900 text-white">
+                                {r.name} ({r.vehicle || 'Veículo'}) — {r.deviceNumber || r.phone || 'Cadastrado'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
                       <div>
                         <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">Dispositivo / Telefone</label>
                         <div className="relative">
@@ -2857,34 +2896,33 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   </form>
 
                   {/* Quick select helpful tool */}
-                  {!isEffectiveRealDevice && (
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
-                      <span className="text-[8.5px] font-black text-blue-300 uppercase tracking-wider block">
-                        {lockedRiderId ? '🔒 Condutor Destinatário do Link:' : '⚠️ Acesso de Teste Rápido (Auto-Preencher):'}
-                      </span>
-                      <div className="grid grid-cols-1 gap-1 max-h-[110px] overflow-y-auto pr-1">
-                        {(lockedRiderId ? riders.filter(r => r.id === lockedRiderId) : riders.slice(0, 4)).map(r => (
-                          <button
-                            key={r.id}
-                            type="button"
-                            onClick={() => {
-                              setPhoneInput(r.deviceNumber || r.phone);
-                              setPasswordInput(r.password || '1234');
-                              setLoginError(null);
-                            }}
-                            className="w-full py-1 px-2 bg-white/5 hover:bg-white/10 rounded-lg text-left text-[9.5px] text-blue-100 flex items-center justify-between gap-1 border border-white/5 transition-all cursor-pointer"
-                          >
-                            <span className="font-semibold truncate">{r.name} ({r.vehicle})</span>
-                            <span className="font-mono text-blue-300 shrink-0">{r.deviceNumber || r.phone} (senha: {r.password || '1234'})</span>
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[8px] text-blue-300/60 leading-none m-0 text-center">Senha padrão: <strong className="text-blue-300">1234</strong> ou a cadastrada pelo administrador.</p>
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+                    <span className="text-[8.5px] font-black text-blue-300 uppercase tracking-wider block">
+                      {lockedRiderId ? '🔒 Condutor Destinatário do Link:' : '⚡ Seleção Rápida de Condutores Cadastrados:'}
+                    </span>
+                    <div className="grid grid-cols-1 gap-1 max-h-[120px] overflow-y-auto pr-1">
+                      {(lockedRiderId ? riders.filter(r => r.id === lockedRiderId) : riders).map(r => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => {
+                            changeSelectedRiderId(r.id);
+                            setPhoneInput(r.deviceNumber || r.phone || r.name);
+                            setPasswordInput(r.password || '1234');
+                            setLoginError(null);
+                          }}
+                          className="w-full py-1 px-2 bg-white/5 hover:bg-white/10 active:bg-white/15 rounded-lg text-left text-[9.5px] text-blue-100 flex items-center justify-between gap-1 border border-white/5 transition-all cursor-pointer"
+                        >
+                          <span className="font-semibold truncate">{r.name} ({r.vehicle})</span>
+                          <span className="font-mono text-blue-300 shrink-0">{r.deviceNumber || r.phone} (senha: {r.password || '1234'})</span>
+                        </button>
+                      ))}
                     </div>
-                  )}
+                    <p className="text-[8px] text-blue-300/60 leading-none m-0 text-center">Senha padrão: <strong className="text-blue-300">1234</strong> ou a cadastrada pelo administrador.</p>
+                  </div>
 
                   {/* Footer Terms */}
-                  <div className="text-center text-[8.5px] text-blue-300/80 pt-2">
+                  <div className="text-center text-[8.5px] text-blue-300/80 pt-2 pb-1">
                     Ao conectar, você aceita os termos operacionais do Vinimap OS.
                   </div>
 
