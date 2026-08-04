@@ -2544,19 +2544,17 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       )}
 
       {/* CORE WRAPPER LAYOUT */}
-      <div className={isEffectiveRealDevice ? "fixed inset-0 w-full h-full bg-slate-100 z-50 font-sans antialiased" : `grid grid-cols-1 ${isFloating ? 'grid-cols-1' : 'lg:grid-cols-12'} gap-6`}>
+      <div className={isEffectiveRealDevice ? "fixed inset-0 w-full h-full bg-slate-950/95 backdrop-blur-md z-50 font-sans antialiased flex items-center justify-center p-0 md:p-4 overflow-hidden" : `grid grid-cols-1 ${isFloating ? 'grid-cols-1' : 'lg:grid-cols-12'} gap-6`}>
         
         {/* PHONE EMULATOR SHELL (Lg: col-span-5) */}
-        <div className={isEffectiveRealDevice ? "w-full h-full" : `${isFloating ? 'w-full' : 'lg:col-span-5'} flex justify-center`}>
-          <div className={isEffectiveRealDevice ? "w-full h-full flex flex-col relative overflow-hidden" : "relative w-[360px] h-[720px] bg-slate-950 rounded-[48px] border-[10px] border-slate-900 shadow-2xl overflow-hidden shrink-0 flex flex-col"}>
+        <div className={isEffectiveRealDevice ? "w-full h-full md:max-w-[410px] md:h-[92vh] md:max-h-[850px] flex justify-center items-center" : `${isFloating ? 'w-full' : 'lg:col-span-5'} flex justify-center`}>
+          <div className={isEffectiveRealDevice ? "w-full h-full md:rounded-[42px] md:border-[8px] md:border-slate-800 md:shadow-2xl flex flex-col relative overflow-hidden bg-slate-900" : "relative w-[360px] h-[720px] bg-slate-950 rounded-[48px] border-[10px] border-slate-900 shadow-2xl overflow-hidden shrink-0 flex flex-col"}>
             
             {/* Camera / Notch */}
-            {!isEffectiveRealDevice && (
-              <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-slate-950 rounded-full z-50 flex items-center justify-between px-4">
-                <div className="w-2.5 h-2.5 bg-slate-900 rounded-full border border-slate-800" />
-                <div className="w-10 h-1 bg-slate-900 rounded-full" />
-              </div>
-            )}
+            <div className={isEffectiveRealDevice ? "hidden md:flex absolute top-2 left-1/2 transform -translate-x-1/2 w-28 h-5 bg-slate-950 rounded-full z-50 items-center justify-between px-3 border border-slate-800/60 pointer-events-none" : "absolute top-2 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-slate-950 rounded-full z-50 flex items-center justify-between px-4"}>
+              <div className="w-2 h-2 bg-slate-900 rounded-full border border-slate-800" />
+              <div className="w-8 h-1 bg-slate-900 rounded-full" />
+            </div>
 
             {/* Simulated Phone OS Status Bar */}
             {!isEffectiveRealDevice && (
@@ -2674,9 +2672,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               {/* CURRENT ACTIVE APP SCREEN */}
               {currentScreen === 'login' ? (
                 /* SCREEN 1: INDIVIDUAL DRIVER APP LOGIN WITH TELEPHONE AND PASSWORD */
-                <div className="flex-1 p-4 sm:p-5 flex flex-col justify-between bg-gradient-to-b from-blue-900 via-slate-900 to-slate-950 text-white overflow-y-auto">
-                  
-                  {/* Branding Header */}
+                <div className="flex-1 p-4 sm:p-5 flex flex-col justify-between bg-gradient-to-b from-blue-950 via-slate-900 to-slate-950 text-white overflow-y-auto">
+                  <div className="max-w-xs sm:max-w-sm mx-auto w-full flex flex-col justify-between h-full min-h-0 space-y-3.5 my-auto py-1">
+                    
+                    {/* Branding Header */}
                   <div className="space-y-1.5 text-center pt-2">
                     <div className="w-16 h-16 rounded-2xl mx-auto shadow-xl border-2 border-white/30 overflow-hidden bg-slate-900 flex items-center justify-center p-0.5">
                       <img src={vinimapLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
@@ -2922,10 +2921,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   </div>
 
                   {/* Footer Terms */}
-                  <div className="text-center text-[8.5px] text-blue-300/80 pt-2 pb-1">
+                  <div className="text-center text-[8.5px] text-blue-300/80 pt-1 pb-1">
                     Ao conectar, você aceita os termos operacionais do Vinimap OS.
                   </div>
 
+                  </div>
                 </div>
               ) : (
                 /* SCREENS RUNNING ACTIVE APPLICATION (HEADER & CONTENT & FOOTER NAVIGATION) */
