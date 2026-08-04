@@ -41,7 +41,9 @@ import {
   dbBulkDeleteTransactions,
   dbBulkSaveClients,
   dbBulkSaveRiders,
-  clearLocalSystemCache
+  clearLocalSystemCache,
+  dbPurgeMockClientPartners,
+  MOCK_CLIENT_IDS
 } from '../lib/dbService';
 
 interface DataMassManagerProps {
@@ -963,6 +965,32 @@ export default function DataMassManager({
                   className="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
                 >
                   Limpar
+                </button>
+              </div>
+
+              <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 flex items-center justify-between">
+                <div>
+                  <h4 className="font-extrabold text-xs text-amber-900 flex items-center gap-1.5">
+                    <Trash2 size={14} className="text-amber-600" />
+                    Excluir Parceiros Mockados
+                  </h4>
+                  <p className="text-[10px] text-amber-700">Expurgar definitivamente os 7 parceiros padrão de exemplo</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Deseja realmente excluir todos os clientes parceiros mockados de exemplo do banco de dados?')) {
+                      try {
+                        await dbPurgeMockClientPartners();
+                        setClientPartners(prev => prev.filter(c => !MOCK_CLIENT_IDS.includes(c.id)));
+                        showToast('Clientes parceiros mockados foram excluídos com sucesso!', 'success');
+                      } catch (err: any) {
+                        showToast(`Erro ao excluir parceiros mockados: ${err.message || err}`, 'error');
+                      }
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs"
+                >
+                  Excluir Mockados
                 </button>
               </div>
 

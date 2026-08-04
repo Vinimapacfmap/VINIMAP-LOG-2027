@@ -3995,11 +3995,31 @@ export default function App() {
                                           setSelectedCepRangesClient(item);
                                           setIsCepRangesModalOpen(true);
                                         }}
-                                        className="p-1 hover:bg-blue-50 text-blue-500 hover:text-blue-700 rounded-lg transition-colors cursor-pointer inline-flex items-center"
-                                        title="Tabela de faixas de CEP (Faixas & Frete)"
+                                        className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-[11px] font-bold transition-colors cursor-pointer inline-flex items-center gap-1"
+                                        title="Gerenciar faixas de CEP e tabela de frete"
                                       >
-                                        <MapPin size={13} />
+                                        <MapPin size={13} className="text-blue-600" />
+                                        <span>Faixas CEP</span>
                                       </button>
+
+                                      <button
+                                        onClick={() => {
+                                          // Recalculate freight for this client's pending orders
+                                          if (item.cepRanges && item.cepRanges.length > 0) {
+                                            handleRecalculateOrdersFreight(item.id, item.cepRanges);
+                                          } else {
+                                            // Open modal to import or manage ranges
+                                            setSelectedCepRangesClient(item);
+                                            setIsCepRangesModalOpen(true);
+                                          }
+                                        }}
+                                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 rounded-lg text-[11px] font-bold transition-colors cursor-pointer inline-flex items-center gap-1"
+                                        title="Recalcular valor de frete para todos os pedidos pendentes deste parceiro"
+                                      >
+                                        <RotateCcw size={13} className="text-amber-600" />
+                                        <span>Recalcular Lote</span>
+                                      </button>
+
                                       <button
                                         onClick={() => {
                                           setEditingClient(item);
@@ -5433,6 +5453,7 @@ export default function App() {
             }}
             client={clientPartners.find(c => c.id === selectedCepRangesClient?.id) || selectedCepRangesClient}
             allClientPartners={clientPartners}
+            orders={orders}
             onSaveCepRanges={handleSaveCepRanges}
             onRecalculateOrdersFreight={handleRecalculateOrdersFreight}
           />
