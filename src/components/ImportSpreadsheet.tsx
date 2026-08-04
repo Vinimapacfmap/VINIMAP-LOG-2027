@@ -295,13 +295,13 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
           warnings.push(`O parceiro '${codCliente}' será cadastrado automaticamente no sistema ao importar.`);
         }
       }
-      if (!dataSol) errors.push("Campo obrigatório ausente: 'DataSolicitacao' (Data da Solicitação).");
-
-      // Rule 2: Date Solicitação must be today's date
-      if (dataSol) {
+      // Rule 2: Date Solicitação validation (flexible & robust)
+      if (!dataSol) {
+        warnings.push(`DataSolicitacao não informada: o pedido será atribuído automaticamente à data de hoje (${todayReal}).`);
+      } else {
         const normalizedSolDate = normalizeDate(dataSol);
         if (normalizedSolDate !== todayBaseline && normalizedSolDate !== todayReal) {
-          errors.push(`A 'DataSolicitacao' (${dataSol}) deve ser o dia de hoje (${todayBaseline} ou ${todayReal}).`);
+          warnings.push(`A 'DataSolicitacao' (${dataSol}) é de uma data diferente de hoje (${todayReal}), mas o pedido será importado normalmente.`);
         }
       }
 
@@ -531,13 +531,13 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
         horarioInicial: getRowValue(data, 'HorarioInicio') || undefined,
         horarioFinal: getRowValue(data, 'HorarioFinal') || undefined,
         deliveryTime: getRowValue(data, 'HorarioFinal') || undefined,
-        deliveryDate: normalizeDate(getRowValue(data, 'DataSolicitacao')) || undefined,
+        deliveryDate: normalizeDate(getRowValue(data, 'DataSolicitacao')) || getSaoPauloISODate(),
         dataConclusao: finalDataConclusao,
         lat: orderLat,
         lng: orderLng,
         timeRemaining: 40,
         itemsCount: Math.floor(Math.random() * 3) + 1,
-        date: normalizeDate(getRowValue(data, 'DataSolicitacao')),
+        date: normalizeDate(getRowValue(data, 'DataSolicitacao')) || getSaoPauloISODate(),
         cep: formattedCep,
         deliveryValue: finalFreightValue,
         driverValue: finalDriverValue,

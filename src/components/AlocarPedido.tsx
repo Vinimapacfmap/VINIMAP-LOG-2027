@@ -1244,9 +1244,13 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                       className="text-xs bg-white border border-slate-200 rounded-lg py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-700 w-full sm:max-w-xs cursor-pointer"
                     >
                       <option value="">Selecione um condutor...</option>
-                      {riders.filter(r => r.status !== 'Offline').map(rider => (
+                      {riders.map(rider => (
                         <option key={rider.id} value={rider.id}>
-                          {rider.name} ({rider.vehicle}) — {rider.status === 'Em rota' ? 'Em Rota (Ativo - Aceita Inclusões)' : 'Livre'}
+                          {rider.name} ({rider.vehicle || 'Veículo Padrão'}) — {
+                            rider.status === 'Em rota' ? 'Em Rota (Ativo - Aceita Inclusões)' :
+                            rider.status === 'Disponível' ? 'Disponível (Livre)' :
+                            `Cadastrado (${rider.status || 'Offline'})`
+                          }
                         </option>
                       ))}
                     </select>

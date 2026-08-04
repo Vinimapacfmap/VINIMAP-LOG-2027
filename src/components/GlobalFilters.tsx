@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { DeliveryRider, OrderStatus, ClientPartner } from '../types';
+import { formatToBrazilianDate } from '../utils/dateUtils';
 import { 
   Filter, 
   Calendar, 
@@ -133,9 +134,16 @@ export default function GlobalFilters({
         <div className="px-5 pb-5 pt-1 border-t border-slate-50 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4" id="filters-form-grid">
           {/* 1. Data Inicial Filter */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1 select-none">
-              <Calendar size={10} className="text-slate-400" />
-              Data Inicial
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center justify-between select-none">
+              <span className="flex items-center gap-1">
+                <Calendar size={10} className="text-slate-400" />
+                Data Inicial
+              </span>
+              {filterDateFrom && (
+                <span className="text-[10px] text-blue-600 font-bold lowercase">
+                  ({formatToBrazilianDate(filterDateFrom)})
+                </span>
+              )}
             </label>
             <input
               type="date"
@@ -151,9 +159,16 @@ export default function GlobalFilters({
 
           {/* 2. Data Final Filter */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1 select-none">
-              <Calendar size={10} className="text-slate-400" />
-              Data Final
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center justify-between select-none">
+              <span className="flex items-center gap-1">
+                <Calendar size={10} className="text-slate-400" />
+                Data Final
+              </span>
+              {filterDateTo && (
+                <span className="text-[10px] text-blue-600 font-bold lowercase">
+                  ({formatToBrazilianDate(filterDateTo)})
+                </span>
+              )}
             </label>
             <input
               type="date"

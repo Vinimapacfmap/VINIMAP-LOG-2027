@@ -1714,10 +1714,29 @@ export default function App() {
 
     if (missingPartners.length > 0) {
       missingPartners.forEach(p => dbSaveClientPartner(p));
+      setClientPartners(prev => {
+        const existingIds = new Set(prev.map(cp => cp.id));
+        const newPartners = missingPartners.filter(p => !existingIds.has(p.id));
+        return [...newPartners, ...prev];
+      });
     }
 
     if (importedOrders.length > 0) {
       dbBulkSaveOrders(importedOrders);
+      setOrders(prev => {
+        const importedIds = new Set(importedOrders.map(i => i.id));
+        const remainingPrev = prev.filter(p => !importedIds.has(p.id));
+        return [...importedOrders, ...remainingPrev];
+      });
+
+      // Expand date filters if needed so user sees imported orders immediately
+      const importedDates = importedOrders.map(o => o.date).filter(Boolean);
+      if (importedDates.length > 0) {
+        const minDate = importedDates.reduce((a, b) => (a < b ? a : b));
+        const maxDate = importedDates.reduce((a, b) => (a > b ? a : b));
+        setFilterDateFrom(prev => (prev && prev < minDate ? prev : minDate));
+        setFilterDateTo(prev => (prev && prev > maxDate ? prev : maxDate));
+      }
     }
 
     // Create activity logs
@@ -1730,6 +1749,7 @@ export default function App() {
     }));
     if (newLogs.length > 0) {
       dbBulkSaveActivityLogs(newLogs);
+      setLogs(prev => [...newLogs, ...prev]);
     }
   };
 

@@ -1,5 +1,5 @@
 {
-  "id": "/?view=driver_mobile",
+  "id": "vinimap-condutor-app",
   "short_name": "Vinimap Condutor",
   "name": "Vinimap Logistics - App do Condutor",
   "icons": [
@@ -7,37 +7,13 @@
       "src": "/icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-192.png",
-      "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icon-192.jpg",
-      "type": "image/jpeg",
-      "sizes": "192x192",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.jpg",
-      "type": "image/jpeg",
-      "sizes": "512x512",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ],
   "start_url": "/?view=driver_mobile",

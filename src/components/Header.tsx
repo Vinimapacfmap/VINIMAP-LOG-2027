@@ -41,12 +41,15 @@ export default function Header({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [timeStr, setTimeStr] = useState('');
+  const [dateStr, setDateStr] = useState('');
 
-  // Real-time Clock in PT-BR style
+  // Real-time Clock and Date in PT-BR style (São Paulo)
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
-      setTimeStr(now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setTimeStr(now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      const parts = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }).format(now);
+      setDateStr(parts);
     };
     updateClock();
     const interval = setInterval(updateClock, 1000);
@@ -110,11 +113,13 @@ export default function Header({
       {/* Right Controls */}
       <div className="flex items-center gap-4">
         
-        {/* Real-Time Operational Clock */}
+        {/* Real-Time Operational Clock & Date */}
         <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-600 font-mono" id="header-clock">
           <Clock size={14} className="text-blue-500 animate-spin" style={{ animationDuration: '8s' }} />
-          <span>{timeStr || '13:17:38'}</span>
-          <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded uppercase font-sans font-bold">Live</span>
+          <span className="font-sans font-bold text-slate-700">{dateStr}</span>
+          <span className="text-slate-300">•</span>
+          <span>{timeStr}</span>
+          <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded uppercase font-sans font-bold">Ao Vivo</span>
         </div>
 
         {/* Notifications Center */}
