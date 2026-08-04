@@ -58,6 +58,8 @@ import { db } from './firebase';
 import {
   seedInitialDataIfEmpty,
   INITIAL_CLIENT_PARTNERS,
+  MOCK_CLIENT_IDS,
+  dbPurgeMockClientPartners,
   dbSaveOrder,
   dbDeleteOrder,
   dbBulkSaveOrders,
@@ -525,7 +527,9 @@ export default function App() {
           const sbState = await fetchAllStateFromSupabase();
           if (isCancelled) return;
           if (sbState.orders && sbState.orders.length > 0) setOrders(sbState.orders);
-          if (sbState.clients && sbState.clients.length > 0) setClientPartners(sbState.clients);
+          if (sbState.clients && sbState.clients.length > 0) {
+            setClientPartners(sbState.clients.filter((c: ClientPartner) => !MOCK_CLIENT_IDS.includes(c.id)));
+          }
           if (sbState.riders && sbState.riders.length > 0) setRiders(sbState.riders);
           if (sbState.logs && sbState.logs.length > 0) setLogs(sbState.logs);
           if (sbState.txs && sbState.txs.length > 0) setFinancialTransactions(sbState.txs);
@@ -544,7 +548,9 @@ export default function App() {
           const parsed = JSON.parse(storedBackup);
           if (isCancelled) return;
           if (parsed.orders && parsed.orders.length > 0) setOrders(parsed.orders);
-          if (parsed.clientPartners && parsed.clientPartners.length > 0) setClientPartners(parsed.clientPartners);
+          if (parsed.clientPartners && parsed.clientPartners.length > 0) {
+            setClientPartners(parsed.clientPartners.filter((c: ClientPartner) => !MOCK_CLIENT_IDS.includes(c.id)));
+          }
           if (parsed.deliveryRiders && parsed.deliveryRiders.length > 0) setRiders(parsed.deliveryRiders);
           if (parsed.financialTransactions && parsed.financialTransactions.length > 0) setFinancialTransactions(parsed.financialTransactions);
           if (parsed.companyHubs && parsed.companyHubs.length > 0) setCompanyHubs(parsed.companyHubs);
@@ -558,12 +564,15 @@ export default function App() {
       // 3. Fallback to initial mock data if React state is empty
       if (isCancelled) return;
       setOrders(prev => prev.length === 0 ? INITIAL_ORDERS : prev);
-      setClientPartners(prev => prev.length === 0 ? INITIAL_CLIENT_PARTNERS : prev);
+      setClientPartners(prev => prev.filter(c => !MOCK_CLIENT_IDS.includes(c.id)));
       setRiders(prev => prev.length === 0 ? INITIAL_RIDERS : prev);
       setLogs(prev => prev.length === 0 ? INITIAL_LOGS : prev);
       setFinancialTransactions(prev => prev.length === 0 ? INITIAL_FINANCIAL_TRANSACTIONS : prev);
       setCompanyHubs(prev => prev.length === 0 ? INITIAL_COMPANY_HUBS : prev);
     };
+
+    // Auto purge mock client partners if any exist in remote database
+    dbPurgeMockClientPartners().catch(() => {});
 
     // 1. Ensure any stale or previous listeners are actively cleaned up
     cleanupAllFirestoreListeners();
@@ -608,7 +617,10 @@ export default function App() {
       onSnapshot(collection(db, 'clientPartners'), (snapshot) => {
         const docs: ClientPartner[] = [];
         snapshot.forEach(doc => {
-          docs.push(doc.data() as ClientPartner);
+          const data = doc.data() as ClientPartner;
+          if (!MOCK_CLIENT_IDS.includes(data.id)) {
+            docs.push(data);
+          }
         });
         setClientPartners(docs);
       }, (error) => handleListenerError(error, 'clientPartners'))
@@ -3878,6 +3890,33 @@ export default function App() {
                                 className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"
                               />
                             </div>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.confirm('Deseja realmente excluir definitivamente todos os clientes parceiros mockados do dashboard e do banco de dados?')) {
+                                  try {
+                                    await dbPurgeMockClientPartners();
+                                    setClientPartners(prev => prev.filter(c => !MOCK_CLIENT_IDS.includes(c.id)));
+                                    const logId = generateUniqueLogId();
+                                    await dbAddActivityLog({
+                                      id: logId,
+                                      time: getSaoPauloTime(),
+                                      type: 'warning',
+                                      message: 'Clientes parceiros mockados foram excluídos permanentemente.',
+                                    });
+                                    alert('Clientes parceiros mockados foram excluídos com sucesso!');
+                                  } catch (err: any) {
+                                    alert(`Erro ao excluir parceiros mockados: ${err.message || err}`);
+                                  }
+                                }
+                              }}
+                              className="px-3 py-1.5 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-xs bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60"
+                              title="Excluir Definitivamente Clientes Parceiros Mockados"
+                            >
+                              <Trash2 size={13} />
+                              <span>Excluir Mockados</span>
+                            </button>
 
                             <button
                               onClick={() => setShowClientForm(!showClientForm)}

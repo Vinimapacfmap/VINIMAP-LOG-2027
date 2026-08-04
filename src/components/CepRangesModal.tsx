@@ -5,7 +5,7 @@
 
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CepRange, ClientPartner, CepTableHistoryItem } from '../types';
+import { CepRange, ClientPartner, CepTableHistoryItem, Order } from '../types';
 import FreightTableImportManager from './FreightTableImportManager';
 
 interface CepRangesModalProps {
@@ -13,6 +13,7 @@ interface CepRangesModalProps {
   onClose: () => void;
   client: ClientPartner | null;
   allClientPartners?: ClientPartner[];
+  orders?: Order[];
   onSaveCepRanges: (clientId: string, ranges: CepRange[], history?: CepTableHistoryItem[]) => void;
   onRecalculateOrdersFreight?: (clientId: string, ranges: CepRange[]) => void;
 }
@@ -22,6 +23,7 @@ export default function CepRangesModal({
   onClose, 
   client, 
   allClientPartners,
+  orders = [],
   onSaveCepRanges,
   onRecalculateOrdersFreight
 }: CepRangesModalProps) {
@@ -51,6 +53,7 @@ export default function CepRangesModal({
         >
           <FreightTableImportManager
             clientPartners={clientsList}
+            orders={orders}
             initialSelectedClientId={client.id}
             onSaveClientCepRanges={onSaveCepRanges}
             onRecalculateOrdersFreight={onRecalculateOrdersFreight}

@@ -40,173 +40,11 @@ import {
 import { INITIAL_RIDERS, INITIAL_ORDERS, INITIAL_LOGS } from '../data/mock';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from '../data/financialMock';
 
-// Define the default client partners since they are not in mock.ts
-export const INITIAL_CLIENT_PARTNERS: ClientPartner[] = [
-  { 
-    id: 'CL1-001', 
-    codigoCliente: 'CL1-001', 
-    name: 'Ana Silva', 
-    region: 'Centro', 
-    tel: '(11) 99123-4567', 
-    addr: 'Av. Paulista, 1000', 
-    status: 'Adimplente', 
-    type: 'Parceiro', 
-    cnpj: '12.345.678/0001-00', 
-    cep: '01310-100', 
-    cidade: 'São Paulo', 
-    estado: 'SP', 
-    cepRanges: [
-      { id: 'cl1-r1-v2', cepStart: '01000-000', cepEnd: '01399-999', value: 10.00, expressValue: 14.00, driverRepass: 8.00, description: 'Centro Expandido' },
-      { id: 'cl1-r2-v2', cepStart: '01400-000', cepEnd: '01499-999', value: 12.00, expressValue: 16.00, driverRepass: 9.50, description: 'Jardins / Cerqueira César' },
-      { id: 'cl1-r3-v2', cepStart: '01500-000', cepEnd: '01999-999', value: 11.00, expressValue: 15.00, driverRepass: 8.80, description: 'Liberdade / Bela Vista' },
-      { id: 'cl1-r4-v2', cepStart: '02000-000', cepEnd: '02999-999', value: 14.00, expressValue: 18.50, driverRepass: 11.00, description: 'Zona Norte (Santana/Tucuruvi)' },
-      { id: 'cl1-r5-v2', cepStart: '03000-000', cepEnd: '03999-999', value: 15.00, expressValue: 19.50, driverRepass: 12.00, description: 'Zona Leste (Tatuapé/Mooca)' },
-      { id: 'cl1-r6-v2', cepStart: '04000-000', cepEnd: '04999-999', value: 13.50, expressValue: 17.50, driverRepass: 10.80, description: 'Zona Sul (Vila Mariana/Itaim)' },
-      { id: 'cl1-r7-v2', cepStart: '05000-000', cepEnd: '05999-999', value: 14.50, expressValue: 19.00, driverRepass: 11.50, description: 'Zona Oeste (Pinheiros/Lapa)' }
-    ],
-    cepRangesHistory: [
-      {
-        id: 'hist-cl1-001-v2',
-        importedAt: '25/07/2026 09:30',
-        filename: 'Tabela_Precos_CEP_Ana_Silva_2026_v2.xlsx',
-        rangesCount: 7,
-        note: 'Última tabela de frete e repasses importada (Ativa)',
-        cepRanges: [
-          { id: 'cl1-r1-v2', cepStart: '01000-000', cepEnd: '01399-999', value: 10.00, expressValue: 14.00, driverRepass: 8.00, description: 'Centro Expandido' },
-          { id: 'cl1-r2-v2', cepStart: '01400-000', cepEnd: '01499-999', value: 12.00, expressValue: 16.00, driverRepass: 9.50, description: 'Jardins / Cerqueira César' },
-          { id: 'cl1-r3-v2', cepStart: '01500-000', cepEnd: '01999-999', value: 11.00, expressValue: 15.00, driverRepass: 8.80, description: 'Liberdade / Bela Vista' },
-          { id: 'cl1-r4-v2', cepStart: '02000-000', cepEnd: '02999-999', value: 14.00, expressValue: 18.50, driverRepass: 11.00, description: 'Zona Norte (Santana/Tucuruvi)' },
-          { id: 'cl1-r5-v2', cepStart: '03000-000', cepEnd: '03999-999', value: 15.00, expressValue: 19.50, driverRepass: 12.00, description: 'Zona Leste (Tatuapé/Mooca)' },
-          { id: 'cl1-r6-v2', cepStart: '04000-000', cepEnd: '04999-999', value: 13.50, expressValue: 17.50, driverRepass: 10.80, description: 'Zona Sul (Vila Mariana/Itaim)' },
-          { id: 'cl1-r7-v2', cepStart: '05000-000', cepEnd: '05999-999', value: 14.50, expressValue: 19.00, driverRepass: 11.50, description: 'Zona Oeste (Pinheiros/Lapa)' }
-        ]
-      },
-      {
-        id: 'hist-cl1-001-v1',
-        importedAt: '10/01/2026 14:15',
-        filename: 'Tabela_Precos_CEP_Ana_Silva_2026_v1.xlsx',
-        rangesCount: 3,
-        note: 'Tabela anterior (Substituída)',
-        cepRanges: [
-          { id: 'cl1-r1', cepStart: '01000-000', cepEnd: '01399-999', value: 10.00, expressValue: 14.00, driverRepass: 8.00, description: 'Centro Expandido v1' },
-          { id: 'cl1-r2', cepStart: '01400-000', cepEnd: '01499-999', value: 12.00, expressValue: 16.00, driverRepass: 9.50, description: 'Jardins / Cerqueira César v1' },
-          { id: 'cl1-r3', cepStart: '01500-000', cepEnd: '01999-999', value: 11.00, expressValue: 15.00, driverRepass: 8.80, description: 'Liberdade / Bela Vista v1' }
-        ]
-      }
-    ]
-  },
-  { 
-    id: 'CL1-002', 
-    codigoCliente: 'CL1-002', 
-    name: 'Pedro Santos', 
-    region: 'Centro', 
-    tel: '(11) 98234-5678', 
-    addr: 'Rua Augusta, 420', 
-    status: 'Adimplente', 
-    type: 'Parceiro', 
-    cnpj: '23.456.789/0001-11', 
-    cep: '01303-010', 
-    cidade: 'São Paulo', 
-    estado: 'SP', 
-    cepRanges: [
-      { id: 'ps-r1', cepStart: '01000-000', cepEnd: '01399-999', value: 9.50, expressValue: 13.50, driverRepass: 7.50, description: 'Centro Expandido' },
-      { id: 'ps-r2', cepStart: '01400-000', cepEnd: '01499-999', value: 12.00, expressValue: 16.00, driverRepass: 9.50, description: 'Jardins / Cerqueira César' }
-    ] 
-  },
-  { 
-    id: 'CL1-003', 
-    codigoCliente: 'CL1-003', 
-    name: 'Mariana Costa', 
-    region: 'Zona Sul', 
-    tel: '(11) 97345-6789', 
-    addr: 'Al. Lorena, 1500', 
-    status: 'Ativo', 
-    type: 'Parceiro', 
-    cnpj: '34.567.890/0001-22', 
-    cep: '01415-000', 
-    cidade: 'São Paulo', 
-    estado: 'SP', 
-    cepRanges: [
-      { id: 'mc-r1', cepStart: '04000-000', cepEnd: '04599-999', value: 11.00, expressValue: 15.00, driverRepass: 8.80, description: 'Vila Mariana & Itaim' },
-      { id: 'mc-r2', cepStart: '01400-000', cepEnd: '01499-999', value: 10.00, expressValue: 14.00, driverRepass: 8.00, description: 'Jardins' }
-    ] 
-  },
-  { 
-    id: 'CL1-004', 
-    codigoCliente: 'CL1-004', 
-    name: 'Beatriz Lima', 
-    region: 'Zona Oeste', 
-    tel: '(11) 95567-8901', 
-    addr: 'Av. Brigadeiro Faria Lima, 3477', 
-    status: 'Adimplente', 
-    type: 'Parceiro', 
-    cnpj: '45.678.901/0001-33', 
-    cep: '01452-000', 
-    cidade: 'São Paulo', 
-    estado: 'SP', 
-    cepRanges: [
-      { id: 'bl-r1', cepStart: '05400-000', cepEnd: '05499-999', value: 13.00, expressValue: 17.00, driverRepass: 10.00, description: 'Pinheiros / Faria Lima' },
-      { id: 'bl-r2', cepStart: '01400-000', cepEnd: '01499-999', value: 12.00, expressValue: 16.00, driverRepass: 9.50, description: 'Jardins' }
-    ] 
-  },
-  { 
-    id: 'CL1-005', 
-    codigoCliente: 'CL1-005', 
-    name: 'Burger King', 
-    region: 'Centro', 
-    tel: '(11) 3003-5464', 
-    addr: 'Av. Paulista, 1200', 
-    status: 'Ativo', 
-    type: 'Parceiro', 
-    cnpj: '17.261.661/0001-73', 
-    cep: '01311-200', 
-    cidade: 'São Paulo', 
-    estado: 'SP',
-    cepRanges: [
-      { id: 'bk-r1', cepStart: '01000-000', cepEnd: '01399-999', value: 8.90, description: 'Centro Expandido', expressValue: 12.90, driverRepass: 7.00 },
-      { id: 'bk-r2', cepStart: '01400-000', cepEnd: '01499-999', value: 11.50, description: 'Jardins / Cerqueira César', expressValue: 15.50, driverRepass: 9.00 },
-      { id: 'bk-r3', cepStart: '01500-000', cepEnd: '01999-999', value: 10.00, description: 'Liberdade / Bela Vista', expressValue: 14.00, driverRepass: 8.00 }
-    ] 
-  },
-  { 
-    id: 'CL1-006', 
-    codigoCliente: 'CL1-006', 
-    name: 'Bella Paulista', 
-    region: 'Centro', 
-    tel: '(11) 3211-1234', 
-    addr: 'Rua Haddock Lobo, 354', 
-    status: 'Ativo', 
-    type: 'Parceiro', 
-    cnpj: '56.789.012/0001-44', 
-    cep: '01303-050', 
-    cidade: 'São Paulo', 
-    estado: 'SP',
-    cepRanges: [
-      { id: 'bella-r1', cepStart: '01300-000', cepEnd: '01399-999', value: 6.00, description: 'Consolação & Bela Vista', expressValue: 9.00, driverRepass: 4.80 },
-      { id: 'bella-r2', cepStart: '01200-000', cepEnd: '01299-999', value: 8.50, description: 'Higienópolis & Santa Cecília', expressValue: 11.50, driverRepass: 6.80 },
-      { id: 'bella-r3', cepStart: '01400-000', cepEnd: '01499-999', value: 9.00, description: 'Cerqueira César', expressValue: 12.00, driverRepass: 7.20 }
-    ] 
-  },
-  { 
-    id: 'CL1-007', 
-    codigoCliente: 'CL1-007', 
-    name: 'Droga Raia', 
-    region: 'Zona Sul', 
-    tel: '(11) 3003-7242', 
-    addr: 'Rua Pamplona, 1792', 
-    status: 'Adimplente', 
-    type: 'Parceiro', 
-    cnpj: '67.890.123/0001-55', 
-    cep: '01415-002', 
-    cidade: 'São Paulo', 
-    estado: 'SP',
-    cepRanges: [
-      { id: 'raia-r1', cepStart: '01400-000', cepEnd: '01499-999', value: 5.00, description: 'Região Jardins', expressValue: 8.00, driverRepass: 4.00 },
-      { id: 'raia-r2', cepStart: '04500-000', cepEnd: '04599-999', value: 8.00, description: 'Itaim Bibi', expressValue: 11.00, driverRepass: 6.50 },
-      { id: 'raia-r3', cepStart: '01300-000', cepEnd: '01399-999', value: 7.50, description: 'Bela Vista', expressValue: 10.50, driverRepass: 6.00 }
-    ] 
-  }
-];
+// Default client partners set to empty to permanently exclude mocked partners
+export const INITIAL_CLIENT_PARTNERS: ClientPartner[] = [];
+
+// Known list of mock client partner IDs to allow permanent deletion across Firestore and Supabase
+export const MOCK_CLIENT_IDS = ['CL1-001', 'CL1-002', 'CL1-003', 'CL1-004', 'CL1-005', 'CL1-006', 'CL1-007'];
 
 // Helper function to recursively remove undefined fields before saving to Firestore
 function removeUndefinedFields<T>(obj: T): T {
@@ -757,6 +595,17 @@ export async function dbDeleteClientPartner(clientId: string) {
       await deleteDoc(doc(db, 'clientPartners', clientId));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `clientPartners/${clientId}`);
+    }
+  }
+}
+
+// Function to permanently purge mock client partners from Firestore, Supabase, and local storage
+export async function dbPurgeMockClientPartners(): Promise<void> {
+  for (const mockId of MOCK_CLIENT_IDS) {
+    try {
+      await dbDeleteClientPartner(mockId);
+    } catch (err) {
+      console.warn(`Could not delete mock client ${mockId}:`, err);
     }
   }
 }

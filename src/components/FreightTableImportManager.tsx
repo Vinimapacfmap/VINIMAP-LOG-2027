@@ -9,7 +9,8 @@ import {
   FileSpreadsheet, Upload, Search, Plus, Trash2, Pencil, Check, 
   AlertCircle, MapPin, Calculator, History, Download, FileText, 
   Calendar, Layers, Sparkles, RefreshCw, ChevronRight, UserCheck,
-  Building2, DollarSign, Filter, ArrowRight, Eye, RotateCcw, X, HelpCircle
+  Building2, DollarSign, Filter, ArrowRight, Eye, RotateCcw, X, HelpCircle,
+  CheckCircle2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
@@ -228,6 +229,63 @@ export default function FreightTableImportManager({
       effectiveDate
     };
   }, [activeRanges]);
+
+  // Pending orders calculation for current selected partner
+  const pendingOrdersForActiveClient = useMemo(() => {
+    if (!activeClient || !orders || orders.length === 0) return [];
+    return orders.filter(o => {
+      const isPartnerMatch = 
+        isMatchingClientCode(o.partnerName, activeClient.id, activeClient.codigoCliente) ||
+        isMatchingClientCode(o.clientName, activeClient.id, activeClient.codigoCliente) ||
+        (o.partnerName && activeClient.name && o.partnerName.toLowerCase() === activeClient.name.toLowerCase()) ||
+        (o.clientName && activeClient.name && o.clientName.toLowerCase() === activeClient.name.toLowerCase());
+      
+      const isPending = o.status !== 'Concluído' && o.status !== 'Cancelado';
+      return isPartnerMatch && isPending;
+    });
+  }, [activeClient, orders]);
+
+  const [recalculatingBatch, setRecalculatingBatch] = useState(false);
+  const [batchSuccessMessage, setBatchSuccessMessage] = useState<string | null>(null);
+
+  const handleExecuteBatchRecalculate = (targetClientId?: string) => {
+    const targetId = targetClientId || selectedClientId;
+    const clientToRecalc = clientPartners.find(c => c.id === targetId) || activeClient;
+    if (!clientToRecalc) return;
+
+    const targetPendingOrders = orders.filter(o => {
+      const isPartnerMatch = 
+        isMatchingClientCode(o.partnerName, clientToRecalc.id, clientToRecalc.codigoCliente) ||
+        isMatchingClientCode(o.clientName, clientToRecalc.id, clientToRecalc.codigoCliente) ||
+        (o.partnerName && clientToRecalc.name && o.partnerName.toLowerCase() === clientToRecalc.name.toLowerCase()) ||
+        (o.clientName && clientToRecalc.name && o.clientName.toLowerCase() === clientToRecalc.name.toLowerCase());
+      
+      const isPending = o.status !== 'Concluído' && o.status !== 'Cancelado';
+      return isPartnerMatch && isPending;
+    });
+
+    if (targetPendingOrders.length === 0) {
+      alert(`Não existem pedidos pendentes para o parceiro "${clientToRecalc.name}".`);
+      return;
+    }
+
+    const confirmMsg = `Deseja recalcular a tabela de frete em lote para todos os ${targetPendingOrders.length} pedido(s) pendente(s) do parceiro "${clientToRecalc.name}" de uma única vez?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setRecalculatingBatch(true);
+    setBatchSuccessMessage(null);
+
+    try {
+      if (onRecalculateOrdersFreight) {
+        onRecalculateOrdersFreight(clientToRecalc.id, activeRanges);
+      }
+      setBatchSuccessMessage(`Recálculo em lote concluído com sucesso! ${targetPendingOrders.length} pedido(s) pendente(s) do parceiro "${clientToRecalc.name}" foram recalculados com a nova tabela.`);
+    } catch (err: any) {
+      alert(`Erro ao recalcular em lote: ${err.message || err}`);
+    } finally {
+      setRecalculatingBatch(false);
+    }
+  };
 
   // Central function to save changes with history
   const saveRangesWithHistory = (
@@ -940,28 +998,45 @@ export default function FreightTableImportManager({
               </div>
             </div>
 
-            {/* Quick Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 text-xs">
-              <div>
-                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Faixas de CEP</span>
-                <span className="font-extrabold text-blue-300 text-sm">{clientStats.totalRanges} ativas</span>
+            {/* Quick Metrics & Batch Recalculate Button */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 text-xs flex-1">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase">Faixas de CEP</span>
+                  <span className="font-extrabold text-blue-300 text-sm">{clientStats.totalRanges} ativas</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase">Frete Médio</span>
+                  <span className="font-extrabold text-emerald-400 text-sm">
+                    {clientStats.avgFreight.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase">Média Repasse</span>
+                  <span className="font-extrabold text-amber-300 text-sm">
+                    {clientStats.avgRepass.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase">Vigência</span>
+                  <span className="font-extrabold text-slate-200 text-xs truncate block">{clientStats.effectiveDate}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Frete Médio</span>
-                <span className="font-extrabold text-emerald-400 text-sm">
-                  {clientStats.avgFreight.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Média Repasse</span>
-                <span className="font-extrabold text-amber-300 text-sm">
-                  {clientStats.avgRepass.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Vigência</span>
-                <span className="font-extrabold text-slate-200 text-xs truncate block">{clientStats.effectiveDate}</span>
-              </div>
+
+              <button
+                onClick={() => handleExecuteBatchRecalculate(activeClient.id)}
+                disabled={recalculatingBatch || activeRanges.length === 0}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 border border-amber-400 shrink-0"
+                title="Aplicar a tabela de frete ativa em lote para todos os pedidos pendentes deste parceiro"
+              >
+                <RotateCcw size={15} className={recalculatingBatch ? "animate-spin" : ""} />
+                <div className="flex flex-col text-left">
+                  <span className="leading-tight">Recalcular Lote</span>
+                  <span className="text-[10px] text-amber-100 font-normal">
+                    {pendingOrdersForActiveClient.length} pedido(s) pendente(s)
+                  </span>
+                </div>
+              </button>
             </div>
 
           </div>
@@ -1034,6 +1109,23 @@ export default function FreightTableImportManager({
       {/* CONTENT AREA */}
       <div className="p-5 overflow-y-auto flex-1 space-y-6">
 
+        {/* Batch Success Message Banner */}
+        {batchSuccessMessage && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-semibold flex items-center justify-between gap-3 shadow-sm animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+              <span>{batchSuccessMessage}</span>
+            </div>
+            <button 
+              onClick={() => setBatchSuccessMessage(null)}
+              className="text-emerald-700 hover:text-emerald-950 font-bold p-1 cursor-pointer"
+              title="Fechar"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
+
         {/* 1. TABELA ATIVA */}
         {activeTab === 'tabela_ativa' && activeClient && (
           <div className="space-y-5">
@@ -1052,6 +1144,21 @@ export default function FreightTableImportManager({
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleExecuteBatchRecalculate(activeClient.id)}
+                  disabled={recalculatingBatch || activeRanges.length === 0}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm border border-amber-400"
+                  title="Recalcular valor de frete em lote para todos os pedidos pendentes deste parceiro"
+                >
+                  <RotateCcw size={13} className={recalculatingBatch ? "animate-spin" : ""} />
+                  <span>Recalcular Lote</span>
+                  {pendingOrdersForActiveClient.length > 0 && (
+                    <span className="px-1.5 py-0.2 bg-amber-700 text-amber-100 rounded-full text-[10px] font-mono font-extrabold">
+                      {pendingOrdersForActiveClient.length}
+                    </span>
+                  )}
+                </button>
+
                 <button
                   onClick={handleExportExcel}
                   disabled={activeRanges.length === 0}

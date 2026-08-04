@@ -62,13 +62,13 @@ interface DataMassManagerProps {
 
 // SP Addresses pool for ultra-realistic order generation
 const SP_ADDRESS_POOL = [
-  { address: 'Av. Paulista, 1000', region: 'Centro', client: 'Ana Silva', lat: -23.5614, lng: -46.6559 },
-  { address: 'Rua Haddock Lobo, 354', region: 'Centro', client: 'Bella Paulista', lat: -23.5539, lng: -46.6622 },
-  { address: 'Al. Lorena, 1500', region: 'Zona Sul', client: 'Mariana Costa', lat: -23.5681, lng: -46.6675 },
-  { address: 'Av. Faria Lima, 3477', region: 'Zona Oeste', client: 'Beatriz Lima', lat: -23.5872, lng: -46.6812 },
-  { address: 'Rua Augusta, 420', region: 'Centro', client: 'Pedro Santos', lat: -23.5492, lng: -46.6485 },
-  { address: 'Rua Pamplona, 1792', region: 'Zona Sul', client: 'Droga Raia', lat: -23.5710, lng: -46.6588 },
-  { address: 'Av. Paulista, 1200', region: 'Centro', client: 'Burger King', lat: -23.5621, lng: -46.6548 },
+  { address: 'Av. Paulista, 1000', region: 'Centro', client: 'Ponto Av. Paulista', lat: -23.5614, lng: -46.6559 },
+  { address: 'Rua Haddock Lobo, 354', region: 'Centro', client: 'Ponto Haddock Lobo', lat: -23.5539, lng: -46.6622 },
+  { address: 'Al. Lorena, 1500', region: 'Zona Sul', client: 'Ponto Alameda Lorena', lat: -23.5681, lng: -46.6675 },
+  { address: 'Av. Faria Lima, 3477', region: 'Zona Oeste', client: 'Ponto Faria Lima', lat: -23.5872, lng: -46.6812 },
+  { address: 'Rua Augusta, 420', region: 'Centro', client: 'Ponto Rua Augusta', lat: -23.5492, lng: -46.6485 },
+  { address: 'Rua Pamplona, 1792', region: 'Zona Sul', client: 'Ponto Rua Pamplona', lat: -23.5710, lng: -46.6588 },
+  { address: 'Av. Paulista, 1200', region: 'Centro', client: 'Ponto Paulista Express', lat: -23.5621, lng: -46.6548 },
   { address: 'Rua Teodoro Sampaio, 800', region: 'Zona Oeste', client: 'Livraria Cultura', lat: -23.5580, lng: -46.6800 },
   { address: 'Rua Clélia, 1200', region: 'Zona Oeste', client: 'Sesc Pompeia', lat: -23.5255, lng: -46.6833 },
   { address: 'Av. Eng. Luís Carlos Berrini, 1000', region: 'Zona Sul', client: 'Tech Hub Berrini', lat: -23.6081, lng: -46.6961 },
