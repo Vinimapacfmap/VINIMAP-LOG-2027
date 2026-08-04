@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Activity, CheckCircle2, AlertTriangle, XCircle, Info, Copy, ExternalLink, ShieldAlert } from 'lucide-react';
-import { getSupabaseConfig, isSupabaseConfigured, testSupabaseConnection, SupabaseTestResult } from '../supabase';
+import { Activity, CheckCircle2, AlertTriangle, XCircle, Info, Copy, ExternalLink, ShieldAlert, Trash2 } from 'lucide-react';
+import { getSupabaseConfig, isSupabaseConfigured, testSupabaseConnection, SupabaseTestResult, clearSupabaseLocalStorage } from '../supabase';
 
 export const DiagnosticUtility: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [cleared, setCleared] = useState(false);
   const [testResult, setTestResult] = useState<SupabaseTestResult | null>(null);
 
   const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -31,6 +32,14 @@ export const DiagnosticUtility: React.FC = () => {
     } finally {
       setTesting(false);
     }
+  };
+
+  const handleClearCache = () => {
+    clearSupabaseLocalStorage();
+    setCleared(true);
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   };
 
   const copyVercelTemplate = () => {
@@ -135,15 +144,23 @@ export const DiagnosticUtility: React.FC = () => {
             </div>
           </div>
 
-          {/* Test Connection Button */}
+          {/* Test Connection & Clear Cache Buttons */}
           <div className="pt-1 flex items-center gap-2">
             <button
               onClick={handleTestConnection}
               disabled={testing}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-1.5 rounded-xl border border-slate-700 flex items-center justify-center gap-2 text-xs transition-colors cursor-pointer disabled:opacity-50"
+              className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-1.5 rounded-xl border border-slate-700 flex items-center justify-center gap-1.5 text-xs transition-colors cursor-pointer disabled:opacity-50"
             >
               <Activity className={`w-3.5 h-3.5 ${testing ? 'animate-spin text-blue-400' : 'text-emerald-400'}`} />
-              <span>{testing ? 'Testando Conexão...' : 'Testar Conexão Supabase'}</span>
+              <span>{testing ? 'Testando...' : 'Testar Conexão'}</span>
+            </button>
+            <button
+              onClick={handleClearCache}
+              title="Limpar chaves salvas no cache do navegador (localStorage)"
+              className="bg-slate-800 hover:bg-rose-950/80 hover:border-rose-700 text-slate-300 hover:text-rose-200 font-medium py-1.5 px-2.5 rounded-xl border border-slate-700 flex items-center gap-1 text-xs transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>{cleared ? 'Limpando...' : 'Limpar Cache'}</span>
             </button>
           </div>
 

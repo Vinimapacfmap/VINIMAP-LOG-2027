@@ -351,6 +351,17 @@ export async function sbSaveClientPartner(client: ClientPartner) {
   const dbClient = mapClientPartnerToDb(client);
   const { error } = await supabase.from('client_partners').upsert(dbClient);
   if (error) {
+    // If column missing in schema cache, attempt fallback without newly added optional columns
+    if (error.message?.includes('enable_completion_notifications') || error.message?.includes('column') || error.code === 'PGRST204' || error.code === '42703') {
+      console.warn(`[Supabase sbSaveClientPartner] Missing column in schema cache, retrying without optional columns...`);
+      const { enable_completion_notifications, cep_ranges_history, ...fallbackClient } = dbClient as any;
+      const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackClient);
+      if (retryErr) {
+        console.warn(`[Supabase sbSaveClientPartner] Error saving client #${client.id} on retry:`, retryErr);
+        throw retryErr;
+      }
+      return;
+    }
     console.warn(`[Supabase sbSaveClientPartner] Error saving client #${client.id}:`, error);
     throw error;
   }
@@ -514,7 +525,19 @@ export async function syncAllStateToSupabase(data: {
   if (data.clients.length > 0) {
     const dbClients = data.clients.map(mapClientPartnerToDb);
     const { error } = await supabase.from('client_partners').upsert(dbClients);
-    if (error) throw new Error(`Error syncing client partners: ${error.message}`);
+    if (error) {
+      if (error.message?.includes('enable_completion_notifications') || error.message?.includes('column') || error.code === 'PGRST204' || error.code === '42703') {
+        console.warn('[Supabase Sync] Missing column in client_partners schema cache, retrying without optional columns...');
+        const fallbackClients = dbClients.map(c => {
+          const { enable_completion_notifications, cep_ranges_history, ...rest } = c as any;
+          return rest;
+        });
+        const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackClients);
+        if (retryErr) throw new Error(`Error syncing client partners: ${retryErr.message}`);
+      } else {
+        throw new Error(`Error syncing client partners: ${error.message}`);
+      }
+    }
   }
 
   // 4. Sync Orders

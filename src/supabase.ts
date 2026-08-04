@@ -57,15 +57,8 @@ if (typeof window !== 'undefined' && window.localStorage) {
 }
 
 // Retrieve environment variables safely across environments (Node process.env, Vite import.meta.env, window.localStorage)
+// Priority: Build-time environment variables (Vercel) > browser localStorage
 const getRawSupabaseUrl = (): string => {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const stored = localStorage.getItem('SUPABASE_URL');
-      if (stored && isValidHttpUrl(stored)) {
-        return stored.trim();
-      }
-    } catch (_) {}
-  }
   const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
   if (metaEnv.VITE_SUPABASE_URL && isValidHttpUrl(metaEnv.VITE_SUPABASE_URL)) {
     return metaEnv.VITE_SUPABASE_URL.trim();
@@ -81,18 +74,18 @@ const getRawSupabaseUrl = (): string => {
       return process.env.SUPABASE_URL.trim();
     }
   }
-  return '';
-};
-
-const getRawSupabaseKey = (): string => {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      const stored = localStorage.getItem('SUPABASE_ANON_KEY');
-      if (stored && isValidAnonKey(stored)) {
+      const stored = localStorage.getItem('SUPABASE_URL');
+      if (stored && isValidHttpUrl(stored)) {
         return stored.trim();
       }
     } catch (_) {}
   }
+  return '';
+};
+
+const getRawSupabaseKey = (): string => {
   const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
   if (metaEnv.VITE_SUPABASE_ANON_KEY && isValidAnonKey(metaEnv.VITE_SUPABASE_ANON_KEY)) {
     return metaEnv.VITE_SUPABASE_ANON_KEY.trim();
@@ -108,8 +101,26 @@ const getRawSupabaseKey = (): string => {
       return process.env.SUPABASE_ANON_KEY.trim();
     }
   }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = localStorage.getItem('SUPABASE_ANON_KEY');
+      if (stored && isValidAnonKey(stored)) {
+        return stored.trim();
+      }
+    } catch (_) {}
+  }
   return '';
 };
+
+export function clearSupabaseLocalStorage(): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      localStorage.removeItem('SUPABASE_URL');
+      localStorage.removeItem('SUPABASE_ANON_KEY');
+      localStorage.removeItem('SUPABASE_SERVICE_KEY');
+    } catch (_) {}
+  }
+}
 
 const rawUrl = getRawSupabaseUrl();
 const rawAnonKey = getRawSupabaseKey();

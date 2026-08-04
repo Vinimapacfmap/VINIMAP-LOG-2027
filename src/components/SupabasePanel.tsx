@@ -339,7 +339,9 @@ CREATE TABLE IF NOT EXISTS client_partners (
     cep VARCHAR(10),
     cidade VARCHAR(100),
     estado VARCHAR(2),
+    enable_completion_notifications BOOLEAN DEFAULT TRUE NOT NULL,
     cep_ranges JSONB DEFAULT '[]'::jsonb,
+    cep_ranges_history JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
@@ -439,6 +441,7 @@ CREATE TABLE IF NOT EXISTS financial_transactions (
 );
 
 -- Ensure missing columns exist in pre-existing tables
+ALTER TABLE client_partners ADD COLUMN IF NOT EXISTS enable_completion_notifications BOOLEAN DEFAULT TRUE NOT NULL;
 ALTER TABLE client_partners ADD COLUMN IF NOT EXISTS cep_ranges_history JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS autorizar_imprimir_recibo BOOLEAN DEFAULT FALSE NOT NULL;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS data_conclusao VARCHAR(50);

@@ -1038,16 +1038,55 @@ export default function App() {
     const cp = clientPartners.find(c => c.id === clientId);
     if (!cp) return;
 
-    // According to business rule: when replacing a freight table, existing/previous orders
-    // (whether completed, in progress, or occurrence) MUST NOT be altered for billing purposes.
-    // The imported table applies strictly to orders launched AFTER this update.
-    const newLog: ActivityLog = {
-      id: generateUniqueLogId('log-recalc'),
-      time: getSaoPauloTime(),
-      message: `Tabela de frete atualizada para o parceiro ${cp.name}. A nova tabela será aplicada exclusivamente para os novos pedidos lançados a partir desta data.`,
-      type: 'info'
-    };
-    dbAddActivityLog(newLog);
+    // Update client partner with latest updatedRanges in partners list for calculation
+    const updatedClientPartners = clientPartners.map(c => 
+      c.id === clientId ? { ...c, cepRanges: updatedRanges } : c
+    );
+
+    // Find all pending orders belonging to this partner
+    const pendingOrders = orders.filter(o => {
+      const isPartnerMatch = 
+        isMatchingClientCode(o.partnerName, cp.id, cp.codigoCliente) ||
+        isMatchingClientCode(o.clientName, cp.id, cp.codigoCliente) ||
+        (o.partnerName && cp.name && o.partnerName.toLowerCase() === cp.name.toLowerCase()) ||
+        (o.clientName && cp.name && o.clientName.toLowerCase() === cp.name.toLowerCase());
+      
+      const isPending = o.status !== 'Concluído' && o.status !== 'Cancelado';
+      return isPartnerMatch && isPending;
+    });
+
+    if (pendingOrders.length > 0) {
+      // Recalculate freight for each pending order
+      const recalculatedOrders = pendingOrders.map(order => 
+        validateAndRecalculateOrderFreight(order, updatedClientPartners)
+      );
+
+      // Update state
+      setOrders(prev => {
+        const recalculatedMap = new Map(recalculatedOrders.map(o => [o.id, o]));
+        return prev.map(o => recalculatedMap.get(o.id) || o);
+      });
+
+      // Persist to database
+      dbBulkSaveOrders(recalculatedOrders);
+
+      // Log success activity
+      const newLog: ActivityLog = {
+        id: generateUniqueLogId('log-recalc-batch'),
+        time: getSaoPauloTime(),
+        message: `Recálculo em lote efetuado: ${recalculatedOrders.length} pedido(s) pendente(s) do parceiro "${cp.name}" foram recalculados com a nova tabela de frete.`,
+        type: 'success'
+      };
+      dbAddActivityLog(newLog);
+    } else {
+      const newLog: ActivityLog = {
+        id: generateUniqueLogId('log-recalc'),
+        time: getSaoPauloTime(),
+        message: `Tabela de frete atualizada para o parceiro ${cp.name}. Nenhum pedido pendente foi encontrado para recálculo.`,
+        type: 'info'
+      };
+      dbAddActivityLog(newLog);
+    }
   };
 
   // Registration form states
