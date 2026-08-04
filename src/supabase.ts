@@ -127,38 +127,89 @@ export function getSupabaseConfig() {
   };
 }
 
-export async function testSupabaseConnection(): Promise<{ success: boolean; message: string }> {
+export interface SupabaseTestResult {
+  success: boolean;
+  message: string;
+  code?: string;
+  clientSource?: string;
+  details?: string;
+}
+
+export function getSupabaseKeyOrigin(): string {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const storedUrl = localStorage.getItem('SUPABASE_URL');
+      const storedKey = localStorage.getItem('SUPABASE_ANON_KEY');
+      if (storedUrl && storedKey) return 'localStorage (Browser Cache)';
+    } catch (_) {}
+  }
+  const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+  if (metaEnv.VITE_SUPABASE_URL && metaEnv.VITE_SUPABASE_ANON_KEY) {
+    return 'VITE_SUPABASE_* (import.meta.env / Vercel Build)';
+  }
+  if (metaEnv.SUPABASE_URL || metaEnv.SUPABASE_ANON_KEY) {
+    return 'SUPABASE_* (import.meta.env)';
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env.VITE_SUPABASE_URL) return 'process.env.VITE_SUPABASE_*';
+    if (process.env.SUPABASE_URL) return 'process.env.SUPABASE_*';
+  }
+  return 'Não configurada / Padrão';
+}
+
+export async function testSupabaseConnection(): Promise<SupabaseTestResult> {
+  const source = getSupabaseKeyOrigin();
   if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('[SupabaseDiagnostic:DefaultClient] Key or URL missing.', { source, url: supabaseUrl });
     return {
       success: false,
-      message: 'Supabase URL ou Key não configurados no ambiente ou localStorage.',
+      message: 'Supabase URL ou Anon Key não configurados no ambiente ou localStorage.',
+      code: 'MISSING_KEYS',
+      clientSource: source,
     };
   }
 
   const client = createCustomSupabaseClient(supabaseUrl, supabaseAnonKey);
   if (!client) {
+    console.warn('[SupabaseDiagnostic:CustomClient] Failed to initialize client instance.', { source, url: supabaseUrl });
     return {
       success: false,
-      message: 'Falha ao instanciar o cliente Supabase. Verifique os valores informados.',
+      message: 'Falha ao instanciar o cliente Supabase. Verifique o formato dos valores.',
+      code: 'INIT_FAILED',
+      clientSource: source,
     };
   }
 
   try {
     // 1. Test query via Supabase JS Client
-    const { error } = await client.from('orders').select('id').limit(1);
+    const { error, status } = await client.from('orders').select('id').limit(1);
 
     if (!error) {
+      console.log('[SupabaseDiagnostic:JSClient] Connected successfully.', { source, status });
       return {
         success: true,
-        message: 'Conexão com o Supabase estabelecida e testada com sucesso!',
+        message: 'Conexão com o Supabase estabelecida e autenticada com sucesso!',
+        code: '200_OK',
+        clientSource: source,
       };
     }
+
+    console.warn(`[SupabaseClient:${isSupabaseConfigured ? 'DefaultViteClient' : 'CustomClient'}] Request error:`, {
+      status,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      source,
+    });
 
     // Standard Postgres errors when connected with valid anon key but table missing or RLS protected
     if (error && (error.code === '42P01' || error.code === 'PGRST301' || error.message?.includes('relation') || error.message?.includes('table'))) {
       return {
         success: true,
-        message: 'Conectado ao Supabase com sucesso! (Chave anon verificada)',
+        message: `Conectado ao Supabase com sucesso! (${error.message})`,
+        code: error.code || 'CONNECTED_NOTICE',
+        clientSource: source,
       };
     }
 
@@ -173,18 +224,30 @@ export async function testSupabaseConnection(): Promise<{ success: boolean; mess
     if (healthRes && healthRes.ok) {
       return {
         success: true,
-        message: 'Servidor do Supabase respondeu com sucesso!',
+        message: 'Servidor do Supabase (Auth Health) respondeu com sucesso!',
+        code: 'AUTH_HEALTH_OK',
+        clientSource: source,
       };
     }
 
+    const is401 = status === 401 || error.message?.toLowerCase().includes('api key') || error.message?.toLowerCase().includes('jwt');
+    const errCode = error.code || (is401 ? '401_UNAUTHORIZED' : 'API_ERROR');
+    const clientName = isSupabaseConfigured ? 'DefaultViteClient' : 'LocalStorageClient';
+
     return {
       success: false,
-      message: `Erro do Supabase (${error.code || 'API'}): ${error.message}`,
+      message: `[${clientName}] Erro ${status || 401}: ${error.message || 'Invalid API key'}`,
+      code: errCode,
+      clientSource: source,
+      details: error.details || error.hint || (is401 ? 'A chave apikey/Bearer foi rejeitada pelo servidor Supabase.' : undefined),
     };
   } catch (err: any) {
+    console.error('[SupabaseDiagnostic:Exception]', err);
     return {
       success: false,
-      message: err?.message || 'Erro de rede/CORS ao conectar com o Supabase.',
+      message: `[DiagnosticClient] Erro de rede ou CORS: ${err?.message || 'Falha ao conectar ao servidor'}`,
+      code: 'FETCH_ERROR',
+      clientSource: source,
     };
   }
 }

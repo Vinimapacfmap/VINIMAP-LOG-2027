@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Activity, CheckCircle2, AlertTriangle, XCircle, Info, Copy, ExternalLink, ShieldAlert } from 'lucide-react';
-import { getSupabaseConfig, isSupabaseConfigured, testSupabaseConnection } from '../supabase';
+import { getSupabaseConfig, isSupabaseConfigured, testSupabaseConnection, SupabaseTestResult } from '../supabase';
 
 export const DiagnosticUtility: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; code?: string } | null>(null);
+  const [testResult, setTestResult] = useState<SupabaseTestResult | null>(null);
 
   const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
   const viteUrl = metaEnv.VITE_SUPABASE_URL || '';
@@ -148,14 +148,31 @@ export const DiagnosticUtility: React.FC = () => {
           </div>
 
           {testResult && (
-            <div className={`p-2.5 rounded-xl text-[10px] leading-tight border ${
+            <div className={`p-2.5 rounded-xl text-[10px] leading-tight border space-y-1 ${
               testResult.success ? 'bg-emerald-950/50 border-emerald-800 text-emerald-200' : 'bg-rose-950/50 border-rose-800 text-rose-200'
             }`}>
-              <div className="font-bold flex items-center gap-1 mb-0.5">
-                {testResult.success ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <XCircle className="w-3 h-3 text-rose-400" />}
-                <span>{testResult.success ? 'Conexão OK!' : 'Falha na Conexão'}</span>
+              <div className="font-bold flex items-center justify-between gap-1 mb-0.5">
+                <span className="flex items-center gap-1">
+                  {testResult.success ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <XCircle className="w-3 h-3 text-rose-400" />}
+                  <span>{testResult.success ? 'Conexão OK!' : 'Falha na Conexão'}</span>
+                </span>
+                {testResult.code && (
+                  <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-slate-900/80 border border-slate-700/80 text-amber-300">
+                    {testResult.code}
+                  </span>
+                )}
               </div>
-              <p>{testResult.message}</p>
+              <p className="font-medium">{testResult.message}</p>
+              {testResult.clientSource && (
+                <div className="text-[9px] text-slate-400 font-mono">
+                  Origem: {testResult.clientSource}
+                </div>
+              )}
+              {testResult.details && (
+                <div className="text-[9px] text-rose-300/80 italic border-t border-rose-900/40 pt-1 mt-1">
+                  Detalhes: {testResult.details}
+                </div>
+              )}
             </div>
           )}
         </div>
