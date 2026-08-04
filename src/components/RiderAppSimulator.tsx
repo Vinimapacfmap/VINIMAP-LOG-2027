@@ -3163,25 +3163,39 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     
                     {/* VIEW: HOME / DASHBOARD TAB */}
                     {activeTab === 'home' && (
-                      <div className="p-4 space-y-4">
+                      <div className="p-3.5 sm:p-4 space-y-3.5">
                         
                         {/* ONLINE/OFFLINE STATUS PANEL */}
-                        <div className="bg-white border border-slate-150 rounded-2xl p-3.5 shadow-xs flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Status de Plantão</span>
-                            <span className={`text-xs font-black ${selectedRider?.status === 'Offline' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                              {selectedRider?.status === 'Offline' ? '📴 OFFLINE' : '🔋 ONLINE EM SERVIÇO'}
-                            </span>
+                        <div className={`border rounded-2xl p-3.5 shadow-sm transition-all flex items-center justify-between gap-3 ${
+                          selectedRider?.status === 'Offline'
+                            ? 'bg-rose-50/70 border-rose-200'
+                            : 'bg-emerald-50/70 border-emerald-200'
+                        }`}>
+                          <div className="space-y-0.5 min-w-0">
+                            <span className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider block">Status do Plantão</span>
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                selectedRider?.status === 'Offline' ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'
+                              }`} />
+                              <span className={`text-xs font-black uppercase truncate ${
+                                selectedRider?.status === 'Offline' ? 'text-rose-700' : 'text-emerald-800'
+                              }`}>
+                                {selectedRider?.status === 'Offline' ? '📴 OFFLINE (PAUSADO)' : '🔋 ONLINE EM SERVIÇO'}
+                              </span>
+                            </div>
                           </div>
 
-                          {selectedRider?.status === 'Offline' && (
-                            <button
-                              onClick={handleStatusToggle}
-                              className="px-3 py-1.5 rounded-xl text-[10px] font-bold cursor-pointer shadow-xs transition-all bg-emerald-600 hover:bg-emerald-700 text-white"
-                            >
-                              Ficar Online
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={handleStatusToggle}
+                            className={`px-3 py-2 rounded-xl text-xs font-extrabold cursor-pointer shadow-sm transition-all shrink-0 flex items-center gap-1.5 active:scale-95 ${
+                              selectedRider?.status === 'Offline'
+                                ? 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white'
+                                : 'bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white'
+                            }`}
+                          >
+                            <span>{selectedRider?.status === 'Offline' ? 'Ficar Online' : 'Pausar Plantão'}</span>
+                          </button>
                         </div>
 
                         {/* PERFORMANCE METRICS HERO CARDS */}
