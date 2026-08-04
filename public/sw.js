@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vinimap-driver-v3';
+const CACHE_NAME = 'vinimap-driver-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +8,8 @@ const STATIC_ASSETS = [
   '/icon-192.jpg',
   '/icon-512.jpg',
   '/logo.jpg',
+  '/logo.png',
+  '/apple-touch-icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
