@@ -82,7 +82,14 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
   }, [selectedDriverId, currentDriver]);
 
   // Generate mobile link for QR Code & WhatsApp
-  const mobileAppUrl = `${window.location.origin}${window.location.pathname}?riderId=${selectedDriverId}&mobile=1`;
+  const getPublicMobileAppUrl = () => {
+    let origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (origin.includes('ais-dev-')) {
+      origin = origin.replace('ais-dev-', 'ais-pre-');
+    }
+    return `${origin}${window.location.pathname}?riderId=${selectedDriverId}&mobile=1`;
+  };
+  const mobileAppUrl = getPublicMobileAppUrl();
 
   // Generate high-resolution scannable QR code
   useEffect(() => {

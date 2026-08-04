@@ -229,18 +229,18 @@ export default function RiderAppSimulator({
   const [lockedRiderId, setLockedRiderId] = useState<string | null>(null);
   const selectedRider = riders.find(r => r.id === selectedRiderId);
 
-  // Check URL parameters for riderId lock when opened directly via link
+  // Check URL parameters or local storage for riderId lock when opened directly via link
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const urlRiderId = params.get('riderId');
+      const urlRiderId = params.get('riderId') || localStorage.getItem('vinimap_driver_id');
       if (urlRiderId) {
         setLockedRiderId(urlRiderId);
         setSelectedRiderId(urlRiderId);
         const targetRider = riders.find(r => r.id === urlRiderId);
         if (targetRider) {
-          setPhoneInput(targetRider.deviceNumber || targetRider.phone || '');
-          setPasswordInput(targetRider.password || '1234');
+          setPhoneInput(prev => prev || targetRider.deviceNumber || targetRider.phone || '');
+          setPasswordInput(prev => prev || targetRider.password || '1234');
         }
       }
     }
@@ -2716,13 +2716,26 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                       // Sanitize phone input for phone matching fallback
                       const cleanInputPhone = inputVal.replace(/\D/g, '');
+                      const shortInputPhone = cleanInputPhone.length >= 10 && cleanInputPhone.startsWith('55')
+                        ? cleanInputPhone.substring(2)
+                        : cleanInputPhone;
                       
-                      // Match device number (exact case-insensitive match) or sanitized phone
-                      const matched = riders.find(r => 
-                        (r.deviceNumber && r.deviceNumber.trim().toLowerCase() === inputVal.toLowerCase()) ||
-                        (r.phone && r.phone.replace(/\D/g, '') === cleanInputPhone) ||
-                        (lockedRiderId && r.id === lockedRiderId)
-                      );
+                      // Flexible matching: check device number, sanitized phone (with/without country code), name, or locked rider ID
+                      const matched = riders.find(r => {
+                        if (lockedRiderId && r.id === lockedRiderId) return true;
+                        if (r.deviceNumber && r.deviceNumber.trim().toLowerCase() === inputVal.toLowerCase()) return true;
+                        if (r.deviceNumber && r.deviceNumber.replace(/\D/g, '') === cleanInputPhone && cleanInputPhone.length > 0) return true;
+                        
+                        const rCleanPhone = (r.phone || '').replace(/\D/g, '');
+                        const rShortPhone = rCleanPhone.length >= 10 && rCleanPhone.startsWith('55') ? rCleanPhone.substring(2) : rCleanPhone;
+                        
+                        if (rCleanPhone && cleanInputPhone && (rCleanPhone === cleanInputPhone || rShortPhone === shortInputPhone)) return true;
+                        if (rCleanPhone && cleanInputPhone && (rCleanPhone.endsWith(cleanInputPhone) || cleanInputPhone.endsWith(rCleanPhone))) return true;
+                        if (r.cpfCnpj && r.cpfCnpj.replace(/\D/g, '') === cleanInputPhone && cleanInputPhone.length > 0) return true;
+                        if (r.name && r.name.toLowerCase().trim() === inputVal.toLowerCase()) return true;
+                        
+                        return false;
+                      });
 
                       if (!matched) {
                         setLoginError('Dispositivo ou telefone não cadastrado no Vinimap.');
@@ -2737,35 +2750,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                       const expectedPassword = matched.password || '1234';
                       if (passwordInput !== expectedPassword) {
-                        setLoginError(`Senha inválida. ${matched.password ? 'Verifique as credenciais.' : 'Use a senha padrão: 1234'}`);
+                        setLoginError(`Senha incorreta. ${matched.password ? 'Verifique suas credenciais.' : 'Sua senha padrão é: 1234'}`);
                         return;
                       }
 
-                      // Device active session validation across devices
+                      // Device session setup for real device
                       const thisDeviceId = getOrCreateDeviceId();
-                      
-                      const isAlreadyLoggedInLocal = riders.some(r => {
-                        const sameDeviceNum = r.deviceNumber && matched.deviceNumber && r.deviceNumber.trim().toLowerCase() === matched.deviceNumber.trim().toLowerCase();
-                        const samePhone = r.phone && matched.phone && r.phone.replace(/\D/g, '') === matched.phone.replace(/\D/g, '');
-                        const sameRider = r.id === matched.id;
-                        const isTarget = sameDeviceNum || samePhone || sameRider;
-                        return isTarget && r.isLoggedIn === true && r.activeDeviceId && r.activeDeviceId !== thisDeviceId;
-                      });
 
-                      if (isAlreadyLoggedInLocal) {
-                        setLoginError('Dispositivo já logado. Não é permitido acesso simultâneo.');
-                        alert('Dispositivo já logado');
-                        return;
-                      }
-
-                      const remoteCheck = await validateRiderDeviceSession(matched.deviceNumber || matched.phone, matched.id, thisDeviceId);
-                      if (!remoteCheck.allowed) {
-                        setLoginError('Dispositivo já logado. Não é permitido acesso simultâneo.');
-                        alert('Dispositivo já logado');
-                        return;
-                      }
-
-                      // Set active session state
+                      // Set active session state for this device (takeover session if logged in elsewhere)
                       const updatedRider: DeliveryRider = {
                         ...matched,
                         isLoggedIn: true,
@@ -2774,13 +2766,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       };
 
                       try {
-                        await dbSaveDeliveryRider(updatedRider, { checkDeviceSession: true, currentDeviceId: thisDeviceId });
+                        await dbSaveDeliveryRider(updatedRider);
                       } catch (saveErr: any) {
-                        if (saveErr?.message === 'Dispositivo já logado' || saveErr?.code === 'DEVICE_ALREADY_LOGGED_IN') {
-                          setLoginError('Dispositivo já logado. Não é permitido acesso simultâneo.');
-                          alert('Dispositivo já logado');
-                          return;
-                        }
+                        console.warn('Non-blocking save error during login:', saveErr);
                       }
 
                       // Login successful
@@ -2804,7 +2792,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         id: `log-sim-login-${Date.now()}`,
                         time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                         type: 'success',
-                        message: `Aplicativo Condutor: ${matched.name} conectou-se com sucesso.`
+                        message: `Aplicativo Condutor: ${matched.name} conectou-se com sucesso no dispositivo.`
                       }]);
                     }}
                     className="space-y-3.5 my-3"
