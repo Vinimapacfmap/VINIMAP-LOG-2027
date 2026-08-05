@@ -69,9 +69,7 @@ import {
   ArrowUp,
   ArrowDown,
   FileSignature,
-  Lock as LockIcon,
-  Maximize2,
-  Minimize2
+  Lock as LockIcon
 } from 'lucide-react';
 import { SignatureCanvasModal } from './SignatureCanvasModal';
 import { DriverAppInstallerModal } from './DriverAppInstallerModal';

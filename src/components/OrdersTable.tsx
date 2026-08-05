@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { compressImage } from '../utils/imageCompressor';
 import { Order, OrderStatus, DeliveryRider, OrderHistoryEntry, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, formatOrderTime, extractISODateFromTimestamp } from '../utils/dateUtils';
@@ -13,6 +13,8 @@ import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult
 import { 
   ChevronLeft, 
   ChevronRight, 
+  ChevronsLeft,
+  ChevronsRight,
   Clock, 
   CheckCircle2, 
   AlertCircle,
@@ -751,149 +753,174 @@ export default function OrdersTable({
   };
 
   // Filter orders by active tab AND search query AND local dropdown filters
-  const filteredOrders = orders.filter((order) => {
-    // 1. Tab filter
-    const matchesTab = activeTab === 'Todos' || order.status === activeTab;
-    
-    // 2. Search query filter (client, code, region, address, partner, CEP)
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = 
-      order.id.toLowerCase().includes(query) ||
-      order.clientName.toLowerCase().includes(query) ||
-      order.region.toLowerCase().includes(query) ||
-      order.address.toLowerCase().includes(query) ||
-      (order.partnerName && order.partnerName.toLowerCase().includes(query)) ||
-      (order.cep && order.cep.replace(/\D/g, '').includes(query)) ||
-      (order.protocolNumber && order.protocolNumber.toLowerCase().includes(query)) ||
-      (order.recipientName && order.recipientName.toLowerCase().includes(query)) ||
-      (order.recipientDoc && order.recipientDoc.toLowerCase().includes(query));
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      // 1. Tab filter
+      const matchesTab = activeTab === 'Todos' || order.status === activeTab;
+      
+      // 2. Search query filter (client, code, region, address, partner, CEP)
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = 
+        order.id.toLowerCase().includes(query) ||
+        order.clientName.toLowerCase().includes(query) ||
+        order.region.toLowerCase().includes(query) ||
+        order.address.toLowerCase().includes(query) ||
+        (order.partnerName && order.partnerName.toLowerCase().includes(query)) ||
+        (order.cep && order.cep.replace(/\D/g, '').includes(query)) ||
+        (order.protocolNumber && order.protocolNumber.toLowerCase().includes(query)) ||
+        (order.recipientName && order.recipientName.toLowerCase().includes(query)) ||
+        (order.recipientDoc && order.recipientDoc.toLowerCase().includes(query));
 
-    // 3. Partner filter
-    const matchesPartner = localPartner === 'Todos' || order.partnerName === localPartner;
+      // 3. Partner filter
+      const matchesPartner = localPartner === 'Todos' || order.partnerName === localPartner;
 
-    // 4. Rider filter
-    const matchesRider = localRider === 'Todos' || order.riderId === localRider;
+      // 4. Rider filter
+      const matchesRider = localRider === 'Todos' || order.riderId === localRider;
 
-    // 5. Region filter
-    const matchesRegion = localRegion === 'Todos' || order.region === localRegion;
+      // 5. Region filter
+      const matchesRegion = localRegion === 'Todos' || order.region === localRegion;
 
-    return matchesTab && matchesSearch && matchesPartner && matchesRider && matchesRegion;
-  });
+      return matchesTab && matchesSearch && matchesPartner && matchesRider && matchesRegion;
+    });
+  }, [orders, activeTab, searchQuery, localPartner, localRider, localRegion]);
 
   // Sort orders based on sortConfig
-  const sortedOrders = [...filteredOrders].sort((a, b) => {
-    if (!sortConfig) return 0;
-    
-    // Check if simplified or spreadsheet mode sorting
-    let valA = '';
-    let valB = '';
+  const sortedOrders = useMemo(() => {
+    if (!sortConfig) return filteredOrders;
 
-    if (viewMode === 'spreadsheet') {
-      valA = getOrderColumnValue(a, sortConfig.key);
-      valB = getOrderColumnValue(b, sortConfig.key);
-    } else {
-      // Simplified fields sorting
-      const key = sortConfig.key;
-      if (key === 'Código') {
-        valA = a.id;
-        valB = b.id;
-      } else if (key === 'Cliente') {
-        valA = a.clientName;
-        valB = b.clientName;
-      } else if (key === 'Endereço') {
-        valA = a.address;
-        valB = b.address;
-      } else if (key === 'Prioridade') {
-        valA = a.priority;
-        valB = b.priority;
-      } else if (key === 'Status') {
-        valA = a.status;
-        valB = b.status;
-      } else if (key === 'Valor') {
-        return sortConfig.direction === 'asc' ? a.value - b.value : b.value - a.value;
+    return [...filteredOrders].sort((a, b) => {
+      // Check if simplified or spreadsheet mode sorting
+      let valA = '';
+      let valB = '';
+
+      if (viewMode === 'spreadsheet') {
+        valA = getOrderColumnValue(a, sortConfig.key);
+        valB = getOrderColumnValue(b, sortConfig.key);
       } else {
-        valA = a.id;
-        valB = b.id;
+        // Simplified fields sorting
+        const key = sortConfig.key;
+        if (key === 'Código') {
+          valA = a.id;
+          valB = b.id;
+        } else if (key === 'Cliente') {
+          valA = a.clientName;
+          valB = b.clientName;
+        } else if (key === 'Endereço') {
+          valA = a.address;
+          valB = b.address;
+        } else if (key === 'Prioridade') {
+          valA = a.priority;
+          valB = b.priority;
+        } else if (key === 'Status') {
+          valA = a.status;
+          valB = b.status;
+        } else if (key === 'Valor') {
+          return sortConfig.direction === 'asc' ? a.value - b.value : b.value - a.value;
+        } else {
+          valA = a.id;
+          valB = b.id;
+        }
       }
-    }
 
-    const keyLower = sortConfig.key.toLowerCase();
+      const keyLower = sortConfig.key.toLowerCase();
 
-    // 1. Check if we are sorting by date (contains "data" or "date" or matches date pattern)
-    const isDateCol = keyLower.includes('data') || keyLower.includes('date');
-    const isBrDatePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-    const isIsoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+      // 1. Check if we are sorting by date (contains "data" or "date" or matches date pattern)
+      const isDateCol = keyLower.includes('data') || keyLower.includes('date');
+      const isBrDatePattern = /^\d{2}\/\d{2}\/\d{4}$/;
+      const isIsoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 
-    if (
-      isDateCol || 
-      (isBrDatePattern.test(valA) && isBrDatePattern.test(valB)) || 
-      (isIsoDatePattern.test(valA) && isIsoDatePattern.test(valB))
-    ) {
-      const toComparableDate = (str: string) => {
-        const clean = str.trim();
-        if (isBrDatePattern.test(clean)) {
-          const parts = clean.split('/');
-          return `${parts[2]}${parts[1]}${parts[0]}`;
+      if (
+        isDateCol || 
+        (isBrDatePattern.test(valA) && isBrDatePattern.test(valB)) || 
+        (isIsoDatePattern.test(valA) && isIsoDatePattern.test(valB))
+      ) {
+        const toComparableDate = (str: string) => {
+          const clean = str.trim();
+          if (isBrDatePattern.test(clean)) {
+            const parts = clean.split('/');
+            return `${parts[2]}${parts[1]}${parts[0]}`;
+          }
+          if (isIsoDatePattern.test(clean)) {
+            const parts = clean.split('-');
+            return `${parts[0]}${parts[1]}${parts[2]}`;
+          }
+          return clean;
+        };
+
+        const dateA = toComparableDate(valA);
+        const dateB = toComparableDate(valB);
+
+        return sortConfig.direction === 'asc' 
+          ? dateA.localeCompare(dateB) 
+          : dateB.localeCompare(dateA);
+      }
+
+      // 2. Is it a sequence/index column?
+      if (keyLower === 'sequencia') {
+        const numA = parseInt(valA, 10) || 0;
+        const numB = parseInt(valB, 10) || 0;
+        return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
+      }
+
+      // 3. Robust numeric, currency, and alphanumeric prefix parsing
+      const extractNumber = (str: string): number | null => {
+        if (!str) return null;
+        let clean = str.trim();
+
+        // Handle Brazilian currency, e.g., R$ 1.250,50 or R$ 12,50
+        if (clean.includes('R$') || (clean.includes(',') && !clean.includes('/'))) {
+          clean = clean.replace(/R\$\s*/gi, '');
+          clean = clean.replace(/\./g, ''); // remove thousands separators
+          clean = clean.replace(/,/g, '.'); // replace decimal comma with dot
         }
-        if (isIsoDatePattern.test(clean)) {
-          const parts = clean.split('-');
-          return `${parts[0]}${parts[1]}${parts[2]}`;
-        }
-        return clean;
+
+        // Filter out other characters except numbers, minus sign, and dots
+        clean = clean.replace(/[^\d.-]/g, '');
+        const parsed = parseFloat(clean);
+        return isNaN(parsed) ? null : parsed;
       };
 
-      const dateA = toComparableDate(valA);
-      const dateB = toComparableDate(valB);
+      const numA = extractNumber(valA);
+      const numB = extractNumber(valB);
 
-      return sortConfig.direction === 'asc' 
-        ? dateA.localeCompare(dateB) 
-        : dateB.localeCompare(dateA);
-    }
-
-    // 2. Is it a sequence/index column?
-    if (keyLower === 'sequencia') {
-      const numA = parseInt(valA, 10) || 0;
-      const numB = parseInt(valB, 10) || 0;
-      return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
-    }
-
-    // 3. Robust numeric, currency, and alphanumeric prefix parsing
-    const extractNumber = (str: string): number | null => {
-      if (!str) return null;
-      let clean = str.trim();
-
-      // Handle Brazilian currency, e.g., R$ 1.250,50 or R$ 12,50
-      if (clean.includes('R$') || (clean.includes(',') && !clean.includes('/'))) {
-        clean = clean.replace(/R\$\s*/gi, '');
-        clean = clean.replace(/\./g, ''); // remove thousands separators
-        clean = clean.replace(/,/g, '.'); // replace decimal comma with dot
+      if (numA !== null && numB !== null) {
+        return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
       }
 
-      // Filter out other characters except numbers, minus sign, and dots
-      clean = clean.replace(/[^\d.-]/g, '');
-      const parsed = parseFloat(clean);
-      return isNaN(parsed) ? null : parsed;
-    };
-
-    const numA = extractNumber(valA);
-    const numB = extractNumber(valB);
-
-    if (numA !== null && numB !== null) {
-      return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
-    }
-
-    // 4. Default natural Portuguese alphanumeric comparison
-    return sortConfig.direction === 'asc' 
-      ? valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base', numeric: true }) 
-      : valB.localeCompare(valA, 'pt-BR', { sensitivity: 'base', numeric: true });
-  });
+      // 4. Default natural Portuguese alphanumeric comparison
+      return sortConfig.direction === 'asc' 
+        ? valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base', numeric: true }) 
+        : valB.localeCompare(valA, 'pt-BR', { sensitivity: 'base', numeric: true });
+    });
+  }, [filteredOrders, sortConfig, viewMode]);
 
   // Calculate pagination details
-  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage) || 1;
-  const paginatedOrders = sortedOrders.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const totalPages = useMemo(() => Math.ceil(sortedOrders.length / itemsPerPage) || 1, [sortedOrders.length, itemsPerPage]);
+
+  // Safe page setter
+  const setPage = (p: number) => {
+    const validPage = Math.max(1, Math.min(p, totalPages));
+    setCurrentPage(validPage);
+  };
+
+  // Reset pagination to page 1 whenever active tab, search, or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeTab, localPartner, localRider, localRegion]);
+
+  // Ensure currentPage is not out of bounds when totalPages decreases
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  const paginatedOrders = useMemo(() => {
+    return sortedOrders.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [sortedOrders, currentPage, itemsPerPage]);
 
   const getPriorityColor = (priority: string) => {
     const p = String(priority || '').toLowerCase();
@@ -1060,12 +1087,6 @@ export default function OrdersTable({
         </div>
       </div>
     );
-  };
-
-  const setPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
   };
 
   // Move columns in spreadsheet mode
@@ -3244,11 +3265,22 @@ export default function OrdersTable({
       </div>
 
       {/* Pagination controls footer */}
-      <div className="p-3 sm:p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/30" id="orders-pagination">
+      <div className="p-3 sm:p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50" id="orders-pagination">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-slate-500 font-medium">
-            Exibindo <strong className="text-slate-800 font-extrabold">{paginatedOrders.length}</strong> de <strong className="text-slate-800 font-extrabold">{filteredOrders.length}</strong> pedidos
-          </span>
+          {(() => {
+            const startRecord = filteredOrders.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+            const endRecord = Math.min(currentPage * itemsPerPage, filteredOrders.length);
+            return (
+              <span className="text-xs text-slate-500 font-medium">
+                Exibindo <strong className="text-slate-800 font-extrabold">{startRecord}–{endRecord}</strong> de <strong className="text-slate-800 font-extrabold">{filteredOrders.length}</strong> pedidos
+                {totalPages > 1 && (
+                  <span className="ml-1 text-slate-400 font-normal">
+                    (Pág. <strong className="text-slate-700 font-bold">{currentPage}</strong> de {totalPages})
+                  </span>
+                )}
+              </span>
+            );
+          })()}
 
           {/* Items per page selector */}
           <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold border-l border-slate-200 pl-3">
@@ -3259,23 +3291,37 @@ export default function OrdersTable({
                 setItemsPerPage(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-extrabold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs"
+              className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-extrabold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs hover:border-slate-300 transition-colors"
             >
-              <option value={25}>25</option>
-              <option value={50}>50 (Padrão)</option>
-              <option value={100}>100</option>
-              <option value={200}>200</option>
+              <option value={25}>25 por pág.</option>
+              <option value={50}>50 por pág. (Padrão)</option>
+              <option value={100}>100 por pág.</option>
+              <option value={200}>200 por pág.</option>
+              <option value={500}>500 por pág.</option>
               <option value={999999}>Todos ({filteredOrders.length})</option>
             </select>
           </div>
         </div>
 
-        <div className="flex items-center gap-2" id="pagination-buttons">
+        <div className="flex items-center gap-1.5 flex-wrap justify-end" id="pagination-buttons">
+          {/* Primeiras páginas / Primeira pág */}
+          <button
+            onClick={() => setPage(1)}
+            disabled={currentPage === 1}
+            className={`p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer transition-colors ${
+              currentPage === 1 ? 'opacity-30 cursor-not-allowed' : ''
+            }`}
+            id="orders-first-page"
+            title="Primeira Página"
+          >
+            <ChevronsLeft size={14} />
+          </button>
+
           <button
             onClick={() => setPage(currentPage - 1)}
             disabled={currentPage === 1}
             className={`p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer transition-colors ${
-              currentPage === 1 ? 'opacity-40 cursor-not-allowed' : ''
+              currentPage === 1 ? 'opacity-30 cursor-not-allowed' : ''
             }`}
             id="orders-prev-page"
             title="Página Anterior"
@@ -3295,9 +3341,9 @@ export default function OrdersTable({
                 <button
                   key={pageNum}
                   onClick={() => setPage(pageNum)}
-                  className={`min-w-7 h-7 px-1.5 rounded-lg border flex items-center justify-center cursor-pointer transition-all ${
+                  className={`min-w-7 h-7 px-1.5 rounded-lg border flex items-center justify-center cursor-pointer transition-all text-xs ${
                     currentPage === pageNum
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100 font-black'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm font-black'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-100 bg-white'
                   }`}
                 >
@@ -3311,12 +3357,24 @@ export default function OrdersTable({
             onClick={() => setPage(currentPage + 1)}
             disabled={currentPage === totalPages || totalPages === 0}
             className={`p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer transition-colors ${
-              currentPage === totalPages || totalPages === 0 ? 'opacity-40 cursor-not-allowed' : ''
+              currentPage === totalPages || totalPages === 0 ? 'opacity-30 cursor-not-allowed' : ''
             }`}
             id="orders-next-page"
             title="Próxima Página"
           >
             <ChevronRight size={14} />
+          </button>
+
+          <button
+            onClick={() => setPage(totalPages)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            className={`p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer transition-colors ${
+              currentPage === totalPages || totalPages === 0 ? 'opacity-30 cursor-not-allowed' : ''
+            }`}
+            id="orders-last-page"
+            title="Última Página"
+          >
+            <ChevronsRight size={14} />
           </button>
         </div>
       </div>

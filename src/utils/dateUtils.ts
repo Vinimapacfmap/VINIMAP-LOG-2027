@@ -195,11 +195,15 @@ export function isOrderInDatePeriod(
 ): boolean {
   if (!dateFrom && !dateTo) return true;
 
+  const isoFrom = dateFrom ? (extractISODateFromTimestamp(dateFrom) || dateFrom) : undefined;
+  const isoTo = dateTo ? (extractISODateFromTimestamp(dateTo) || dateTo) : undefined;
+
   // 1. Direct check on order creation date, occurrenceDate, or deliveryDate
-  const primaryDate = order.occurrenceDate || order.date || order.deliveryDate;
-  if (primaryDate) {
-    const directFrom = !dateFrom || (primaryDate >= dateFrom);
-    const directTo = !dateTo || (primaryDate <= dateTo);
+  const rawPrimary = order.occurrenceDate || order.date || order.deliveryDate;
+  if (rawPrimary) {
+    const primaryDate = extractISODateFromTimestamp(rawPrimary) || rawPrimary;
+    const directFrom = !isoFrom || (primaryDate >= isoFrom);
+    const directTo = !isoTo || (primaryDate <= isoTo);
     if (directFrom && directTo) {
       return true;
     }
@@ -211,8 +215,8 @@ export function isOrderInDatePeriod(
       const entryIsoDate = extractISODateFromTimestamp(entry.timestamp);
       if (!entryIsoDate) continue;
 
-      const histFrom = !dateFrom || (entryIsoDate >= dateFrom);
-      const histTo = !dateTo || (entryIsoDate <= dateTo);
+      const histFrom = !isoFrom || (entryIsoDate >= isoFrom);
+      const histTo = !isoTo || (entryIsoDate <= isoTo);
 
       if (histFrom && histTo) {
         if (targetStatus && targetStatus !== 'Todos') {

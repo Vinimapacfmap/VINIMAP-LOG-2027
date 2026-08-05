@@ -1734,9 +1734,14 @@ export default function App() {
       if (importedDates.length > 0) {
         const minDate = importedDates.reduce((a, b) => (a < b ? a : b));
         const maxDate = importedDates.reduce((a, b) => (a > b ? a : b));
-        setFilterDateFrom(prev => (prev && prev < minDate ? prev : minDate));
-        setFilterDateTo(prev => (prev && prev > maxDate ? prev : maxDate));
+        setFilterDateFrom(prev => (!prev || minDate < prev ? minDate : prev));
+        setFilterDateTo(prev => (!prev || maxDate > prev ? maxDate : prev));
       }
+      // Clear restrictive side filters to guarantee visibility in Central de Pedidos
+      setFilterPartner('');
+      setFilterRiderId('');
+      setFilterStatus('');
+      setFilterCep('');
     }
 
     // Create activity logs

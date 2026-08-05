@@ -26,7 +26,7 @@ import {
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode, OrderStatus } from '../types';
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import * as XLSX from 'xlsx';
-import { getSaoPauloDateTimeShort, getSaoPauloISODate, getSaoPauloTime } from '../utils/dateUtils';
+import { getSaoPauloDateTimeShort, getSaoPauloISODate, getSaoPauloTime, extractISODateFromTimestamp } from '../utils/dateUtils';
 
 interface ImportSpreadsheetProps {
   orders: Order[];
@@ -85,11 +85,9 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
     'Prioridade', 'DataConclusao'
   ];
 
-  // Helper to get today's date formatted as YYYY-MM-DD
+  // Helper to get today's date formatted as YYYY-MM-DD in SP timezone
   const getTodayDateStr = () => {
-    // Return system baseline date or real-world calendar date
-    // Let's accept both '2026-07-02' (the baseline mock date) and today's calendar date
-    return '2026-07-02';
+    return getSaoPauloISODate();
   };
 
   const getRealTodayDateStr = () => {
@@ -98,7 +96,6 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
 
   const normalizeDate = (dateStr: string): string => {
     if (!dateStr) return '';
-    // Handle formats like DD/MM/YYYY or DD-MM-YYYY or YYYY-MM-DD or Excel serial number
     const cleaned = dateStr.trim();
 
     // Check if it's an Excel date serial number (e.g. "46205")
@@ -114,13 +111,19 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
       }
     }
 
+    // Try extractISODateFromTimestamp
+    const extracted = extractISODateFromTimestamp(cleaned);
+    if (extracted) return extracted;
+
     if (cleaned.includes('/')) {
       const parts = cleaned.split('/');
       if (parts.length === 3) {
-        // DD/MM/YYYY to YYYY-MM-DD
+        if (parts[0].length === 4) {
+          return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
         const day = parts[0].padStart(2, '0');
         const month = parts[1].padStart(2, '0');
-        const year = parts[2];
+        const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
         return `${year}-${month}-${day}`;
       }
     }
@@ -128,17 +131,16 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
       const parts = cleaned.split('-');
       if (parts.length === 3) {
         if (parts[0].length === 4) {
-          // YYYY-MM-DD
           return cleaned;
         } else {
-          // DD-MM-YYYY to YYYY-MM-DD
           const day = parts[0].padStart(2, '0');
           const month = parts[1].padStart(2, '0');
-          const year = parts[2];
+          const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
           return `${year}-${month}-${day}`;
         }
       }
     }
+
     return cleaned;
   };
 
@@ -295,13 +297,13 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
           warnings.push(`O parceiro '${codCliente}' será cadastrado automaticamente no sistema ao importar.`);
         }
       }
-      // Rule 2: Date Solicitação validation (flexible & robust)
+      // Rule 2: Date Solicitação validation (flexible & robust - Regra de Data Vigente)
       if (!dataSol) {
-        warnings.push(`DataSolicitacao não informada: o pedido será atribuído automaticamente à data de hoje (${todayReal}).`);
+        warnings.push(`DataSolicitacao não informada: o pedido será atribuído automaticamente à data vigente de hoje (${todayReal}).`);
       } else {
         const normalizedSolDate = normalizeDate(dataSol);
-        if (normalizedSolDate !== todayBaseline && normalizedSolDate !== todayReal) {
-          warnings.push(`A 'DataSolicitacao' (${dataSol}) é de uma data diferente de hoje (${todayReal}), mas o pedido será importado normalmente.`);
+        if (normalizedSolDate !== todayReal) {
+          warnings.push(`A 'DataSolicitacao' (${dataSol}) difere da data vigente (${todayReal}). O pedido será importado com a data (${normalizedSolDate}) e o filtro da Central será ajustado automaticamente.`);
         }
       }
 
