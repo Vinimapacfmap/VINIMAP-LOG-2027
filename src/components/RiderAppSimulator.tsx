@@ -269,7 +269,6 @@ export default function RiderAppSimulator({
   useEffect(() => {
     if (activeRiderId && activeRiderId !== selectedRiderId) {
       setSelectedRiderId(activeRiderId);
-      setCurrentScreen('dashboard');
     }
   }, [activeRiderId]);
 
