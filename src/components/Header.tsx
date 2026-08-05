@@ -19,6 +19,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { CompanyHub } from '../types';
 import { PwaInstallButton } from './PwaInstallButton';
 
 interface HeaderProps {
@@ -28,6 +29,7 @@ interface HeaderProps {
   onLogout?: () => void;
   onExportContingency?: () => void;
   lastContingencyTime?: string;
+  activeHub?: CompanyHub;
 }
 
 export default function Header({ 
@@ -36,7 +38,8 @@ export default function Header({
   searchQuery, 
   onLogout,
   onExportContingency,
-  lastContingencyTime
+  lastContingencyTime,
+  activeHub
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -186,7 +189,7 @@ export default function Header({
         </div>
 
         {/* PWA Install Action */}
-        <PwaInstallButton variant="header" />
+        <PwaInstallButton variant="header" activeHub={activeHub} />
 
         {/* Contingency Backup & Daily Forced JSON Export */}
         {onExportContingency && (

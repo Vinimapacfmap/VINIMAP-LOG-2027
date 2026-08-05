@@ -27,7 +27,7 @@ import {
   Phone,
   Lock
 } from 'lucide-react';
-import { DeliveryRider } from '../types';
+import { DeliveryRider, CompanyHub } from '../types';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 
 interface DriverAppInstallerModalProps {
@@ -36,6 +36,7 @@ interface DriverAppInstallerModalProps {
   riders: DeliveryRider[];
   selectedRiderId?: string;
   onSelectRider?: (riderId: string) => void;
+  activeHub?: CompanyHub;
 }
 
 export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = ({
@@ -43,7 +44,8 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
   onClose,
   riders,
   selectedRiderId,
-  onSelectRider
+  onSelectRider,
+  activeHub
 }) => {
   const [activeTab, setActiveTab] = useState<'pwa' | 'apk' | 'whatsapp' | 'qrcode'>('pwa');
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
@@ -81,13 +83,17 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
     }
   }, [selectedDriverId, currentDriver]);
 
+  // Effective headquarters logo
+  const companyLogo = activeHub?.logoUrl || vinimapLogo;
+
   // Generate mobile link for QR Code & WhatsApp
   const getPublicMobileAppUrl = () => {
     let origin = typeof window !== 'undefined' ? window.location.origin : '';
     if (origin.includes('ais-dev-')) {
       origin = origin.replace('ais-dev-', 'ais-pre-');
     }
-    return `${origin}${window.location.pathname}?riderId=${selectedDriverId}&mobile=1`;
+    const cleanPath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+    return `${origin}/?view=driver_mobile${selectedDriverId ? `&riderId=${selectedDriverId}` : ''}`;
   };
   const mobileAppUrl = getPublicMobileAppUrl();
 
@@ -242,7 +248,7 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-emerald-400 rounded-3xl blur-md opacity-75 group-hover:opacity-100 transition duration-300"></div>
                 <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-slate-900 flex items-center justify-center">
                   <img 
-                    src={vinimapLogo} 
+                    src={companyLogo} 
                     alt="Logo Oficial Vinimap Logistics" 
                     className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
                     referrerPolicy="no-referrer"
@@ -647,7 +653,7 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
                         {/* Overlay Logo in center */}
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-white shadow-lg bg-slate-900 p-0.5">
-                            <img src={vinimapLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
+                            <img src={companyLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
                           </div>
                         </div>
                       </div>

@@ -6,17 +6,21 @@
 import React, { useState, useEffect } from 'react';
 import { Download, CheckCircle2, Sparkles, X, ExternalLink, ChevronRight, Check, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DeliveryRider, CompanyHub } from '../types';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 
 interface PwaInstallButtonProps {
   variant?: 'header' | 'sidebar' | 'banner';
   className?: string;
+  activeHub?: CompanyHub;
 }
 
-export const PwaInstallButton: React.FC<PwaInstallButtonProps> = ({ variant = 'header', className = '' }) => {
+export const PwaInstallButton: React.FC<PwaInstallButtonProps> = ({ variant = 'header', className = '', activeHub }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isAppInstalled, setIsAppInstalled] = useState<boolean>(false);
   const [showModal, setShowModal] = useState<boolean>(false);
+
+  const companyLogo = activeHub?.logoUrl || vinimapLogo;
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
@@ -133,7 +137,7 @@ export const PwaInstallButton: React.FC<PwaInstallButtonProps> = ({ variant = 'h
         <div className={`p-4 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl border border-slate-700 shadow-xl space-y-3 ${className}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/20 shrink-0 shadow-md bg-slate-900">
-              <img src={vinimapLogo} alt="Vinimap Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img src={companyLogo} alt="Vinimap Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             </div>
             <div>
               <h4 className="font-black text-xs text-white">Aplicativo Oficial Vinimap</h4>
@@ -174,7 +178,7 @@ export const PwaInstallButton: React.FC<PwaInstallButtonProps> = ({ variant = 'h
               {/* Header */}
               <div className="text-center space-y-2 pt-1">
                 <div className="w-16 h-16 rounded-2xl mx-auto shadow-lg border-2 border-emerald-500/30 overflow-hidden bg-slate-900 flex items-center justify-center p-0.5 relative">
-                  <img src={vinimapLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
+                  <img src={companyLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
                   <span className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-white border-2 border-white text-[10px]">
                     <Check size={12} />
                   </span>

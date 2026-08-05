@@ -2973,6 +2973,7 @@ export default function App() {
           onLogout={handleLogout}
           onExportContingency={() => exportDatabaseContingency(false)}
           lastContingencyTime={lastContingencyBackupTime}
+          activeHub={companyHubs.find(h => h.active)}
         />
 
         {/* Scrollable Stage area */}
@@ -4919,9 +4920,7 @@ export default function App() {
                                 origin = origin.replace('ais-dev-', 'ais-pre-');
                                 isDevMode = true;
                               }
-                              const installLink = `${origin}${window.location.pathname}?view=rider${
-                                installMode === 'real' ? '&real=true' : ''
-                              }${
+                              const installLink = `${origin}/?view=driver_mobile${
                                 selectedRiderForInstallId ? `&riderId=${selectedRiderForInstallId}` : ''
                               }`;
                               
