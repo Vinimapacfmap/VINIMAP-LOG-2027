@@ -25,7 +25,8 @@ import {
   Send,
   MessageSquare,
   Phone,
-  Lock
+  Lock,
+  Copy
 } from 'lucide-react';
 import { DeliveryRider, CompanyHub } from '../types';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
@@ -69,7 +70,9 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
   );
 
   const [customPhone, setCustomPhone] = useState<string>('11970791804');
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>('');
   const [whatsappSent, setWhatsappSent] = useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
   // Sync current driver phone when driver selection changes
@@ -86,16 +89,17 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
   // Effective headquarters logo
   const companyLogo = activeHub?.logoUrl || vinimapLogo;
 
-  // Generate mobile link for QR Code & WhatsApp
+  // Generate mobile link for QR Code & WhatsApp (Supports Vercel base URL override)
   const getPublicMobileAppUrl = () => {
-    let origin = typeof window !== 'undefined' ? window.location.origin : '';
-    if (origin.includes('ais-dev-')) {
+    let origin = customBaseUrl.trim();
+    if (!origin && typeof window !== 'undefined') {
+      origin = window.location.origin;
+    }
+    if (!customBaseUrl.trim() && origin.includes('ais-dev-')) {
       origin = origin.replace('ais-dev-', 'ais-pre-');
     }
-    const path = typeof window !== 'undefined' ? window.location.pathname : '/';
     const cleanOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
-    const cleanPath = path.endsWith('/') ? path : `${path}/`;
-    return `${cleanOrigin}${cleanPath}?view=driver_mobile${selectedDriverId ? `&riderId=${selectedDriverId}` : ''}`;
+    return `${cleanOrigin}/?view=driver_mobile${selectedDriverId ? `&riderId=${selectedDriverId}` : ''}`;
   };
   const mobileAppUrl = getPublicMobileAppUrl();
 
@@ -530,18 +534,58 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
                           type="text"
                           value={customPhone}
                           onChange={(e) => setCustomPhone(e.target.value)}
-                          placeholder="(11) 99999-8888"
+                          placeholder="11970791804"
                           className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded-xl pl-9 pr-3 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                       </div>
                     </div>
                   </div>
 
+                  {/* Vercel / Custom Base URL Input */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider">
+                        Domínio do App / URL da Vercel (Opcional)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setCustomBaseUrl('https://vinimap.vercel.app')}
+                        className="text-[10px] text-blue-600 hover:text-blue-800 font-extrabold cursor-pointer hover:underline"
+                      >
+                        Usar Vercel Demo (vinimap.vercel.app)
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={customBaseUrl}
+                      onChange={(e) => setCustomBaseUrl(e.target.value)}
+                      placeholder={typeof window !== 'undefined' ? window.location.origin : 'https://vinimap.vercel.app'}
+                      className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded-xl px-3 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-1 block font-medium">
+                      Se estiver rodando na Vercel, insira o domínio do seu projeto aqui.
+                    </span>
+                  </div>
+
                   {/* Message Preview Box */}
                   <div className="space-y-1">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
-                      Prévia da Mensagem Formatada:
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                        Prévia da Mensagem Formatada:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(mobileAppUrl);
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 3000);
+                        }}
+                        className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Copy size={12} />
+                        <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link de Instalação'}</span>
+                      </button>
+                    </div>
                     <div className="p-3 bg-emerald-900/10 border border-emerald-200 text-emerald-950 rounded-xl text-[11px] font-mono leading-relaxed space-y-1">
                       <p className="font-bold">Olá {currentDriver?.name || 'Condutor'}! 🚚📱</p>
                       <p>Aqui está o link para baixar e instalar o aplicativo oficial *Vinimap Condutor* no seu celular:</p>
@@ -562,7 +606,7 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
                   {whatsappSent && (
                     <div className="p-3 bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs rounded-xl font-bold flex items-center gap-2">
                       <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
-                      <span>Mensagem enviada com sucesso ao aplicativo do WhatsApp!</span>
+                      <span>Mensagem enviada com sucesso para {customPhone}!</span>
                     </div>
                   )}
                 </div>

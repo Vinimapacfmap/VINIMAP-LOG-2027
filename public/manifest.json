@@ -7,41 +7,16 @@
       "src": "/icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-192.png",
-      "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/logo.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any"
-    },
-    {
-      "src": "/apple-touch-icon.png",
-      "type": "image/png",
-      "sizes": "180x180",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ],
   "start_url": "/?view=driver_mobile",
-  "scope": "/",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "display": "standalone",
