@@ -222,7 +222,23 @@ export default function RiderAppSimulator({
 }: RiderAppSimulatorProps) {
   const effectiveLogo = activeHub?.logoUrl || vinimapLogo;
   const [isUserFullScreen, setIsUserFullScreen] = useState(false);
-  const isEffectiveRealDevice = isRealDevice || isStandalone || isUserFullScreen || (typeof window !== 'undefined' && (
+  
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined') {
+        setIsMobileScreen(window.innerWidth < 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isEffectiveRealDevice = isRealDevice || isStandalone || isUserFullScreen || isMobileScreen || (typeof window !== 'undefined' && (
     new URLSearchParams(window.location.search).has('mobile') || 
     new URLSearchParams(window.location.search).has('riderId') || 
     new URLSearchParams(window.location.search).get('view') === 'driver_mobile'
