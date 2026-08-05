@@ -1,6 +1,6 @@
-const STATIC_CACHE_NAME = 'vinimap-static-v5';
-const TILE_CACHE_NAME = 'vinimap-tiles-v5';
-const DYNAMIC_CACHE_NAME = 'vinimap-dynamic-v5';
+const STATIC_CACHE_NAME = 'vinimap-static-v6';
+const TILE_CACHE_NAME = 'vinimap-tiles-v6';
+const DYNAMIC_CACHE_NAME = 'vinimap-dynamic-v6';
 
 // Core assets to pre-cache on SW installation
 const STATIC_ASSETS = [
@@ -13,9 +13,7 @@ const STATIC_ASSETS = [
   '/icon-512.jpg',
   '/logo.jpg',
   '/logo.png',
-  '/apple-touch-icon.png',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  '/apple-touch-icon.png'
 ];
 
 // Helper to determine if a request URL is a Leaflet map tile
@@ -50,14 +48,18 @@ function isStaticOrCdnAsset(url) {
   );
 }
 
-// 1. Install Event: Pre-cache core app shell & Leaflet CDN dependencies
+// 1. Install Event: Pre-cache core app shell safely without throwing errors
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE_NAME).then((cache) => {
-      console.log('[SW] Pre-caching core app assets & Leaflet CDN for offline mode');
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[SW] Non-critical precache item failed:', err);
-      });
+    caches.open(STATIC_CACHE_NAME).then(async (cache) => {
+      console.log('[SW] Pre-caching core app assets safely');
+      await Promise.allSettled(
+        STATIC_ASSETS.map((asset) =>
+          cache.add(asset).catch((err) => {
+            console.warn('[SW] Non-critical precache failed for:', asset, err);
+          })
+        )
+      );
     })
   );
   self.skipWaiting();
@@ -83,7 +85,6 @@ self.addEventListener('activate', (event) => {
 
 // 3. Fetch Event: Offline-first tile caching & Network-First navigation fallback
 self.addEventListener('fetch', (event) => {
-  // Only handle HTTP/HTTPS GET requests
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
 
@@ -97,12 +98,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(TILE_CACHE_NAME).then((tileCache) => {
         return tileCache.match(event.request).then((cachedTile) => {
-          if (cachedTile) {
-            // Instant load from Cache API (Offline ready!)
-            return cachedTile;
-          }
+          if (cachedTile) return cachedTile;
 
-          // Fetch tile from network and cache response (even opaque type 0 or 200)
           return fetch(event.request)
             .then((networkResponse) => {
               if (
@@ -117,10 +114,7 @@ self.addEventListener('fetch', (event) => {
               }
               return networkResponse;
             })
-            .catch(() => {
-              // Return cached tile if available, else standard fallback
-              return cachedTile;
-            });
+            .catch(() => cachedTile);
         });
       })
     );
@@ -141,7 +135,6 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // Serve cached index.html SPA entry point when offline in low 4G signal area
           return caches.match('/index.html').then((cachedIndex) => {
             return cachedIndex || caches.match('/');
           });
@@ -150,7 +143,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // --- STRATEGY C: STATIC ASSETS & CDN DEPENDENCIES (Stale-While-Revalidate / Cache First) ---
+  // --- STRATEGY C: STATIC ASSETS & CDN DEPENDENCIES ---
   if (isStaticOrCdnAsset(url)) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
@@ -175,7 +168,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // --- STRATEGY D: GENERAL REQUESTS (Network First with Dynamic Cache Fallback) ---
+  // --- STRATEGY D: GENERAL REQUESTS ---
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
@@ -187,17 +180,15 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+      .catch(() => caches.match(event.request))
   );
 });
 
-// 4. Message Handler for client Cache API inspection and management
+// 4. Message Handler
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CLEAR_TILE_CACHE') {
     caches.delete(TILE_CACHE_NAME).then(() => {
-      console.log('[SW] Map tiles cache purged by user command');
+      console.log('[SW] Map tiles cache purged');
       if (event.ports && event.ports[0]) {
         event.ports[0].postMessage({ success: true, message: 'Map tile cache cleared' });
       }

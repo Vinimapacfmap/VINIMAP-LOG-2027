@@ -92,8 +92,10 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
     if (origin.includes('ais-dev-')) {
       origin = origin.replace('ais-dev-', 'ais-pre-');
     }
-    const cleanPath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
-    return `${origin}/?view=driver_mobile${selectedDriverId ? `&riderId=${selectedDriverId}` : ''}`;
+    const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+    const cleanOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+    const cleanPath = path.endsWith('/') ? path : `${path}/`;
+    return `${cleanOrigin}${cleanPath}?view=driver_mobile${selectedDriverId ? `&riderId=${selectedDriverId}` : ''}`;
   };
   const mobileAppUrl = getPublicMobileAppUrl();
 
