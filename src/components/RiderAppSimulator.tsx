@@ -5025,16 +5025,29 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 </div>
               </div>
 
+              {/* WhatsApp Webview Notice (if opened inside WhatsApp) */}
+              {typeof navigator !== 'undefined' && /WhatsApp/i.test(navigator.userAgent) && (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl space-y-1.5 shadow-sm">
+                  <div className="flex items-center gap-1.5 font-black text-amber-900 text-xs uppercase tracking-wide">
+                    <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                    <span>Navegador do WhatsApp Detectado</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 font-medium leading-relaxed m-0">
+                    O WhatsApp impede a instalação automática de aplicativos. Toque no menu <strong>(⋮)</strong> no canto superior do WhatsApp e escolha <strong>"Abrir no Chrome"</strong> ou <strong>"Abrir no Safari"</strong> para instalar o ícone oficial na tela do celular.
+                  </p>
+                </div>
+              )}
+
               {/* Native Prompt Triggered or Status Banner */}
               <div className="p-3.5 bg-slate-900 text-white rounded-2xl space-y-1.5 shadow-md border border-slate-800">
                 <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-xs">
                   <Sparkles size={16} className="animate-spin" />
-                  <span>Recursos e Cache Offline Carregados!</span>
+                  <span>Aplicativo Web PWA Pronto para Instalação!</span>
                 </div>
                 <p className="text-[11px] text-slate-300 font-medium leading-relaxed m-0">
                   {isAppInstalled ? 
-                    'O aplicativo Minimap já está instalado e ativo no seu dispositivo.' : 
-                    'Os arquivos do aplicativo do condutor foram registrados no seu navegador.'}
+                    'O aplicativo Vinimap Condutor já está instalado e ativo no seu dispositivo.' : 
+                    'Este é um aplicativo PWA oficial. Ele instala o ícone direto na Tela de Início do celular sem precisar baixar arquivo de loja (.APK).'}
                 </p>
               </div>
 
