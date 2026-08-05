@@ -62,7 +62,8 @@ import {
   Mail,
   BellRing,
   Phone,
-  MoreVertical
+  MoreVertical,
+  UserX
 } from 'lucide-react';
 import { 
   getNotificationSettings, 
@@ -217,6 +218,7 @@ export default function OrdersTable({
   // Selection states
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+  const [activeStatusDropdownId, setActiveStatusDropdownId] = useState<string | null>(null);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
@@ -1023,8 +1025,15 @@ export default function OrdersTable({
     return diffMin;
   };
 
-  const renderStatusCellWithHealth = (status: string, createdAt: string, date: string, history?: any[]) => {
-    const duration = getOrderStatusDuration(status, createdAt, date, history);
+  const renderStatusCellWithHealth = (orderOrStatus: Order | string, createdAt?: string, date?: string, history?: any[]) => {
+    const isOrderObj = typeof orderOrStatus === 'object';
+    const order = isOrderObj ? orderOrStatus : null;
+    const status = isOrderObj ? orderOrStatus.status : (orderOrStatus as string);
+    const effCreatedAt = isOrderObj ? orderOrStatus.createdAt : (createdAt || '');
+    const effDate = isOrderObj ? orderOrStatus.date : (date || '');
+    const effHistory = isOrderObj ? orderOrStatus.history : history;
+
+    const duration = getOrderStatusDuration(status, effCreatedAt, effDate, effHistory);
     let gradientClass = "";
     let barColorClass = "bg-slate-200";
     let healthText = "";
@@ -1061,13 +1070,75 @@ export default function OrdersTable({
         delayLabel = "Crítico";
       }
     }
+
+    const isOpen = Boolean(order && activeStatusDropdownId === order.id);
+
     return (
       <div className="flex flex-col items-center justify-center py-1 px-1.5 relative min-w-[120px] w-full h-full">
         <div className={`absolute inset-0 ${gradientClass} pointer-events-none rounded-sm`} />
-        <span className={`relative z-10 inline-flex items-center gap-1 px-2.5 py-0.5 text-[9px] font-extrabold border rounded-full leading-none whitespace-nowrap mb-1.5 shadow-xs ${getStatusClasses(status as OrderStatus)}`}>
+        
+        <button
+          onClick={(e) => {
+            if (!order) return;
+            e.stopPropagation();
+            setActiveStatusDropdownId(isOpen ? null : order.id);
+          }}
+          className={`relative z-10 inline-flex items-center gap-1 px-2.5 py-0.5 text-[9px] font-extrabold border rounded-full leading-none whitespace-nowrap mb-1.5 shadow-xs transition-all cursor-pointer hover:scale-105 ${getStatusClasses(status as OrderStatus)}`}
+          title="Clique para abrir o Menu de Status & Desalocação"
+        >
           {getStatusIcon(status as OrderStatus)}
           <span>{status}</span>
-        </span>
+          {order && <ChevronDown size={8} className="opacity-60" />}
+        </button>
+
+        {order && isOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveStatusDropdownId(null);
+              }}
+            />
+            <div className="absolute top-full mt-1 z-50 w-52 bg-white border border-slate-200/90 rounded-xl shadow-2xl py-1 text-left divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/80">
+                Menu Status #{order.id}
+              </div>
+              <div className="py-1 max-h-48 overflow-y-auto">
+                {(['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((st) => (
+                  <button
+                    key={st}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveStatusDropdownId(null);
+                      onUpdateStatus(order.id, st);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-[11px] font-bold flex items-center gap-2 hover:bg-slate-50 cursor-pointer ${
+                      order.status === st ? 'text-blue-600 bg-blue-50/50 font-black' : 'text-slate-700'
+                    }`}
+                  >
+                    {getStatusIcon(st)}
+                    <span>{st}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="py-1 bg-amber-50/40">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveStatusDropdownId(null);
+                    onAssignRider(order.id, 'unassign');
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-[11px] font-extrabold text-amber-700 hover:bg-amber-100/70 flex items-center gap-2 cursor-pointer"
+                >
+                  <UserX size={13} className="text-amber-600 shrink-0" />
+                  <span>Desalocar Condutor</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="relative z-10 w-full max-w-[85px] h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/40">
           <div className={`h-full ${barColorClass} rounded-full transition-all duration-500`} style={{ width: `${barWidthPercent}%` }} />
         </div>
@@ -2697,7 +2768,7 @@ export default function OrdersTable({
                 <span>Alterar Status</span>
                 <ChevronDown size={11} />
               </button>
-              <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 hidden group-hover:block">
+              <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 hidden group-hover:block">
                 {(['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((status) => (
                   <button
                     key={status}
@@ -2707,6 +2778,14 @@ export default function OrdersTable({
                     {status}
                   </button>
                 ))}
+                <div className="border-t border-slate-100 my-1" />
+                <button
+                  onClick={() => handleBulkRiderAssign('unassign')}
+                  className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <UserX size={12} className="text-amber-600" />
+                  <span>Desalocar Condutor</span>
+                </button>
               </div>
             </div>
 
@@ -2717,7 +2796,14 @@ export default function OrdersTable({
                 <span>Alocar Condutor</span>
                 <ChevronDown size={11} />
               </button>
-              <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 hidden group-hover:block max-h-40 overflow-y-auto">
+              <div className="absolute right-0 mt-1 w-52 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 hidden group-hover:block max-h-48 overflow-y-auto">
+                <button
+                  onClick={() => handleBulkRiderAssign('unassign')}
+                  className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-1.5 cursor-pointer border-b border-slate-100"
+                >
+                  <UserX size={12} className="text-amber-600" />
+                  <span>🚫 Desalocar Condutor</span>
+                </button>
                 {riders.map((r) => (
                   <button
                     key={r.id}
@@ -3001,8 +3087,19 @@ export default function OrdersTable({
                                     })()}
                                   </div>
 
-                                  {/* Section 3: Cancelamento */}
+                                  {/* Section 3: Desalocação e Cancelamento */}
                                   <div className="py-1">
+                                    <button
+                                      onClick={() => {
+                                        setActiveActionMenuId(null);
+                                        onAssignRider(order.id, 'unassign');
+                                      }}
+                                      className="w-full px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                    >
+                                      <UserX size={14} className="text-amber-600" />
+                                      <span>Desalocar Condutor</span>
+                                    </button>
+
                                     {order.status !== 'Concluído' && order.status !== 'Cancelado' ? (
                                       <button
                                         onClick={() => {
@@ -3031,7 +3128,7 @@ export default function OrdersTable({
                       {/* Status Badge Indicator synchronized with dashboard */}
                       {visibleColumns.has('Status') && (
                         <td className="px-1 py-1 text-center whitespace-nowrap min-w-[130px]">
-                          {renderStatusCellWithHealth(order.status, order.createdAt, order.date, order.history)}
+                          {renderStatusCellWithHealth(order)}
                         </td>
                       )}
 
@@ -3116,7 +3213,7 @@ export default function OrdersTable({
                           {visibleColumns.has('DispositivoCondutor') && (
                             <td className="px-6 py-4 relative">
                               {rider ? (
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 relative group/rider">
                                   <img
                                     src={rider.avatar}
                                     alt={rider.name}
@@ -3127,6 +3224,48 @@ export default function OrdersTable({
                                     <span className="block font-bold text-slate-700 text-[11px] leading-tight">{rider.name}</span>
                                     <span className="text-[9px] text-slate-400 font-medium">{rider.vehicle}</span>
                                   </div>
+                                  <button
+                                    onClick={() => setShowRiderDropdown(showRiderDropdown === order.id ? null : order.id)}
+                                    className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer transition-colors ml-1"
+                                    title="Opções de Alocação"
+                                  >
+                                    <ChevronDown size={11} />
+                                  </button>
+
+                                  {showRiderDropdown === order.id && (
+                                    <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 max-h-52 overflow-y-auto text-left">
+                                      <button
+                                        onClick={() => {
+                                          onAssignRider(order.id, 'unassign');
+                                          setShowRiderDropdown(null);
+                                        }}
+                                        className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-2 cursor-pointer border-b border-slate-100"
+                                      >
+                                        <UserX size={12} className="text-amber-600 shrink-0" />
+                                        <span>Desalocar Condutor</span>
+                                      </button>
+                                      <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Reatribuir Condutor
+                                      </div>
+                                      {riders
+                                        .filter(r => r.status === 'Disponível' || r.status === 'Em rota')
+                                        .map(availRider => (
+                                          <button
+                                            key={availRider.id}
+                                            onClick={() => {
+                                              onAssignRider(order.id, availRider.id);
+                                              setShowRiderDropdown(null);
+                                            }}
+                                            className="w-full text-left px-3 py-1.5 hover:bg-blue-50/50 text-[11px] flex items-center gap-2 cursor-pointer font-semibold text-slate-700"
+                                          >
+                                            <img src={availRider.avatar} className="w-4 h-4 rounded-full object-cover" />
+                                            <div className="truncate">
+                                              <p className="font-bold leading-none">{availRider.name}</p>
+                                            </div>
+                                          </button>
+                                        ))}
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
                                 <div className="relative">
@@ -3142,6 +3281,16 @@ export default function OrdersTable({
 
                                   {showRiderDropdown === order.id && (
                                     <div className="absolute left-0 mt-1.5 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 max-h-48 overflow-y-auto">
+                                      <button
+                                        onClick={() => {
+                                          onAssignRider(order.id, 'unassign');
+                                          setShowRiderDropdown(null);
+                                        }}
+                                        className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-2 cursor-pointer border-b border-slate-100"
+                                      >
+                                        <UserX size={12} className="text-amber-600 shrink-0" />
+                                        <span>Desalocar Condutor</span>
+                                      </button>
                                       <div className="px-2.5 py-1 border-b border-slate-100 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                                         Selecione um Entregador
                                       </div>
@@ -3187,7 +3336,7 @@ export default function OrdersTable({
                           if (col === 'Status') {
                             return (
                               <td key={col} className="px-1 py-1 border-r border-slate-50 text-center whitespace-nowrap min-w-[130px]">
-                                {renderStatusCellWithHealth(order.status, order.createdAt, order.date, order.history)}
+                                {renderStatusCellWithHealth(order)}
                               </td>
                             );
                           }

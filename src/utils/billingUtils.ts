@@ -178,26 +178,15 @@ export function calculateRiderCommissionForOrder(
   freight: number;
   model: string;
 } {
-  // If there is no rider assigned, check if we can fallback to the spreadsheet's driver value
-  if (!rider) {
-    let fallbackValue = 0;
-    if (order.driverValue !== undefined && order.driverValue !== null) {
-      fallbackValue = order.driverValue;
-    } else if (order.rawData) {
-      const rawVal = order.rawData['ValorCondutor'] || order.rawData['valorcondutor'];
-      if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
-        const parsed = parseFloat(String(rawVal).replace(',', '.'));
-        if (!isNaN(parsed)) {
-          fallbackValue = parsed;
-        }
-      }
-    }
+  // REGRA: Ao desalocar ou cancelar o pedido, o frete/repasse NÃO é contabilizado para o condutor antigo (retorna 0).
+  // O repasse só é contabilizado para o NOVO condutor atualmente alocado (se concluído), e é ZERADO se desalocado ou cancelado.
+  if (!rider || !order.riderId || order.riderId !== rider.id || order.status === 'Cancelado') {
     return {
-      total: fallbackValue,
+      total: 0,
       fixed: 0,
       variable: 0,
-      freight: fallbackValue,
-      model: 'planilha'
+      freight: 0,
+      model: rider?.billingModel || 'nenhum'
     };
   }
 

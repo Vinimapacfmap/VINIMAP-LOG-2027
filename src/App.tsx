@@ -955,14 +955,16 @@ export default function App() {
   const validateAndRecalculateOrderFreight = (order: Order, partners: ClientPartner[]): Order => {
     const finalFreightValue = getOrderFreightValue(order, partners);
     
-    // Calculate potential driver commission
-    const assignedRider = riders.find(r => r.id === order.riderId);
-    const commissionResult = calculateRiderCommissionForOrder(
-      assignedRider,
-      { ...order, deliveryValue: finalFreightValue, status: 'Concluído' },
-      partners
-    );
-    const finalDriverValue = order.riderId ? commissionResult.total : undefined;
+    // Calculate potential driver commission (0 if unassigned or cancelled)
+    const assignedRider = order.riderId ? riders.find(r => r.id === order.riderId) : undefined;
+    const isUnassignedOrCancelled = !order.riderId || order.status === 'Cancelado';
+    const finalDriverValue = (assignedRider && !isUnassignedOrCancelled)
+      ? calculateRiderCommissionForOrder(
+          assignedRider,
+          { ...order, deliveryValue: finalFreightValue, status: 'Concluído' },
+          partners
+        ).total
+      : 0;
 
     const normalizedRawData = { ...(order.rawData || {}) };
     const keys = Object.keys(normalizedRawData);
@@ -973,20 +975,16 @@ export default function App() {
     const condutorKey = keys.find(k => k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "") === 'dispositivocondutor') || 'DispositivoCondutor';
 
     normalizedRawData[freightKey] = String(finalFreightValue);
-    if (finalDriverValue !== undefined) {
-      normalizedRawData[driverKey] = String(finalDriverValue);
-    } else {
-      normalizedRawData[driverKey] = '';
-    }
+    normalizedRawData[driverKey] = !isUnassignedOrCancelled ? String(finalDriverValue) : '0';
     if (order.cep) {
       normalizedRawData[cepKey] = order.cep;
     }
-    normalizedRawData[condutorKey] = assignedRider ? assignedRider.name : 'Não vinculado';
+    normalizedRawData[condutorKey] = (assignedRider && !isUnassignedOrCancelled) ? assignedRider.name : 'Não vinculado';
 
     return {
       ...order,
       deliveryValue: finalFreightValue,
-      driverValue: finalDriverValue,
+      driverValue: !isUnassignedOrCancelled ? finalDriverValue : 0,
       rawData: normalizedRawData
     };
   };
@@ -2073,14 +2071,67 @@ export default function App() {
     }
   };
 
-  // Triggered when linking a rider to a pending order
+  // Triggered when linking or unassigning a rider to an order
   const handleAssignRider = async (orderId: string, riderId: string) => {
     try {
       const currentOrder = orders.find(o => o.id === orderId);
       if (!currentOrder) return;
 
-      const riderName = riders.find(r => r.id === riderId)?.name || 'Entregador';
+      const isUnassign = !riderId || riderId === '' || riderId === 'unassign' || riderId === 'desalocar';
       const nowTime = getSaoPauloTime();
+
+      if (isUnassign) {
+        let updatedRiderObj: DeliveryRider | null = null;
+        if (currentOrder.riderId) {
+          const prevRider = riders.find(r => r.id === currentOrder.riderId);
+          if (prevRider) {
+            const remainingActiveOrders = orders.filter(
+              o => o.id !== currentOrder.id && o.riderId === currentOrder.riderId && o.status !== 'Concluído' && o.status !== 'Cancelado'
+            );
+            const hasRemaining = remainingActiveOrders.length > 0;
+            updatedRiderObj = {
+              ...prevRider,
+              status: hasRemaining ? 'Em rota' : 'Disponível',
+              currentOrderId: hasRemaining ? remainingActiveOrders[0].id : undefined
+            };
+          }
+        }
+
+        const historyEntry = {
+          timestamp: getSaoPauloDateTimeShort(),
+          action: 'Entregador Desalocado',
+          user: 'Operador',
+          details: 'Condutor desalocado do pedido. Status redefinido para Não iniciado.'
+        };
+
+        const initialUpdatedOrder: Order = {
+          ...currentOrder,
+          riderId: undefined,
+          status: 'Não iniciado' as OrderStatus,
+          history: [...(currentOrder.history || []), historyEntry]
+        };
+
+        const updatedOrder = validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners);
+
+        const promises: Promise<any>[] = [dbSaveOrder(updatedOrder)];
+        if (updatedRiderObj) {
+          promises.push(dbSaveDeliveryRider(updatedRiderObj));
+        }
+
+        const newLog: ActivityLog = {
+          id: generateUniqueLogId('log'),
+          time: nowTime,
+          message: `Condutor desalocado do pedido #${orderId}.`,
+          type: 'warning',
+          orderId
+        };
+        promises.push(dbAddActivityLog(newLog));
+
+        await Promise.all(promises);
+        return;
+      }
+
+      const riderName = riders.find(r => r.id === riderId)?.name || 'Entregador';
 
       const historyEntry = {
         timestamp: getSaoPauloDateTimeShort(),
@@ -2123,7 +2174,7 @@ export default function App() {
       await Promise.all(promises);
     } catch (err: any) {
       console.error(err);
-      alert(`Erro ao alocar condutor: ${err.message || err}`);
+      alert(`Erro ao alocar/desalocar condutor: ${err.message || err}`);
     }
   };
 
@@ -2309,20 +2360,22 @@ export default function App() {
 
   const handleBulkAssignRider = async (orderIds: string[], riderId: string) => {
     try {
-      const riderName = riders.find(r => r.id === riderId)?.name || 'Entregador';
+      const isUnassign = !riderId || riderId === '' || riderId === 'unassign' || riderId === 'desalocar';
+      const riderName = isUnassign ? 'Nenhum' : (riders.find(r => r.id === riderId)?.name || 'Entregador');
       const updatedOrders: Order[] = [];
 
       orders.forEach(order => {
         if (orderIds.includes(order.id)) {
           const historyEntry = {
             timestamp: getSaoPauloDateTimeShort(),
-            action: 'Entregador Alocado (Em Massa)',
+            action: isUnassign ? 'Entregadores Desalocados (Em Massa)' : 'Entregador Alocado (Em Massa)',
             user: 'Sistema (Painel)',
-            details: `Entregador ${riderName} vinculado em massa.`
+            details: isUnassign ? 'Condutor desalocado dos pedidos selecionados.' : `Entregador ${riderName} vinculado em massa.`
           };
           const initialUpdatedOrder: Order = {
             ...order,
-            riderId,
+            riderId: isUnassign ? undefined : riderId,
+            status: isUnassign ? ('Não iniciado' as OrderStatus) : order.status,
             history: [...(order.history || []), historyEntry]
           };
           updatedOrders.push(validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners));
@@ -2339,15 +2392,17 @@ export default function App() {
       const newLog: ActivityLog = {
         id: generateUniqueLogId('log-bulk'),
         time: nowTime,
-        message: `Entregador ${riderName} vinculado a ${orderIds.length} pedidos em massa.`,
-        type: 'info'
+        message: isUnassign
+          ? `Condutores desalocados de ${orderIds.length} pedidos em massa.`
+          : `Entregador ${riderName} vinculado a ${orderIds.length} pedidos em massa.`,
+        type: isUnassign ? 'warning' : 'info'
       };
       promises.push(dbAddActivityLog(newLog));
 
       await Promise.all(promises);
     } catch (err: any) {
       console.error(err);
-      alert(`Erro ao vincular condutor em lote: ${err.message || err}`);
+      alert(`Erro ao vincular/desalocar condutor em lote: ${err.message || err}`);
     }
   };
 
