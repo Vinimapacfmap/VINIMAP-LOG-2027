@@ -1705,6 +1705,7 @@ export default function App() {
     const newOrder = validateAndRecalculateOrderFreight(initialOrder, clientPartners);
 
     try {
+      setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
       await dbSaveOrder(newOrder);
 
       // Create activity timeline log
@@ -2212,6 +2213,11 @@ export default function App() {
 
         const updatedOrder = validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners);
 
+        setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+        if (updatedRiderObj) {
+          setRiders(prev => prev.map(r => r.id === updatedRiderObj.id ? updatedRiderObj : r));
+        }
+
         const promises: Promise<any>[] = [dbSaveOrder(updatedOrder)];
         if (updatedRiderObj) {
           promises.push(dbSaveDeliveryRider(updatedRiderObj));
@@ -2248,6 +2254,8 @@ export default function App() {
 
       const updatedOrder = validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners);
 
+      setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+
       const promises: Promise<any>[] = [];
 
       // Mark rider busy if order is already in route/delivering
@@ -2255,6 +2263,7 @@ export default function App() {
         const rider = riders.find(r => r.id === riderId);
         if (rider) {
           const updatedRider: DeliveryRider = { ...rider, status: 'Em rota', currentOrderId: orderId };
+          setRiders(prev => prev.map(r => r.id === riderId ? updatedRider : r));
           promises.push(dbSaveDeliveryRider(updatedRider));
         }
       }
@@ -2342,6 +2351,7 @@ export default function App() {
         finalOrder.riderId = undefined;
       }
 
+      setOrders(prev => prev.map(o => o.id === finalOrder.id ? finalOrder : o));
       promises.push(dbSaveOrder(finalOrder));
 
       const nowTime = getSaoPauloTime();
@@ -2363,6 +2373,7 @@ export default function App() {
 
   const handleDeleteOrder = async (orderId: string) => {
     try {
+      setOrders(prev => prev.filter(o => o.id !== orderId));
       await dbDeleteOrder(orderId);
 
       const nowTime = getSaoPauloTime();
@@ -2468,12 +2479,23 @@ export default function App() {
         }
       });
 
+      setOrders(prev => {
+        const map = new Map(updatedOrders.map(o => [o.id, o]));
+        return prev.map(o => map.get(o.id) || o);
+      });
+      const ridersToSave = Object.values(updatedRidersMap);
+      if (ridersToSave.length > 0) {
+        setRiders(prev => {
+          const map = new Map(ridersToSave.map(r => [r.id, r]));
+          return prev.map(r => map.get(r.id) || r);
+        });
+      }
+
       const promises: Promise<any>[] = [];
 
       if (updatedOrders.length > 0) {
         promises.push(dbBulkSaveOrders(updatedOrders));
       }
-      const ridersToSave = Object.values(updatedRidersMap);
       if (ridersToSave.length > 0) {
         ridersToSave.forEach(r => promises.push(dbSaveDeliveryRider(r)));
       }
@@ -2518,6 +2540,11 @@ export default function App() {
         }
       });
 
+      setOrders(prev => {
+        const map = new Map(updatedOrders.map(o => [o.id, o]));
+        return prev.map(o => map.get(o.id) || o);
+      });
+
       const promises: Promise<any>[] = [];
 
       if (updatedOrders.length > 0) {
@@ -2544,6 +2571,7 @@ export default function App() {
 
   const handleBulkDelete = async (orderIds: string[]) => {
     try {
+      setOrders(prev => prev.filter(o => !orderIds.includes(o.id)));
       await dbBulkDeleteOrders(orderIds);
 
       const nowTime = getSaoPauloTime();
@@ -2582,6 +2610,7 @@ export default function App() {
         return validateAndRecalculateOrderFreight(tempOrder, clientPartners);
       });
 
+      setOrders(prev => [...createdOrders, ...prev]);
       await dbBulkSaveOrders(createdOrders);
 
       // Add a single activity log for the bulk operation
@@ -2667,12 +2696,22 @@ export default function App() {
         }
       });
 
+      setOrders(prev => {
+        const map = new Map(updatedOrders.map(o => [o.id, o]));
+        return prev.map(o => map.get(o.id) || o);
+      });
+      const ridersToSave = Object.values(updatedRidersMap);
+      if (ridersToSave.length > 0) {
+        setRiders(prev => {
+          const map = new Map(ridersToSave.map(r => [r.id, r]));
+          return prev.map(r => map.get(r.id) || r);
+        });
+      }
+
       const promises: Promise<any>[] = [];
       if (updatedOrders.length > 0) {
         promises.push(dbBulkSaveOrders(updatedOrders));
       }
-
-      const ridersToSave = Object.values(updatedRidersMap);
       if (ridersToSave.length > 0) {
         ridersToSave.forEach(r => promises.push(dbSaveDeliveryRider(r)));
       }
