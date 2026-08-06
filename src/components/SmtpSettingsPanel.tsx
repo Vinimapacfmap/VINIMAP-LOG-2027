@@ -150,7 +150,18 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
         }),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch (_e) {
+        data = {
+          success: false,
+          error: response.ok 
+            ? 'Resposta do servidor não pôde ser lida em formato JSON.' 
+            : `Servidor indisponível ou rota não encontrada (HTTP ${response.status}). Se estiver usando o Vercel, confirme o deploy da pasta /api.`
+        };
+      }
 
       if (data.success) {
         setTestResult({
