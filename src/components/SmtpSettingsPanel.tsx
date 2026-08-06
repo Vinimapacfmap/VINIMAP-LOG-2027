@@ -21,6 +21,7 @@ import {
   Info,
   Terminal,
   Check,
+  Save,
   AlertTriangle,
   Lock,
   Globe
@@ -30,15 +31,30 @@ import { SmtpSettings, SmtpLogEntry, DEFAULT_SMTP_SETTINGS } from '../utils/noti
 interface SmtpSettingsPanelProps {
   smtpSettings: SmtpSettings;
   onChange: (updated: SmtpSettings) => void;
+  onSave?: () => void;
+  isSaved?: boolean;
 }
 
 export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
   smtpSettings,
   onChange,
+  onSave,
+  isSaved = false,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showHelpGuide, setShowHelpGuide] = useState(false);
+  const [internalSaved, setInternalSaved] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+
+  const handleSaveClick = () => {
+    if (onSave) {
+      onSave();
+    }
+    setInternalSaved(true);
+    setTimeout(() => setInternalSaved(false), 3000);
+  };
+
+  const isSavedStatus = isSaved || internalSaved;
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -232,15 +248,30 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
             </div>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer shrink-0 self-start sm:self-center">
-            <input 
-              type="checkbox" 
-              checked={smtpSettings.enabled} 
-              onChange={(e) => updateField('enabled', e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-          </label>
+          <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+            <button
+              type="button"
+              onClick={handleSaveClick}
+              className={`px-4 py-2 text-xs font-extrabold rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer ${
+                isSavedStatus
+                  ? 'bg-emerald-600 text-white shadow-emerald-200'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
+              }`}
+            >
+              {isSavedStatus ? <Check size={16} /> : <Save size={16} />}
+              <span>{isSavedStatus ? 'Salvo com Sucesso!' : 'Salvar SMTP'}</span>
+            </button>
+
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={smtpSettings.enabled} 
+                onChange={(e) => updateField('enabled', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -538,6 +569,21 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
             <p>
               Garantimos que o servidor SMTP próprio envia direto do seu domínio, evitando que os e-mails caiam na caixa de spam do seu cliente final.
             </p>
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSaveClick}
+              className={`w-full sm:w-auto px-6 py-3 text-xs font-extrabold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
+                isSavedStatus
+                  ? 'bg-emerald-600 text-white shadow-emerald-200'
+                  : 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-emerald-200'
+              }`}
+            >
+              {isSavedStatus ? <Check size={18} /> : <Save size={18} />}
+              <span>{isSavedStatus ? 'Configurações SMTP Salvas com Sucesso!' : 'Salvar Configurações do Servidor SMTP'}</span>
+            </button>
           </div>
         </div>
       </div>

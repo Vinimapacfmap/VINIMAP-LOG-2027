@@ -298,6 +298,8 @@ export default function NotificationSettingsManager({ onSaveSuccess }: Notificat
         <SmtpSettingsPanel
           smtpSettings={settings.smtpSettings || DEFAULT_SMTP_SETTINGS}
           onChange={(updatedSmtp) => setSettings(prev => ({ ...prev, smtpSettings: updatedSmtp }))}
+          onSave={handleSave}
+          isSaved={isSaved}
         />
       )}
 
@@ -417,6 +419,26 @@ export default function NotificationSettingsManager({ onSaveSuccess }: Notificat
           </div>
         </div>
       )}
+
+      {/* Bottom Save Action Bar */}
+      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+        <p className="text-xs text-slate-500 font-medium">
+          As alterações feitas nas mensagens e credenciais SMTP são salvas para todos os disparos de e-mail e WhatsApp.
+        </p>
+
+        <button
+          onClick={handleSave}
+          type="button"
+          className={`px-6 py-2.5 text-xs font-extrabold rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer ${
+            isSaved 
+              ? 'bg-emerald-600 text-white shadow-emerald-200' 
+              : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
+          }`}
+        >
+          {isSaved ? <Check size={16} /> : <Save size={16} />}
+          <span>{isSaved ? 'Configurações Salvas!' : 'Salvar Todas as Configurações'}</span>
+        </button>
+      </div>
     </div>
   );
 }
