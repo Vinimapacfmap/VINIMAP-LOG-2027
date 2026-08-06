@@ -2283,6 +2283,43 @@ export default function App() {
       
       // Dynamic recalculation of freight whenever CEP or partnerName is modified
       const existingOrder = orders.find(o => o.id === finalOrder.id);
+
+      // Verify if caller already appended a new history entry; if not, calculate diff and append entry with timestamp
+      if (existingOrder) {
+        const existingHistLen = (existingOrder.history || []).length;
+        const newHistLen = (finalOrder.history || []).length;
+
+        if (newHistLen <= existingHistLen) {
+          const changes: string[] = [];
+          if (finalOrder.clientName !== existingOrder.clientName) changes.push(`Cliente: "${existingOrder.clientName}" ➔ "${finalOrder.clientName}"`);
+          if ((finalOrder.phone || '') !== (existingOrder.phone || '')) changes.push(`Telefone: "${existingOrder.phone || ''}" ➔ "${finalOrder.phone || ''}"`);
+          if (finalOrder.address !== existingOrder.address) changes.push(`Endereço: "${existingOrder.address}" ➔ "${finalOrder.address}"`);
+          if (finalOrder.region !== existingOrder.region) changes.push(`Região: "${existingOrder.region}" ➔ "${finalOrder.region}"`);
+          if (finalOrder.priority !== existingOrder.priority) changes.push(`Prioridade: "${existingOrder.priority}" ➔ "${finalOrder.priority}"`);
+          if (finalOrder.value !== existingOrder.value) changes.push(`Valor: "R$ ${existingOrder.value}" ➔ "R$ ${finalOrder.value}"`);
+          if (finalOrder.itemsCount !== existingOrder.itemsCount) changes.push(`Qtd Itens: "${existingOrder.itemsCount}" ➔ "${finalOrder.itemsCount}"`);
+          if ((finalOrder.cep || '') !== (existingOrder.cep || '')) changes.push(`CEP: "${existingOrder.cep || ''}" ➔ "${finalOrder.cep || ''}"`);
+          if ((finalOrder.partnerName || '') !== (existingOrder.partnerName || '')) changes.push(`Parceiro: "${existingOrder.partnerName || ''}" ➔ "${finalOrder.partnerName || ''}"`);
+          if ((finalOrder.date || '') !== (existingOrder.date || '')) changes.push(`Data: "${existingOrder.date || ''}" ➔ "${finalOrder.date || ''}"`);
+          if (finalOrder.status !== existingOrder.status) changes.push(`Status: "${existingOrder.status}" ➔ "${finalOrder.status}"`);
+          if (finalOrder.deliveryValue !== existingOrder.deliveryValue) changes.push(`Valor Entrega: "R$ ${existingOrder.deliveryValue ?? 0}" ➔ "R$ ${finalOrder.deliveryValue ?? 0}"`);
+          if (finalOrder.driverValue !== existingOrder.driverValue) changes.push(`Valor Condutor: "R$ ${existingOrder.driverValue ?? 0}" ➔ "R$ ${finalOrder.driverValue ?? 0}"`);
+
+          if (changes.length > 0) {
+            const editTimestamp = getSaoPauloDateTimeShort();
+            finalOrder.history = [
+              ...(existingOrder.history || []),
+              {
+                timestamp: editTimestamp,
+                action: 'Dados do Pedido Alterados',
+                user: 'Operador',
+                details: `Alteração registrada em ${editTimestamp}: ${changes.join('; ')}`
+              }
+            ];
+          }
+        }
+      }
+
       if (existingOrder && (existingOrder.cep !== finalOrder.cep || existingOrder.partnerName !== finalOrder.partnerName)) {
         // If CEP or partner name is changed, we ignore any manual overridden deliveryValue to let it recompute
         const orderForRecalc = { ...finalOrder, deliveryValue: undefined };

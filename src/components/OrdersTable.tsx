@@ -1503,6 +1503,62 @@ export default function OrdersTable({
     const parsedValEntrega = editForm['ValorEntrega'] ? parseFloat(editForm['ValorEntrega'].replace(',', '.')) : undefined;
     const parsedValCondutor = editForm['ValorCondutor'] ? parseFloat(editForm['ValorCondutor'].replace(',', '.')) : undefined;
 
+    // Track specific field alterations for audit history
+    const changes: string[] = [];
+    if (editStandardFields.clientName !== hubOrder.clientName) {
+      changes.push(`Cliente: "${hubOrder.clientName}" ➔ "${editStandardFields.clientName}"`);
+    }
+    if ((editStandardFields.phone || '') !== (hubOrder.phone || '')) {
+      changes.push(`Telefone: "${hubOrder.phone || ''}" ➔ "${editStandardFields.phone}"`);
+    }
+    if (editStandardFields.address !== hubOrder.address) {
+      changes.push(`Endereço: "${hubOrder.address}" ➔ "${editStandardFields.address}"`);
+    }
+    if (editStandardFields.region !== hubOrder.region) {
+      changes.push(`Região: "${hubOrder.region}" ➔ "${editStandardFields.region}"`);
+    }
+    if (editStandardFields.priority !== hubOrder.priority) {
+      changes.push(`Prioridade: "${hubOrder.priority}" ➔ "${editStandardFields.priority}"`);
+    }
+    if ((valNF || editStandardFields.value) !== hubOrder.value) {
+      changes.push(`Valor NF: "R$ ${hubOrder.value}" ➔ "R$ ${valNF || editStandardFields.value}"`);
+    }
+    const newItemsCount = parseInt(String(editStandardFields.itemsCount)) || 1;
+    if (newItemsCount !== hubOrder.itemsCount) {
+      changes.push(`Qtd Itens: "${hubOrder.itemsCount}" ➔ "${newItemsCount}"`);
+    }
+    if ((editStandardFields.cep || '') !== (hubOrder.cep || '')) {
+      changes.push(`CEP: "${hubOrder.cep || ''}" ➔ "${editStandardFields.cep}"`);
+    }
+    if ((editStandardFields.partnerName || '') !== (hubOrder.partnerName || '')) {
+      changes.push(`Parceiro: "${hubOrder.partnerName || ''}" ➔ "${editStandardFields.partnerName}"`);
+    }
+    if ((editStandardFields.date || '') !== (hubOrder.date || '')) {
+      changes.push(`Data: "${hubOrder.date || ''}" ➔ "${editStandardFields.date}"`);
+    }
+    if (parsedValEntrega !== undefined && parsedValEntrega !== hubOrder.deliveryValue) {
+      changes.push(`Valor Entrega: "R$ ${hubOrder.deliveryValue ?? 0}" ➔ "R$ ${parsedValEntrega}"`);
+    }
+    if (parsedValCondutor !== undefined && parsedValCondutor !== hubOrder.driverValue) {
+      changes.push(`Valor Condutor: "R$ ${hubOrder.driverValue ?? 0}" ➔ "R$ ${parsedValCondutor}"`);
+    }
+
+    // Check custom fields from editForm against hubOrder.rawData
+    if (hubOrder.rawData) {
+      Object.keys(editForm).forEach(k => {
+        const oldVal = hubOrder.rawData?.[k] || '';
+        const newVal = editForm[k] || '';
+        if (oldVal !== newVal && !['ProcurarPor', 'Endereco', 'CEP', 'Telefone', 'CodigoCliente', 'ValorNotaFiscal', 'DataSolicitacao', 'ValorEntrega', 'ValorCondutor'].includes(k)) {
+          changes.push(`${k}: "${oldVal}" ➔ "${newVal}"`);
+        }
+      });
+    }
+
+    const editTimestamp = getSaoPauloDateTimeShort();
+    const detailsMsg = changes.length > 0 
+      ? `Dados do pedido alterados em ${editTimestamp}: ${changes.join('; ')}`
+      : `Dados cadastrais do pedido salvos em ${editTimestamp}.`;
+
     const updatedOrder: Order = {
       ...hubOrder,
       clientName: editStandardFields.clientName,
@@ -1511,7 +1567,7 @@ export default function OrdersTable({
       region: editStandardFields.region,
       priority: editStandardFields.priority,
       value: valNF || editStandardFields.value,
-      itemsCount: parseInt(String(editStandardFields.itemsCount)) || 1,
+      itemsCount: newItemsCount,
       cep: editStandardFields.cep,
       partnerName: editStandardFields.partnerName,
       date: editStandardFields.date,
@@ -1533,10 +1589,10 @@ export default function OrdersTable({
       history: [
         ...(hubOrder.history || []),
         {
-          timestamp: getSaoPauloDateTimeShort(),
-          action: 'Pedido Editado (CRUD)',
+          timestamp: editTimestamp,
+          action: 'Dados do Pedido Alterados',
           user: 'Operador',
-          details: 'Campos cadastrais editados manualmente via central de pedidos.'
+          details: detailsMsg
         }
       ]
     };
