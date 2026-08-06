@@ -75,6 +75,7 @@ import {
 } from 'lucide-react';
 import { SignatureCanvasModal } from './SignatureCanvasModal';
 import { DriverAppInstallerModal } from './DriverAppInstallerModal';
+import { applyDynamicPwaManifestAndIcons } from '../utils/pwaUtils';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 
 const convertToGeoLat = (svgLatPercent: number) => -23.52 - (svgLatPercent / 100) * 0.12;
@@ -250,11 +251,16 @@ export default function RiderAppSimulator({
   const [lockedRiderId, setLockedRiderId] = useState<string | null>(null);
   const selectedRider = riders.find(r => r.id === selectedRiderId);
 
+  // Apply dynamic PWA icons & manifest using Headquarters Logo
+  useEffect(() => {
+    applyDynamicPwaManifestAndIcons(activeHub?.logoUrl);
+  }, [activeHub]);
+
   // Check URL parameters or local storage for riderId lock when opened directly via link
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const urlRiderId = params.get('riderId') || localStorage.getItem('vinimap_driver_id');
+      const urlRiderId = params.get('riderId') || localStorage.getItem('vinimap_driver_id') || activeRiderId;
       if (urlRiderId) {
         setLockedRiderId(urlRiderId);
         setSelectedRiderId(urlRiderId);
@@ -265,19 +271,22 @@ export default function RiderAppSimulator({
         }
       }
     }
-  }, [riders]);
+  }, [riders, activeRiderId]);
 
   // Sync state with parent activeRiderId
   useEffect(() => {
-    if (activeRiderId && activeRiderId !== selectedRiderId) {
+    if (lockedRiderId) {
+      setSelectedRiderId(lockedRiderId);
+    } else if (activeRiderId && activeRiderId !== selectedRiderId) {
       setSelectedRiderId(activeRiderId);
     }
-  }, [activeRiderId]);
+  }, [activeRiderId, lockedRiderId]);
 
   const changeSelectedRiderId = (id: string) => {
-    setSelectedRiderId(id);
+    const effectiveId = lockedRiderId || id;
+    setSelectedRiderId(effectiveId);
     if (onActiveRiderChange) {
-      onActiveRiderChange(id);
+      onActiveRiderChange(effectiveId);
     }
   };
 
@@ -2877,43 +2886,69 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   >
                     <div className="space-y-3">
                       {/* Driver Select Dropdown */}
-                      <div>
-                        <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">
-                          Condutor Cadastrado (Selecione abaixo)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-2.5 text-blue-300 pointer-events-none z-10">
-                            <User size={13} />
-                          </span>
-                          <select
-                            value={selectedRiderId || ''}
-                            onChange={(e) => {
-                              const id = e.target.value;
-                              if (id) {
-                                const r = riders.find(item => item.id === id);
-                                if (r) {
-                                  changeSelectedRiderId(r.id);
-                                  setPhoneInput(r.deviceNumber || r.phone || r.name);
-                                  setPasswordInput(r.password || '1234');
-                                  setLoginError(null);
-                                }
-                              } else {
-                                changeSelectedRiderId('');
-                                setPhoneInput('');
-                                setPasswordInput('');
-                              }
-                            }}
-                            className="w-full bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-900 border border-white/20 focus:border-blue-400 rounded-xl py-2 pl-8 pr-3 text-xs text-white focus:outline-none transition-all cursor-pointer font-semibold shadow-inner"
-                          >
-                            <option value="" className="bg-slate-900 text-slate-300">-- Selecione o Condutor Cadastrado --</option>
-                            {riders.map(r => (
-                              <option key={r.id} value={r.id} className="bg-slate-900 text-white">
-                                {r.name} ({r.vehicle || 'Veículo'}) — {r.deviceNumber || r.phone || 'Cadastrado'}
-                              </option>
-                            ))}
-                          </select>
+                      {lockedRiderId ? (
+                        <div>
+                          <label className="text-[9.5px] font-bold text-emerald-300 uppercase tracking-wider block mb-1">
+                            🔒 Condutor Exclusivo do Link
+                          </label>
+                          <div className="bg-slate-800/90 border border-emerald-500/40 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-inner">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0 shadow-xs">
+                                <User size={14} className="text-emerald-300" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-extrabold text-xs text-white truncate">
+                                  {riders.find(r => r.id === lockedRiderId)?.name || 'Condutor Cadastrado'}
+                                </div>
+                                <div className="text-[9.5px] text-emerald-200 font-medium truncate">
+                                  {riders.find(r => r.id === lockedRiderId)?.vehicle || 'Veículo'} — Acesso Restrito
+                                </div>
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 rounded-lg text-[9px] font-extrabold text-emerald-300 uppercase tracking-wider shrink-0">
+                              Bloqueado
+                            </span>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div>
+                          <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">
+                            Condutor Cadastrado (Selecione abaixo)
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-blue-300 pointer-events-none z-10">
+                              <User size={13} />
+                            </span>
+                            <select
+                              value={selectedRiderId || ''}
+                              onChange={(e) => {
+                                const id = e.target.value;
+                                if (id) {
+                                  const r = riders.find(item => item.id === id);
+                                  if (r) {
+                                    changeSelectedRiderId(r.id);
+                                    setPhoneInput(r.deviceNumber || r.phone || r.name);
+                                    setPasswordInput(r.password || '1234');
+                                    setLoginError(null);
+                                  }
+                                } else {
+                                  changeSelectedRiderId('');
+                                  setPhoneInput('');
+                                  setPasswordInput('');
+                                }
+                              }}
+                              className="w-full bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-900 border border-white/20 focus:border-blue-400 rounded-xl py-2 pl-8 pr-3 text-xs text-white focus:outline-none transition-all cursor-pointer font-semibold shadow-inner"
+                            >
+                              <option value="" className="bg-slate-900 text-slate-300">-- Selecione o Condutor Cadastrado --</option>
+                              {riders.map(r => (
+                                <option key={r.id} value={r.id} className="bg-slate-900 text-white">
+                                  {r.name} ({r.vehicle || 'Veículo'}) — {r.deviceNumber || r.phone || 'Cadastrado'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
 
                       <div>
                         <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">Dispositivo / Telefone</label>
@@ -2973,31 +3008,33 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     </button>
                   </form>
 
-                  {/* Quick select helpful tool */}
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
-                    <span className="text-[8.5px] font-black text-blue-300 uppercase tracking-wider block">
-                      {lockedRiderId ? '🔒 Condutor Destinatário do Link:' : '⚡ Seleção Rápida de Condutores Cadastrados:'}
-                    </span>
-                    <div className="grid grid-cols-1 gap-1 max-h-[120px] overflow-y-auto pr-1">
-                      {(lockedRiderId ? riders.filter(r => r.id === lockedRiderId) : riders).map(r => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => {
-                            changeSelectedRiderId(r.id);
-                            setPhoneInput(r.deviceNumber || r.phone || r.name);
-                            setPasswordInput(r.password || '1234');
-                            setLoginError(null);
-                          }}
-                          className="w-full py-1 px-2 bg-white/5 hover:bg-white/10 active:bg-white/15 rounded-lg text-left text-[9.5px] text-blue-100 flex items-center justify-between gap-1 border border-white/5 transition-all cursor-pointer"
-                        >
-                          <span className="font-semibold truncate">{r.name} ({r.vehicle})</span>
-                          <span className="font-mono text-blue-300 shrink-0">{r.deviceNumber || r.phone} (senha: {r.password || '1234'})</span>
-                        </button>
-                      ))}
+                  {/* Quick select helpful tool - only in simulator preview mode without locked link */}
+                  {!lockedRiderId && (
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+                      <span className="text-[8.5px] font-black text-blue-300 uppercase tracking-wider block">
+                        ⚡ Seleção Rápida de Condutores Cadastrados:
+                      </span>
+                      <div className="grid grid-cols-1 gap-1 max-h-[120px] overflow-y-auto pr-1">
+                        {riders.map(r => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => {
+                              changeSelectedRiderId(r.id);
+                              setPhoneInput(r.deviceNumber || r.phone || r.name);
+                              setPasswordInput(r.password || '1234');
+                              setLoginError(null);
+                            }}
+                            className="w-full py-1 px-2 bg-white/5 hover:bg-white/10 active:bg-white/15 rounded-lg text-left text-[9.5px] text-blue-100 flex items-center justify-between gap-1 border border-white/5 transition-all cursor-pointer"
+                          >
+                            <span className="font-semibold truncate">{r.name} ({r.vehicle})</span>
+                            <span className="font-mono text-blue-300 shrink-0">{r.deviceNumber || r.phone} (senha: {r.password || '1234'})</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[8px] text-blue-300/60 leading-none m-0 text-center">Senha padrão: <strong className="text-blue-300">1234</strong> ou a cadastrada pelo administrador.</p>
                     </div>
-                    <p className="text-[8px] text-blue-300/60 leading-none m-0 text-center">Senha padrão: <strong className="text-blue-300">1234</strong> ou a cadastrada pelo administrador.</p>
-                  </div>
+                  )}
 
                   {/* Footer Terms */}
                   <div className="text-center text-[8.5px] text-blue-300/80 pt-1 pb-1">
@@ -5011,6 +5048,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
         riders={riders}
         selectedRiderId={selectedRiderId}
         onSelectRider={(id) => setSelectedRiderId(id)}
+        activeHub={activeHub}
       />
 
       {/* PWA Direct Installation & Visual Guide Modal */}

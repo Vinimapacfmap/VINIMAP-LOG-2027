@@ -23,9 +23,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
     
     if (isSupabaseConfigured && supabase) {
       try {
+        const cleanEmail = email.trim().toLowerCase();
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: cleanEmail,
+          password: password,
         });
 
         if (error) {
@@ -37,9 +38,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
             setIsApiKeyError(true);
             setError('Chave de API do Supabase inválida na Vercel (Invalid API key).');
           } else if (error.message === 'Email not confirmed') {
-            setError('E-mail não confirmado. Verifique se o e-mail foi confirmado no painel do Supabase.');
+            setError('E-mail não confirmado no Supabase. Acesse o painel do Supabase > Authentication > Users e confirme o e-mail ou desative a confirmação em Settings > Email.');
           } else if (error.message === 'Invalid login credentials') {
-            setError('Credenciais inválidas. Verifique o e-mail e a senha.');
+            setError('Credenciais inválidas. Verifique o e-mail e a senha no Supabase Auth ou crie o usuário no painel do Supabase.');
           } else {
             setError(error.message);
           }

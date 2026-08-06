@@ -5,6 +5,32 @@
 
 import { Order, DeliveryRider } from '../types';
 
+export interface SmtpLogEntry {
+  id: string;
+  timestamp: string;
+  recipient: string;
+  subject: string;
+  orderCode?: string;
+  status: 'success' | 'error';
+  messageId?: string;
+  errorDetails?: string;
+}
+
+export interface SmtpSettings {
+  enabled: boolean;
+  host: string;
+  port: number;
+  security: 'tls' | 'ssl' | 'none';
+  authRequired: boolean;
+  user: string;
+  pass: string;
+  fromEmail: string;
+  fromName: string;
+  replyTo?: string;
+  testRecipientEmail?: string;
+  logs?: SmtpLogEntry[];
+}
+
 export interface NotificationSettings {
   autoSendEmail: boolean;
   autoSendWhatsapp: boolean;
@@ -12,12 +38,29 @@ export interface NotificationSettings {
   emailMessageTemplate: string;
   whatsappMessageTemplate: string;
   senderEmailName: string;
+  smtpSettings?: SmtpSettings;
 }
+
+export const DEFAULT_SMTP_SETTINGS: SmtpSettings = {
+  enabled: false,
+  host: 'smtp.gmail.com',
+  port: 587,
+  security: 'tls',
+  authRequired: true,
+  user: '',
+  pass: '',
+  fromEmail: '',
+  fromName: 'Vinimap Logística',
+  replyTo: '',
+  testRecipientEmail: '',
+  logs: []
+};
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   autoSendEmail: true,
   autoSendWhatsapp: true,
   senderEmailName: 'ViniMap Logística & Notificações',
+  smtpSettings: DEFAULT_SMTP_SETTINGS,
   emailSubjectTemplate: 'Seu Pedido #{codigo} foi CONCLUÍDO com sucesso! - {parceiro}',
   emailMessageTemplate: `Olá {cliente}!
 
@@ -59,6 +102,10 @@ export function getNotificationSettings(): NotificationSettings {
       return {
         ...DEFAULT_NOTIFICATION_SETTINGS,
         ...parsed,
+        smtpSettings: {
+          ...DEFAULT_SMTP_SETTINGS,
+          ...(parsed.smtpSettings || {})
+        }
       };
     }
   } catch (e) {

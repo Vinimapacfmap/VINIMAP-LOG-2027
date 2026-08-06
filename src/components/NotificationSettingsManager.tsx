@@ -17,15 +17,18 @@ import {
   BellRing,
   HelpCircle,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Server
 } from 'lucide-react';
 import { 
   NotificationSettings, 
   getNotificationSettings, 
   saveNotificationSettings, 
   DEFAULT_NOTIFICATION_SETTINGS,
+  DEFAULT_SMTP_SETTINGS,
   replaceNotificationPlaceholders
 } from '../utils/notificationUtils';
+import { SmtpSettingsPanel } from './SmtpSettingsPanel';
 import { Order } from '../types';
 
 interface NotificationSettingsManagerProps {
@@ -59,7 +62,7 @@ const SAMPLE_ORDER: Order = {
 
 export default function NotificationSettingsManager({ onSaveSuccess }: NotificationSettingsManagerProps) {
   const [settings, setSettings] = useState<NotificationSettings>(getNotificationSettings());
-  const [activeTab, setActiveTab] = useState<'whatsapp' | 'email' | 'preview'>('whatsapp');
+  const [activeTab, setActiveTab] = useState<'whatsapp' | 'email' | 'smtp' | 'preview'>('whatsapp');
   const [isSaved, setIsSaved] = useState(false);
   const [focusedField, setFocusedField] = useState<'subject' | 'emailBody' | 'waBody'>('waBody');
 
@@ -262,6 +265,22 @@ export default function NotificationSettingsManager({ onSaveSuccess }: Notificat
 
         <button
           type="button"
+          onClick={() => setActiveTab('smtp')}
+          className={`px-4 py-2.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'smtp'
+              ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Server size={16} />
+          <span>Servidor SMTP Próprio</span>
+          {settings.smtpSettings?.enabled && (
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+          )}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('preview')}
           className={`px-4 py-2.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
             activeTab === 'preview'
@@ -273,6 +292,14 @@ export default function NotificationSettingsManager({ onSaveSuccess }: Notificat
           <span>Visualizar Prévia em Tempo Real</span>
         </button>
       </div>
+
+      {/* TAB SMTP: CUSTOM SMTP CONFIGURATION */}
+      {activeTab === 'smtp' && (
+        <SmtpSettingsPanel
+          smtpSettings={settings.smtpSettings || DEFAULT_SMTP_SETTINGS}
+          onChange={(updatedSmtp) => setSettings(prev => ({ ...prev, smtpSettings: updatedSmtp }))}
+        />
+      )}
 
       {/* TAB 1: WHATSAPP TEMPLATE EDITOR */}
       {activeTab === 'whatsapp' && (

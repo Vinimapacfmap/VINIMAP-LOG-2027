@@ -63,10 +63,13 @@ import {
   BellRing,
   Phone,
   MoreVertical,
-  UserX
+  UserX,
+  Server
 } from 'lucide-react';
 import { 
   getNotificationSettings, 
+  saveNotificationSettings,
+  SmtpLogEntry,
   replaceNotificationPlaceholders, 
   getOrderContactInfo, 
   generateWhatsappUrl, 
@@ -259,6 +262,71 @@ export default function OrdersTable({
   const [cepGeocodeError, setCepGeocodeError] = useState('');
   const [selectedAssignOrderForCep, setSelectedAssignOrderForCep] = useState<string>('');
   const [cepAssignSuccessMsg, setCepAssignSuccessMsg] = useState('');
+  const [isSendingSmtpOrder, setIsSendingSmtpOrder] = useState<string | null>(null);
+
+  const handleSendSmtpEmailOrder = async (order: Order, emailSubj: string, emailBody: string, recipientEmail: string) => {
+    const notifSettings = getNotificationSettings();
+    if (!notifSettings.smtpSettings?.enabled || !notifSettings.smtpSettings.host) {
+      alert('O Servidor SMTP Próprio não está ativo nas configurações. Ative o servidor SMTP na aba de Notificações para realizar o disparo direto.');
+      return;
+    }
+
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      alert('E-mail do cliente é inválido ou não cadastrado no pedido.');
+      return;
+    }
+
+    setIsSendingSmtpOrder(order.id);
+    try {
+      const res = await fetch('/api/smtp/send-order-completion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          smtpSettings: notifSettings.smtpSettings,
+          recipientEmail,
+          subject: emailSubj,
+          body: emailBody,
+          orderCode: order.id.replace('ped-', '').toUpperCase()
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ E-mail disparado com SUCESSO via SMTP do parceiro (${notifSettings.smtpSettings.fromName || 'SMTP Server'})!\nMessage-ID: ${data.messageId}`);
+        
+        const updatedSmtpSettings = { ...notifSettings.smtpSettings };
+        const newLog: SmtpLogEntry = {
+          id: `smtp-log-${Date.now()}`,
+          timestamp: new Date().toLocaleString('pt-BR'),
+          recipient: recipientEmail,
+          subject: emailSubj,
+          orderCode: order.id.replace('ped-', '').toUpperCase(),
+          status: 'success',
+          messageId: data.messageId
+        };
+        updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
+        saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+      } else {
+        alert(`❌ Falha ao enviar e-mail via SMTP:\n${data.error || 'Erro desconhecido'}`);
+        const updatedSmtpSettings = { ...notifSettings.smtpSettings };
+        const newLog: SmtpLogEntry = {
+          id: `smtp-log-${Date.now()}`,
+          timestamp: new Date().toLocaleString('pt-BR'),
+          recipient: recipientEmail,
+          subject: emailSubj,
+          orderCode: order.id.replace('ped-', '').toUpperCase(),
+          status: 'error',
+          errorDetails: data.error
+        };
+        updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
+        saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+      }
+    } catch (err: any) {
+      alert(`Erro ao conectar ao servidor de e-mail: ${err.message || 'Erro de rede'}`);
+    } finally {
+      setIsSendingSmtpOrder(null);
+    }
+  };
 
   // Handle CEP Geocoding lookup
   const handleExecuteCepGeocode = async (overrideCep?: string) => {
@@ -4846,6 +4914,27 @@ export default function OrdersTable({
                                 <Mail size={14} />
                                 <span>Enviar por E-mail</span>
                               </a>
+                            )}
+                            {contact.hasEmail && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendSmtpEmailOrder(hubOrder, emailSubj, emailBody, contact.email)}
+                                disabled={isSendingSmtpOrder === hubOrder.id}
+                                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-200 cursor-pointer"
+                                title="Enviar e-mail diretamente via Servidor SMTP próprio do parceiro"
+                              >
+                                {isSendingSmtpOrder === hubOrder.id ? (
+                                  <>
+                                    <RefreshCw size={14} className="animate-spin" />
+                                    <span>Disparando...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Server size={14} />
+                                    <span>Disparar via SMTP Próprio</span>
+                                  </>
+                                )}
+                              </button>
                             )}
                           </div>
                         </div>

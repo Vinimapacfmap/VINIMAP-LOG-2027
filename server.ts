@@ -8,6 +8,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -972,6 +973,187 @@ app.post('/api/github/sync', async (req, res) => {
   } catch (err: any) {
     console.error('Error during GitHub sync:', err);
     return res.status(500).json({ success: false, error: err.message || 'Erro interno na sincronização com GitHub' });
+  }
+});
+
+// POST /api/smtp/test - Test connection to custom SMTP server & send test message
+app.post('/api/smtp/test', async (req, res) => {
+  try {
+    const {
+      host,
+      port = 587,
+      security = 'tls',
+      authRequired = true,
+      user,
+      pass,
+      fromEmail,
+      fromName = 'ViniMap Logística',
+      testRecipientEmail
+    } = req.body;
+
+    if (!host || !host.trim()) {
+      return res.status(400).json({ success: false, error: 'O endereço do servidor SMTP (Host) é obrigatório.' });
+    }
+
+    const targetEmail = testRecipientEmail?.trim() || fromEmail?.trim() || user?.trim();
+    if (!targetEmail) {
+      return res.status(400).json({ success: false, error: 'Informe um e-mail de destino válido para envio do e-mail de teste.' });
+    }
+
+    const numericPort = Number(port) || 587;
+    const isSecure = security === 'ssl' || numericPort === 465;
+
+    // Create nodemailer transporter
+    const transporter = nodemailer.createTransport({
+      host: host.trim(),
+      port: numericPort,
+      secure: isSecure,
+      auth: authRequired && (user || pass) ? {
+        user: user?.trim(),
+        pass: pass
+      } : undefined,
+      tls: {
+        rejectUnauthorized: false
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000
+    });
+
+    // Verify SMTP connection
+    await transporter.verify();
+
+    // Send test email message
+    const sender = fromName ? `"${fromName.replace(/"/g, '')}" <${fromEmail || user}>` : (fromEmail || user);
+    
+    const info = await transporter.sendMail({
+      from: sender,
+      to: targetEmail,
+      subject: `[ViniMap] Teste de Conexão SMTP - ${new Date().toLocaleTimeString('pt-BR')}`,
+      text: `Olá!\n\nEste é um e-mail de teste disparado pelo painel do ViniMap Logística utilizando as suas configurações de servidor SMTP próprio.\n\nServidor: ${host}\nPorta: ${numericPort}\nCriptografia: ${security.toUpperCase()}\nRemetente: ${sender}\n\nStatus: Conexão efetuada com sucesso!`,
+      html: `
+        <div style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 24px; border-radius: 12px; color: #1e293b;">
+          <div style="background-color: #0f172a; padding: 16px 20px; border-radius: 8px; color: white; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 18px;">✅ Conexão SMTP Estabelecida com Sucesso</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.8;">ViniMap Logistics - Notificações do Parceiro</p>
+          </div>
+          <p>Olá,</p>
+          <p>Este é um e-mail de teste gerado para validar as credenciais do seu <strong>Servidor SMTP Próprio</strong>.</p>
+          <div style="background-color: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #2563eb; font-size: 14px;">Parâmetros Configurados:</h4>
+            <ul style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6;">
+              <li><strong>Servidor (Host):</strong> ${host}</li>
+              <li><strong>Porta:</strong> ${numericPort}</li>
+              <li><strong>Criptografia:</strong> ${security.toUpperCase()}</li>
+              <li><strong>Autenticação:</strong> ${authRequired ? 'Ativa' : 'Desativada'}</li>
+              <li><strong>Usuário:</strong> ${user || 'N/A'}</li>
+              <li><strong>Remetente Oficial:</strong> ${sender}</li>
+            </ul>
+          </div>
+          <p style="font-size: 12px; color: #64748b;">E-mail gerado automaticamente em ${new Date().toLocaleString('pt-BR')} (Horário de Brasília).</p>
+        </div>
+      `
+    });
+
+    return res.json({
+      success: true,
+      message: 'Conexão SMTP validada e e-mail de teste enviado com sucesso!',
+      messageId: info.messageId,
+      response: info.response,
+      testedAt: new Date().toISOString()
+    });
+
+  } catch (err: any) {
+    console.error('[SMTP Test Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: `Falha ao conectar ou disparar pelo servidor SMTP: ${err.message || 'Erro desconhecido'}`
+    });
+  }
+});
+
+// POST /api/smtp/send-order-completion - Send real order completion notification email via partner SMTP
+app.post('/api/smtp/send-order-completion', async (req, res) => {
+  try {
+    const {
+      smtpSettings,
+      recipientEmail,
+      subject,
+      body,
+      orderCode
+    } = req.body;
+
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      return res.status(400).json({ success: false, error: 'E-mail de destino inválido.' });
+    }
+
+    if (!smtpSettings || !smtpSettings.enabled || !smtpSettings.host) {
+      return res.status(400).json({ success: false, error: 'Servidor SMTP personalizado não está ativo ou configurado.' });
+    }
+
+    const numericPort = Number(smtpSettings.port) || 587;
+    const isSecure = smtpSettings.security === 'ssl' || numericPort === 465;
+
+    const transporter = nodemailer.createTransport({
+      host: smtpSettings.host.trim(),
+      port: numericPort,
+      secure: isSecure,
+      auth: smtpSettings.authRequired && (smtpSettings.user || smtpSettings.pass) ? {
+        user: smtpSettings.user?.trim(),
+        pass: smtpSettings.pass
+      } : undefined,
+      tls: {
+        rejectUnauthorized: false
+      },
+      connectionTimeout: 12000,
+      socketTimeout: 12000
+    });
+
+    const sender = smtpSettings.fromName 
+      ? `"${smtpSettings.fromName.replace(/"/g, '')}" <${smtpSettings.fromEmail || smtpSettings.user}>`
+      : (smtpSettings.fromEmail || smtpSettings.user);
+
+    const htmlBody = `
+      <div style="font-family: Arial, Helvetica, sans-serif; background-color: #f1f5f9; padding: 20px; color: #1e293b;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #cbd5e1;">
+          <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #38bdf8;">${smtpSettings.fromName || 'ViniMap Logística'}</h1>
+            <p style="margin: 6px 0 0 0; font-size: 12px; color: #94a3b8; font-weight: 600;">NOTIFICAÇÃO OFICIAL DE CONCLUSÃO DE PEDIDO</p>
+          </div>
+          <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+            ${(body || '').replace(/\n/g, '<br/>')}
+          </div>
+          <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; text-align: center; font-size: 11px; color: #64748b;">
+            <p style="margin: 0;">Mensagem automática disparada via servidor de e-mail próprio do parceiro.</p>
+            <p style="margin: 4px 0 0 0;">Pedido #${orderCode || 'N/A'} • ViniMap Logistics System</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const info = await transporter.sendMail({
+      from: sender,
+      to: recipientEmail.trim(),
+      replyTo: smtpSettings.replyTo?.trim() || undefined,
+      subject: subject || `Notificação do Pedido #${orderCode}`,
+      text: body,
+      html: htmlBody
+    });
+
+    return res.json({
+      success: true,
+      messageId: info.messageId,
+      response: info.response,
+      sentAt: new Date().toISOString(),
+      recipient: recipientEmail
+    });
+
+  } catch (err: any) {
+    console.error('[SMTP Completion Order Dispatch Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: `Erro ao enviar e-mail via SMTP do parceiro: ${err.message || 'Falha no envio'}`
+    });
   }
 });
 

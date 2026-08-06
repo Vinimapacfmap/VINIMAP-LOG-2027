@@ -39,6 +39,7 @@ import DailyNotebook from './components/DailyNotebook';
 import OtimizadorRotasInteligente from './components/OtimizadorRotasInteligente';
 import HubRegistration from './components/HubRegistration';
 import LogoHubManager from './components/LogoHubManager';
+import { applyDynamicPwaManifestAndIcons } from './utils/pwaUtils';
 import { calculateRiderCommissionForOrder } from './utils/billingUtils';
 import RiderAppSimulator from './components/RiderAppSimulator';
 import VolumeCalculator from './components/VolumeCalculator';
@@ -134,6 +135,8 @@ import {
 import NotificationSettingsManager from './components/NotificationSettingsManager';
 import { 
   getNotificationSettings, 
+  saveNotificationSettings,
+  SmtpLogEntry,
   replaceNotificationPlaceholders, 
   getOrderContactInfo, 
   generateWhatsappUrl 
@@ -335,6 +338,12 @@ export default function App() {
   const [clientPartners, setClientPartners] = useState<ClientPartner[]>([]);
   const [companyHubs, setCompanyHubs] = useState<CompanyHub[]>(INITIAL_COMPANY_HUBS);
 
+  // Dynamic PWA manifest and icons update with Headquarters (Hub) Logo
+  useEffect(() => {
+    const activeHub = companyHubs.find(h => h.active);
+    applyDynamicPwaManifestAndIcons(activeHub?.logoUrl);
+  }, [companyHubs]);
+
   // Supabase Immediate Manual Sync State & Handler
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
   const [lastSupabaseSyncTime, setLastSupabaseSyncTime] = useState<string>('');
@@ -358,7 +367,7 @@ export default function App() {
       
       const newLog: ActivityLog = {
         id: `log-sb-${Date.now()}`,
-        timestamp: getSaoPauloTime(),
+        time: getSaoPauloTime(),
         message: `Sincronização com Supabase concluída com sucesso (${stats.ordersCount} pedidos, ${stats.ridersCount} condutores, ${stats.clientsCount} parceiros).`,
         type: 'success'
       };
@@ -368,7 +377,7 @@ export default function App() {
       setSupabaseSyncStatus('error');
       const newLog: ActivityLog = {
         id: `log-sb-err-${Date.now()}`,
-        timestamp: getSaoPauloTime(),
+        time: getSaoPauloTime(),
         message: `Erro ao sincronizar com Supabase: ${err.message || 'Falha de conexão'}`,
         type: 'danger'
       };
@@ -1988,6 +1997,53 @@ export default function App() {
           if (notifSettings.autoSendEmail && contact.hasEmail) {
             emailSubj = replaceNotificationPlaceholders(notifSettings.emailSubjectTemplate, updatedOrderObj, riderName);
             emailBody = replaceNotificationPlaceholders(notifSettings.emailMessageTemplate, updatedOrderObj, riderName);
+
+            // Auto-dispatch via partner custom SMTP server if enabled
+            if (notifSettings.smtpSettings?.enabled && notifSettings.smtpSettings.host) {
+              const cleanOrderCode = updatedOrderObj.id.replace('ped-', '').toUpperCase();
+              fetch('/api/smtp/send-order-completion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  smtpSettings: notifSettings.smtpSettings,
+                  recipientEmail: contact.email,
+                  subject: emailSubj,
+                  body: emailBody,
+                  orderCode: cleanOrderCode
+                })
+              }).then(res => res.json()).then(data => {
+                const updatedSmtpSettings = { ...notifSettings.smtpSettings! };
+                if (data.success) {
+                  console.log('✅ E-mail disparado automaticamente via SMTP do parceiro com sucesso!', data);
+                  const newLog: SmtpLogEntry = {
+                    id: `smtp-log-${Date.now()}`,
+                    timestamp: new Date().toLocaleString('pt-BR'),
+                    recipient: contact.email,
+                    subject: emailSubj,
+                    orderCode: cleanOrderCode,
+                    status: 'success',
+                    messageId: data.messageId
+                  };
+                  updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
+                  saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+                } else {
+                  console.warn('⚠️ Falha no disparo automático SMTP:', data.error);
+                  const newLog: SmtpLogEntry = {
+                    id: `smtp-log-${Date.now()}`,
+                    timestamp: new Date().toLocaleString('pt-BR'),
+                    recipient: contact.email,
+                    subject: emailSubj,
+                    orderCode: cleanOrderCode,
+                    status: 'error',
+                    errorDetails: data.error
+                  };
+                  updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
+                  saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+                }
+              }).catch(err => {
+                console.error('Erro ao disparar e-mail via SMTP no backend:', err);
+              });
+            }
           }
 
           const notifDetails = [
