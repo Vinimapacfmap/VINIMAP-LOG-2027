@@ -258,6 +258,9 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
                     alt="Logo Oficial Vinimap Logistics" 
                     className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                    }}
                   />
                 </div>
                 <span className="absolute -bottom-2 -right-2 bg-emerald-500 text-slate-950 p-1.5 rounded-full shadow-lg border-2 border-slate-900">
@@ -699,7 +702,15 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
                         {/* Overlay Logo in center */}
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-white shadow-lg bg-slate-900 p-0.5">
-                            <img src={companyLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
+                            <img 
+                              src={companyLogo} 
+                              alt="Vinimap Logo" 
+                              className="w-full h-full object-cover rounded-lg" 
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                              }}
+                            />
                           </div>
                         </div>
                       </div>

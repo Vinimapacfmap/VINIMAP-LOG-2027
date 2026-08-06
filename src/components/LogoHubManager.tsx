@@ -472,7 +472,10 @@ export default function LogoHubManager({ hubs, onSaveHub }: LogoHubManagerProps)
                   alt="Pré-visualização do Logotipo"
                   className="w-full h-full object-contain"
                   referrerPolicy="no-referrer"
-                  onError={() => setErrorMsg('Não foi possível carregar a imagem. Verifique a URL ou o arquivo.')}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                    setErrorMsg('Não foi possível carregar a imagem. Restaurada a logo padrão Vinimap.');
+                  }}
                 />
               </div>
               <div>
@@ -493,6 +496,9 @@ export default function LogoHubManager({ hubs, onSaveHub }: LogoHubManagerProps)
                     alt="Logo Sidebar"
                     className="w-9 h-9 rounded-xl object-contain border border-slate-100 bg-white p-0.5 shadow-xs"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                    }}
                   />
                   <div>
                     <div className="font-bold text-xs text-slate-800">{currentHub.name}</div>
@@ -516,6 +522,9 @@ export default function LogoHubManager({ hubs, onSaveHub }: LogoHubManagerProps)
                     alt="Logo Driver App"
                     className="w-10 h-10 rounded-xl object-cover border border-slate-700 bg-white shadow-xs"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                    }}
                   />
                   <div>
                     <div className="font-bold text-xs text-white">App do Condutor</div>
@@ -540,6 +549,9 @@ export default function LogoHubManager({ hubs, onSaveHub }: LogoHubManagerProps)
                       alt="Logo PDF"
                       className="w-full h-full object-contain"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                      }}
                     />
                   </div>
                   <div>
@@ -566,6 +578,9 @@ export default function LogoHubManager({ hubs, onSaveHub }: LogoHubManagerProps)
                         alt="Logo Map Marker"
                         className="w-full h-full object-cover rounded-full"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                        }}
                       />
                     </div>
                   </div>

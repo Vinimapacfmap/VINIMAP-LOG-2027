@@ -50,7 +50,7 @@ import { RevenueByPartnerChart } from './components/RevenueByPartnerChart';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from './data/financialMock';
 import { AdminLogin } from './components/AdminLogin';
 import { supabase, isSupabaseConfigured } from './supabase';
-import { fetchAllStateFromSupabase } from './lib/supabaseService';
+import { fetchAllStateFromSupabase, syncAllStateToSupabase } from './lib/supabaseService';
 import { FinancialTransaction } from './types';
 
 import { onSnapshot, collection } from 'firebase/firestore';
@@ -334,6 +334,49 @@ export default function App() {
 
   const [clientPartners, setClientPartners] = useState<ClientPartner[]>([]);
   const [companyHubs, setCompanyHubs] = useState<CompanyHub[]>(INITIAL_COMPANY_HUBS);
+
+  // Supabase Immediate Manual Sync State & Handler
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
+  const [lastSupabaseSyncTime, setLastSupabaseSyncTime] = useState<string>('');
+  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+
+  const handleSyncSupabase = useCallback(async () => {
+    setIsSyncingSupabase(true);
+    setSupabaseSyncStatus('syncing');
+    try {
+      const stats = await syncAllStateToSupabase({
+        hubs: companyHubs,
+        clients: clientPartners,
+        riders,
+        orders,
+        logs,
+        txs: financialTransactions
+      });
+      const nowTime = getSaoPauloTime();
+      setLastSupabaseSyncTime(nowTime);
+      setSupabaseSyncStatus('synced');
+      
+      const newLog: ActivityLog = {
+        id: `log-sb-${Date.now()}`,
+        timestamp: getSaoPauloTime(),
+        message: `Sincronização com Supabase concluída com sucesso (${stats.ordersCount} pedidos, ${stats.ridersCount} condutores, ${stats.clientsCount} parceiros).`,
+        type: 'success'
+      };
+      dbAddActivityLog(newLog);
+    } catch (err: any) {
+      console.error('Erro na sincronização manual com Supabase:', err);
+      setSupabaseSyncStatus('error');
+      const newLog: ActivityLog = {
+        id: `log-sb-err-${Date.now()}`,
+        timestamp: getSaoPauloTime(),
+        message: `Erro ao sincronizar com Supabase: ${err.message || 'Falha de conexão'}`,
+        type: 'danger'
+      };
+      dbAddActivityLog(newLog);
+    } finally {
+      setIsSyncingSupabase(false);
+    }
+  }, [companyHubs, clientPartners, riders, orders, logs, financialTransactions]);
 
   // ---------------------------------------------------------------------------
   // CONTINGENCY AUTO-BACKUP & FORCED JSON DOWNLOAD SYSTEM
@@ -3029,6 +3072,10 @@ export default function App() {
           onExportContingency={() => exportDatabaseContingency(false)}
           lastContingencyTime={lastContingencyBackupTime}
           activeHub={companyHubs.find(h => h.active)}
+          onSyncSupabase={handleSyncSupabase}
+          isSyncingSupabase={isSyncingSupabase}
+          lastSupabaseSyncTime={lastSupabaseSyncTime}
+          supabaseSyncStatus={supabaseSyncStatus}
         />
 
         {/* Scrollable Stage area */}

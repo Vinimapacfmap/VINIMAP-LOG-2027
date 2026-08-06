@@ -22,7 +22,9 @@ import {
   RefreshCw,
   Database,
   CheckCircle2,
-  RotateCcw
+  RotateCcw,
+  Navigation,
+  Zap
 } from 'lucide-react';
 import { initLeafletPosGuard } from '../utils/leafletPatch';
 import { motion, AnimatePresence } from 'motion/react';
@@ -53,6 +55,7 @@ function MapController({ center, zoom }: { center: [number, number]; zoom: numbe
 export default function MapContainer({ riders, orders, selectedRiderId, setSelectedRiderId, activeHub }: MapContainerProps) {
   const [activeLegendFilter, setActiveLegendFilter] = useState<string | null>(null);
   const [mapStyle, setMapStyle] = useState<'standard' | 'mapbox-streets' | 'mapbox-satellite' | 'mapbox-dark' | 'dark-vinimap' | 'satellite' | 'openstreetmap'>('mapbox-streets');
+  const [showOptimizedRoute, setShowOptimizedRoute] = useState<boolean>(true);
 
   // Offline Map Cache State
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -254,7 +257,7 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
           <span class="absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-20 animate-ping"></span>
           <span class="absolute inline-flex h-7 w-7 rounded-full bg-blue-500 opacity-35 animate-pulse"></span>
           <div class="relative h-7 w-7 rounded-full bg-slate-900 border-2 border-white shadow-lg overflow-hidden flex items-center justify-center p-0.5">
-            <img src="${activeHub?.logoUrl || vinimapLogo}" class="w-full h-full object-cover rounded-full" />
+            <img src="${activeHub?.logoUrl || vinimapLogo}" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null;this.src='${vinimapLogo}';" />
           </div>
         </div>
         <div class="bg-blue-600 border border-blue-500 rounded-lg px-2.5 py-0.5 shadow-md -mt-1 text-[9px] font-extrabold text-white uppercase tracking-wider whitespace-nowrap">
@@ -423,6 +426,21 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
             <span>{simulatedOffline ? 'Sair do Offline' : 'Simular Offline'}</span>
           </button>
         </div>
+
+        {/* Route Optimization Polyline Toggle Button */}
+        <button
+          type="button"
+          onClick={() => setShowOptimizedRoute(!showOptimizedRoute)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-md flex items-center gap-1.5 border backdrop-blur-md ${
+            showOptimizedRoute
+              ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-400 shadow-sky-950/30'
+              : 'bg-white/90 hover:bg-white text-slate-600 border-slate-200'
+          }`}
+          title="Exibir ou ocultar a linha de polilinha da rota otimizada"
+        >
+          <Navigation size={13} className={showOptimizedRoute ? 'text-sky-200 animate-pulse' : 'text-slate-400'} />
+          <span>{showOptimizedRoute ? 'Rota Otimizada: ON' : 'Rota Otimizada: OFF'}</span>
+        </button>
       </div>
 
       {/* Map Action Controls (Style Selector & Zoom Controls) */}
@@ -791,36 +809,49 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
           )}
 
           {/* High-fidelity primary route line overlays for selected rider */}
-          {selectedRider && selectedRider.status !== 'Offline' && (
+          {selectedRider && selectedRider.status !== 'Offline' && showOptimizedRoute && (
             <>
-              {/* Hub to Rider (Completed/Traversed leg) */}
+              {/* Hub to Rider (Initial position leg) */}
               <Polyline
                 positions={[
                   hub,
                   getRiderGeoCoords(selectedRider, { lat: hubLat, lng: hubLng })
                 ]}
-                color="#3b82f6"
-                weight={3.5}
+                color="#0284c7"
+                weight={3}
                 opacity={0.6}
-                dashArray="5, 5"
+                dashArray="6, 6"
               />
 
-              {/* High-fidelity active route sequence of the rider (Continuous sequential leg path originating from Hub) */}
+              {/* High-fidelity active route sequence of the rider (Continuous sequential leg path originating from Rider to Stops) */}
               {sortedActiveRiderOrders.length > 0 && (() => {
-                const points: [number, number][] = [
-                  hub
-                ];
+                const riderPos = getRiderGeoCoords(selectedRider, { lat: hubLat, lng: hubLng });
+                const pointsFromRider: [number, number][] = [riderPos];
+                const pointsFromHub: [number, number][] = [hub];
+
                 sortedActiveRiderOrders.forEach(o => {
                   const coords = getCoordinatesFromCep(o.cep, o.region, o.address, o.lat, o.lng);
-                  points.push([coords.lat, coords.lng]);
+                  pointsFromRider.push([coords.lat, coords.lng]);
+                  pointsFromHub.push([coords.lat, coords.lng]);
                 });
+
                 return (
-                  <Polyline
-                    positions={points}
-                    color="#ea580c"
-                    weight={4}
-                    opacity={0.9}
-                  />
+                  <React.Fragment key={`rider-opt-route-${selectedRider.id}`}>
+                    {/* Background glow polyline */}
+                    <Polyline
+                      positions={pointsFromRider}
+                      color="#0284c7"
+                      weight={8}
+                      opacity={0.35}
+                    />
+                    {/* Main vibrant foreground route polyline */}
+                    <Polyline
+                      positions={pointsFromRider}
+                      color="#f97316"
+                      weight={4.5}
+                      opacity={0.95}
+                    />
+                  </React.Fragment>
                 );
               })()}
             </>
@@ -828,6 +859,41 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
 
         </LeafletMapContainer>
         </SafeMapWrapper>
+
+        {/* Selected Rider Optimized Route Overlay Summary Card */}
+        {selectedRider && sortedActiveRiderOrders.length > 0 && showOptimizedRoute && (
+          <div className="absolute bottom-16 left-4 z-[998] bg-slate-900/90 text-white backdrop-blur-md border border-sky-500/40 rounded-2xl p-3 shadow-2xl max-w-xs space-y-2 text-xs">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
+              <div className="flex items-center gap-1.5 font-extrabold text-sky-400">
+                <Navigation size={14} className="animate-pulse" />
+                <span>Rota Otimizada Ativa</span>
+              </div>
+              <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-lg text-[9.5px] font-mono font-bold uppercase tracking-wider">
+                {sortedActiveRiderOrders.length} {sortedActiveRiderOrders.length === 1 ? 'Parada' : 'Paradas'}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-300 space-y-1">
+              <p className="font-bold text-white flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                <span>Condutor: <strong className="text-sky-300">{selectedRider.name}</strong></span>
+              </p>
+              <div className="flex items-center gap-1 font-mono text-[9.5px] text-slate-300 overflow-x-auto py-1 scrollbar-none">
+                <span className="bg-slate-800 text-emerald-400 font-bold px-1.5 py-0.5 rounded border border-emerald-500/30 shrink-0">Hub</span>
+                <span>➔</span>
+                <span className="bg-slate-800 text-amber-300 font-bold px-1.5 py-0.5 rounded border border-amber-500/30 shrink-0">Condutor</span>
+                <span>➔</span>
+                {sortedActiveRiderOrders.map((o, idx) => (
+                  <React.Fragment key={o.id}>
+                    <span className="bg-sky-950 text-sky-300 font-bold px-1.5 py-0.5 rounded border border-sky-500/30 shrink-0">
+                      #{idx + 1} ({o.clientName?.split(' ')[0] || 'Parada'})
+                    </span>
+                    {idx < sortedActiveRiderOrders.length - 1 && <span>➔</span>}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Offline Cache Status Banner Overlay on Map Canvas */}
         {isEffectiveOffline && (

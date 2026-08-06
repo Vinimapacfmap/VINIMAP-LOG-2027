@@ -16,7 +16,9 @@ import {
   AlertTriangle,
   Info,
   Database,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyHub } from '../types';
@@ -30,6 +32,10 @@ interface HeaderProps {
   onExportContingency?: () => void;
   lastContingencyTime?: string;
   activeHub?: CompanyHub;
+  onSyncSupabase?: () => Promise<void> | void;
+  isSyncingSupabase?: boolean;
+  lastSupabaseSyncTime?: string;
+  supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
 }
 
 export default function Header({ 
@@ -39,7 +45,11 @@ export default function Header({
   onLogout,
   onExportContingency,
   lastContingencyTime,
-  activeHub
+  activeHub,
+  onSyncSupabase,
+  isSyncingSupabase = false,
+  lastSupabaseSyncTime,
+  supabaseSyncStatus = 'idle'
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -190,6 +200,59 @@ export default function Header({
 
         {/* PWA Install Action */}
         <PwaInstallButton variant="header" activeHub={activeHub} />
+
+        {/* Supabase Force Sync Action */}
+        {onSyncSupabase && (
+          <button
+            type="button"
+            onClick={onSyncSupabase}
+            disabled={isSyncingSupabase}
+            title={
+              isSyncingSupabase
+                ? 'Sincronizando dados com o Supabase...'
+                : lastSupabaseSyncTime
+                ? `Última sincronização com Supabase: ${lastSupabaseSyncTime}. Clique para sincronizar novamente.`
+                : 'Sincronizar todos os dados do painel com o Supabase imediatamente'
+            }
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border shadow-3xs transition-all cursor-pointer shrink-0 group ${
+              isSyncingSupabase
+                ? 'bg-amber-50 text-amber-700 border-amber-200/80 cursor-wait'
+                : supabaseSyncStatus === 'synced'
+                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200/80'
+                : supabaseSyncStatus === 'error'
+                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200/80'
+                : 'bg-sky-50 hover:bg-sky-100 active:bg-sky-200 text-sky-700 border-sky-200/80'
+            }`}
+            id="header-supabase-sync-btn"
+          >
+            {isSyncingSupabase ? (
+              <RefreshCw size={15} className="animate-spin text-amber-600 shrink-0" />
+            ) : supabaseSyncStatus === 'synced' ? (
+              <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+            ) : supabaseSyncStatus === 'error' ? (
+              <AlertCircle size={15} className="text-rose-600 shrink-0" />
+            ) : (
+              <RefreshCw size={15} className="text-sky-600 group-hover:rotate-180 transition-transform duration-500 shrink-0" />
+            )}
+
+            <span>
+              {isSyncingSupabase
+                ? 'Sincronizando...'
+                : supabaseSyncStatus === 'synced'
+                ? 'Sincronizado'
+                : supabaseSyncStatus === 'error'
+                ? 'Erro ao Sincronizar'
+                : 'Sincronizar Supabase'}
+            </span>
+
+            {supabaseSyncStatus === 'synced' && !isSyncingSupabase && (
+              <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0" />
+            )}
+            {isSyncingSupabase && (
+              <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping shrink-0" />
+            )}
+          </button>
+        )}
 
         {/* Contingency Backup & Daily Forced JSON Export */}
         {onExportContingency && (

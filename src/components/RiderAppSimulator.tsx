@@ -10,6 +10,8 @@ import { getSaoPauloISODate, getSaoPauloDate } from '../utils/dateUtils';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
 
+import { PwaInstallBanner } from './PwaInstallBanner';
+
 function getOrCreateDeviceId(): string {
   if (typeof window === 'undefined') return 'device_server';
   try {
@@ -1730,7 +1732,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     const baseIcon = L.divIcon({
       html: `
         <div class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-900 text-white shadow-lg border-2 border-white overflow-hidden p-0.5">
-          <img src="${activeHub?.logoUrl || vinimapLogo}" class="w-full h-full object-cover rounded-full" />
+          <img src="${activeHub?.logoUrl || vinimapLogo}" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null;this.src='${vinimapLogo}';" />
         </div>
       `,
       className: '',
@@ -2563,7 +2565,15 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               className="px-4 py-2.5 bg-gradient-to-r from-slate-900 to-blue-950 hover:from-slate-800 hover:to-blue-900 text-white rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-2 border border-slate-700/60"
             >
               <div className="w-6 h-6 rounded-lg overflow-hidden border border-white/20 shrink-0">
-                <img src={effectiveLogo} alt="Vinimap Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img 
+                  src={effectiveLogo} 
+                  alt="Vinimap Logo" 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                  }}
+                />
               </div>
               <div className="text-left">
                 <span className="text-[9px] uppercase font-bold text-emerald-400 block leading-tight">Download do App</span>
@@ -2702,7 +2712,15 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     className="absolute top-2 left-3 right-3 bg-slate-900/95 text-white p-2.5 rounded-2xl shadow-xl z-50 border border-white/10 flex items-center gap-2.5 backdrop-blur-md"
                   >
                     <div className="w-7 h-7 rounded-xl overflow-hidden border border-white/20 shrink-0 shadow-md bg-slate-900">
-                      <img src={effectiveLogo} alt="Vinimap Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <img 
+                        src={effectiveLogo} 
+                        alt="Vinimap Logo" 
+                        className="w-full h-full object-cover" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                        }}
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center">
@@ -2731,7 +2749,15 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     {/* Branding Header */}
                   <div className="space-y-1.5 text-center pt-2">
                     <div className="w-16 h-16 rounded-2xl mx-auto shadow-xl border-2 border-white/30 overflow-hidden bg-slate-900 flex items-center justify-center p-0.5">
-                      <img src={effectiveLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
+                      <img 
+                        src={effectiveLogo} 
+                        alt="Vinimap Logo" 
+                        className="w-full h-full object-cover rounded-xl" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                        }}
+                      />
                     </div>
                     <h3 className="text-base font-black tracking-tight mt-2 text-white">Vinimap Condutor</h3>
                     <span className="text-[9.5px] text-blue-200 font-bold tracking-widest uppercase block">Aplicativo de Campo do Entregador</span>
@@ -4956,6 +4982,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               </div>
             </div>
 
+            {/* PWA INSTALLATION BANNER IN DRIVER VIEW FOOTER */}
+            <PwaInstallBanner logoUrl={activeHub?.logoUrl} className="mt-4" />
+
           </div>
         )}
 
@@ -5006,7 +5035,15 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               {/* Logo & Header */}
               <div className="text-center space-y-2 pt-1">
                 <div className="w-16 h-16 rounded-2xl mx-auto shadow-lg border-2 border-emerald-500/30 overflow-hidden bg-slate-900 flex items-center justify-center p-0.5 relative">
-                  <img src={effectiveLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
+                  <img 
+                    src={effectiveLogo} 
+                    alt="Vinimap Logo" 
+                    className="w-full h-full object-cover rounded-xl" 
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                    }}
+                  />
                   <span className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-white border-2 border-white text-[10px]">
                     <Check size={12} />
                   </span>

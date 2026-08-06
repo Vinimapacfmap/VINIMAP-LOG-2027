@@ -749,7 +749,7 @@ export default function RiderTrackingView({ riders, orders, onUpdateRiderCoords,
         <div class="relative flex items-center justify-center">
           <div class="absolute w-8 h-8 rounded-full bg-blue-500/20 animate-ping pointer-events-none"></div>
           <div class="w-7 h-7 rounded-full bg-slate-900 border-2 border-white shadow-xl overflow-hidden flex items-center justify-center p-0.5">
-            <img src="${activeHub?.logoUrl || vinimapLogo}" class="w-full h-full object-cover rounded-full" />
+            <img src="${activeHub?.logoUrl || vinimapLogo}" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null;this.src='${vinimapLogo}';" />
           </div>
           <div class="absolute -top-7 whitespace-nowrap bg-slate-900 border border-slate-700 text-[8px] font-black uppercase px-2 py-0.5 rounded-md shadow-lg text-blue-400">
             ${activeHub ? activeHub.name.toUpperCase() : 'BASE VINIMAP (SEDE)'}

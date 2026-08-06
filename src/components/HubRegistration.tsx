@@ -476,6 +476,9 @@ export default function HubRegistration({
                     alt="Logotipo" 
                     className="w-16 h-16 rounded-xl object-contain border border-slate-100 bg-white p-1 shadow-sm shrink-0"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                    }}
                   />
                   <div>
                     <h4 className="font-extrabold text-slate-800 tracking-tight text-base font-sans">{activeHub.name}</h4>
@@ -593,6 +596,9 @@ export default function HubRegistration({
                         alt="Logo Hub" 
                         className="w-11 h-11 rounded-lg object-contain border border-slate-100 bg-white p-0.5 shrink-0"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                        }}
                       />
 
                       <div className="space-y-0.5">
@@ -1061,6 +1067,9 @@ export default function HubRegistration({
                         alt="Preview Logo" 
                         className="w-16 h-16 rounded-lg object-contain bg-white border border-slate-100 p-0.5 shadow-sm"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                        }}
                       />
                       <div className="space-y-1">
                         <span className="text-xs font-bold text-slate-700 block">Logotipo Vinipack / Sede</span>

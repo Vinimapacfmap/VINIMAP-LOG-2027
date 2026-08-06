@@ -108,6 +108,9 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
                 alt="Logo Sede" 
                 className="w-9 h-9 rounded-xl object-contain border border-slate-100 bg-white p-0.5 shrink-0 shadow-sm"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                }}
               />
             ) : (
               <img 
@@ -115,6 +118,9 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
                 alt="Vinimap Logo" 
                 className="w-9 h-9 rounded-xl object-cover border border-slate-100 bg-white shrink-0 shadow-sm"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                }}
               />
             )}
             {isExpanded && (

@@ -350,7 +350,7 @@ export default function OtimizadorRotasInteligente({
     const baseIcon = L.divIcon({
       html: `
         <div class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-900 text-white shadow-lg border-2 border-white overflow-hidden p-0.5">
-          <img src="${activeHub?.logoUrl || vinimapLogo}" class="w-full h-full object-cover rounded-full" />
+          <img src="${activeHub?.logoUrl || vinimapLogo}" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null;this.src='${vinimapLogo}';" />
         </div>
       `,
       className: '',

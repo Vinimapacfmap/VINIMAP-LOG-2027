@@ -137,7 +137,15 @@ export const PwaInstallButton: React.FC<PwaInstallButtonProps> = ({ variant = 'h
         <div className={`p-4 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl border border-slate-700 shadow-xl space-y-3 ${className}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/20 shrink-0 shadow-md bg-slate-900">
-              <img src={companyLogo} alt="Vinimap Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img 
+                src={companyLogo} 
+                alt="Vinimap Logo" 
+                className="w-full h-full object-cover" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                }}
+              />
             </div>
             <div>
               <h4 className="font-black text-xs text-white">Aplicativo Oficial Vinimap</h4>
@@ -178,7 +186,15 @@ export const PwaInstallButton: React.FC<PwaInstallButtonProps> = ({ variant = 'h
               {/* Header */}
               <div className="text-center space-y-2 pt-1">
                 <div className="w-16 h-16 rounded-2xl mx-auto shadow-lg border-2 border-emerald-500/30 overflow-hidden bg-slate-900 flex items-center justify-center p-0.5 relative">
-                  <img src={companyLogo} alt="Vinimap Logo" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
+                  <img 
+                    src={companyLogo} 
+                    alt="Vinimap Logo" 
+                    className="w-full h-full object-cover rounded-xl" 
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = vinimapLogo;
+                    }}
+                  />
                   <span className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-white border-2 border-white text-[10px]">
                     <Check size={12} />
                   </span>
