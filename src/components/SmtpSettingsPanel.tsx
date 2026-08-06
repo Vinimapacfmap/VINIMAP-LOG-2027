@@ -37,6 +37,7 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
   onChange,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [showHelpGuide, setShowHelpGuide] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
@@ -45,6 +46,9 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
     error?: string;
     testedAt?: string;
   } | null>(null);
+
+  const isImapPort = [993, 143, 995, 110].includes(Number(smtpSettings.port));
+  const isInvalidPort = [535, 80, 443].includes(Number(smtpSettings.port));
 
   const updateField = <K extends keyof SmtpSettings>(key: K, value: SmtpSettings[K]) => {
     onChange({
@@ -241,13 +245,24 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
       </div>
 
       {/* Quick Provider Presets */}
-      <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Zap size={15} className="text-amber-500" />
-          <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-            Preenchimento Rápido com Provedor Conhecido:
-          </span>
+      <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Zap size={15} className="text-amber-500" />
+            <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+              Preenchimento Rápido com Provedor Conhecido:
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowHelpGuide(!showHelpGuide)}
+            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+          >
+            <HelpCircle size={14} />
+            <span>{showHelpGuide ? 'Ocultar Guia de Ajuda' : 'Como obter credenciais (Gmail / Outlook)?'}</span>
+          </button>
         </div>
+
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -282,6 +297,53 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
             <span>Locaweb / Hosting Custom</span>
           </button>
         </div>
+
+        {showHelpGuide && (
+          <div className="mt-3 p-4 bg-white rounded-xl border border-blue-200 text-xs text-slate-700 space-y-3 shadow-2xs">
+            <h4 className="font-extrabold text-blue-900 flex items-center gap-1.5">
+              <Info size={15} className="text-blue-600" />
+              <span>Instruções de Configuração por Provedor</span>
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] leading-relaxed">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <strong className="text-red-600 font-bold block mb-1">🔴 Gmail / Google Workspace:</strong>
+                <ol className="list-decimal pl-4 space-y-1 text-slate-600">
+                  <li>Host: <code className="font-mono text-slate-800">smtp.gmail.com</code> | Porta: <code className="font-mono text-slate-800">587</code> (TLS)</li>
+                  <li>Ative a <strong>Verificação em Duas Etapas</strong> na sua Conta Google.</li>
+                  <li>Acesse: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-semibold">myaccount.google.com/apppasswords</a></li>
+                  <li>Crie uma nova <strong>Senha de Aplicativo</strong> e cole os 16 caracteres no campo "Senha SMTP".</li>
+                </ol>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <strong className="text-blue-600 font-bold block mb-1">🔵 Outlook / Office 365:</strong>
+                <ol className="list-decimal pl-4 space-y-1 text-slate-600">
+                  <li>Host: <code className="font-mono text-slate-800">smtp.office365.com</code> | Porta: <code className="font-mono text-slate-800">587</code> (TLS)</li>
+                  <li>Usuário: Seu e-mail completo do Outlook/Office365.</li>
+                  <li>Caso possua 2FA ativo, gere uma Senha de Aplicativo no painel de Segurança da Microsoft.</li>
+                </ol>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <strong className="text-amber-600 font-bold block mb-1">🟡 Zoho Mail:</strong>
+                <ol className="list-decimal pl-4 space-y-1 text-slate-600">
+                  <li>Host: <code className="font-mono text-slate-800">smtp.zoho.com</code> | Porta: <code className="font-mono text-slate-800">465</code> (SSL) ou <code className="font-mono text-slate-800">587</code></li>
+                  <li>No painel Zoho, ative o acesso SMTP e utilize a Senha de Aplicativo se 2FA estiver ligado.</li>
+                </ol>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <strong className="text-indigo-600 font-bold block mb-1">🟣 cPanel / Locaweb / Hostinger:</strong>
+                <ol className="list-decimal pl-4 space-y-1 text-slate-600">
+                  <li>Host: <code className="font-mono text-slate-800">mail.seu-dominio.com.br</code> ou <code className="font-mono text-slate-800">smtplw.com.br</code></li>
+                  <li>Porta: <code className="font-mono text-slate-800">587</code> | Criptografia: TLS/STARTTLS</li>
+                  <li>Usuário: Endereço de e-mail completo da caixa postal.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* SMTP Server Form */}
@@ -318,7 +380,11 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
                 value={smtpSettings.port}
                 onChange={(e) => updateField('port', Number(e.target.value) || 587)}
                 placeholder="587"
-                className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono text-slate-800"
+                className={`w-full px-3.5 py-2 text-xs bg-slate-50 border rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-mono text-slate-800 ${
+                  isImapPort || isInvalidPort 
+                    ? 'border-amber-500 bg-amber-50 focus:ring-amber-500/20' 
+                    : 'border-slate-200 focus:ring-blue-500/20 focus:border-blue-500'
+                }`}
               />
             </div>
 
@@ -337,6 +403,24 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
               </select>
             </div>
           </div>
+
+          {(isImapPort || isInvalidPort) && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2">
+              <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <strong>Atenção para a Porta {smtpSettings.port}:</strong>
+                {isImapPort ? (
+                  <p className="text-[11px] mt-0.5">
+                    A porta {smtpSettings.port} é usada para recebimento IMAP/POP3. Para envio via SMTP, utilize a porta <strong>587</strong> (TLS) ou <strong>465</strong> (SSL).
+                  </p>
+                ) : (
+                  <p className="text-[11px] mt-0.5">
+                    Porta incomum para SMTP. As portas padrão de envio são <strong>587</strong> (TLS) ou <strong>465</strong> (SSL).
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="pt-2">
             <label className="flex items-center gap-2 cursor-pointer">

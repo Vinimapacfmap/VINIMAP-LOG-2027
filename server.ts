@@ -1065,9 +1065,24 @@ app.post('/api/smtp/test', async (req, res) => {
 
   } catch (err: any) {
     console.error('[SMTP Test Error]:', err);
+    
+    let userFriendlyError = err.message || 'Erro de conexão SMTP desconhecido';
+    const rawMsg = (err.message || '') + ' ' + (err.response || '');
+
+    if (rawMsg.includes('535') || rawMsg.includes('Username and Password not accepted') || rawMsg.includes('Incorrect authentication data')) {
+      userFriendlyError = `Autenticação Recusada (Erro 535): Usuário ou senha incorretos.\n\n💡 DICAS PARA RESOLVER:\n• Gmail/Google Workspace: O Google exige uma 'Senha de Aplicativo' de 16 dígitos em vez da sua senha pessoal do e-mail. Ative a Verificação em Duas Etapas na sua Conta do Google > Segurança > Senhas de app.\n• cPanel / Locaweb / Hostinger: Certifique-se de preencher o endereço de e-mail COMPLETO como Usuário (ex: contato@suaempresa.com.br).`;
+    } else if (rawMsg.includes('Invalid greeting') || rawMsg.includes('IMAP4') || rawMsg.includes('Dovecot') || [993, 143, 995, 110].includes(Number(req.body.port))) {
+      userFriendlyError = `Porta Incorreta / Servidor IMAP: A porta ${req.body.port} informada pertence a um protocolo de RECEBIMENTO de e-mails (IMAP/POP3).\n\n💡 DICA: Para ENVIO SMTP, altere a porta para 587 (Criptografia TLS/STARTTLS) ou 465 (Criptografia SSL).`;
+    } else if (rawMsg.includes('550') || rawMsg.includes('SMTP AUTH is required')) {
+      userFriendlyError = `Autenticação Obrigatória (Erro 550): O servidor SMTP exige login para autorizar o disparo de e-mails.\n\n💡 DICA: Ative a chave 'Requer Autenticação' e informe usuário e senha válidos.`;
+    } else if (rawMsg.includes('ECONNREFUSED') || rawMsg.includes('ETIMEDOUT') || rawMsg.includes('ENOTFOUND')) {
+      userFriendlyError = `Não foi possível conectar ao servidor SMTP (${req.body.host}:${req.body.port}).\n\n💡 DICAS:\n• Verifique se o Host está correto (ex: smtp.gmail.com, smtp.office365.com, smtplw.com.br).\n• Verifique se a porta (ex: 587 ou 465) não está bloqueada ou incorreta.`;
+    }
+
     return res.status(500).json({
       success: false,
-      error: `Falha ao conectar ou disparar pelo servidor SMTP: ${err.message || 'Erro desconhecido'}`
+      error: userFriendlyError,
+      rawError: err.message
     });
   }
 });
@@ -1150,9 +1165,22 @@ app.post('/api/smtp/send-order-completion', async (req, res) => {
 
   } catch (err: any) {
     console.error('[SMTP Completion Order Dispatch Error]:', err);
+
+    let userFriendlyError = err.message || 'Falha no envio do e-mail de conclusão';
+    const rawMsg = (err.message || '') + ' ' + (err.response || '');
+
+    if (rawMsg.includes('535') || rawMsg.includes('Username and Password not accepted') || rawMsg.includes('Incorrect authentication data')) {
+      userFriendlyError = `Autenticação Recusada (Erro 535): Usuário ou senha do SMTP do parceiro estão incorretos. Caso seja Gmail, é necessário usar Senha de Aplicativo.`;
+    } else if (rawMsg.includes('Invalid greeting') || rawMsg.includes('IMAP4') || rawMsg.includes('Dovecot')) {
+      userFriendlyError = `Porta Incorreta / Servidor IMAP: A porta informada é do protocolo IMAP. Altere para 587 (TLS) ou 465 (SSL).`;
+    } else if (rawMsg.includes('550') || rawMsg.includes('SMTP AUTH is required')) {
+      userFriendlyError = `Autenticação Obrigatória (Erro 550): O servidor exige que a autenticação esteja ativa.`;
+    }
+
     return res.status(500).json({
       success: false,
-      error: `Erro ao enviar e-mail via SMTP do parceiro: ${err.message || 'Falha no envio'}`
+      error: `Erro ao enviar e-mail via SMTP do parceiro: ${userFriendlyError}`,
+      rawError: err.message
     });
   }
 });
