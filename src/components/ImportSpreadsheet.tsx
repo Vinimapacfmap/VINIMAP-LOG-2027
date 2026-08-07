@@ -614,8 +614,8 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
     
     const { key, direction } = sortConfig;
     return [...validRows].sort((a, b) => {
-      const valA = a.data[key] || '';
-      const valB = b.data[key] || '';
+      const valA = String(a.data[key] ?? '');
+      const valB = String(b.data[key] ?? '');
       
       const numA = parseFloat(valA);
       const numB = parseFloat(valB);

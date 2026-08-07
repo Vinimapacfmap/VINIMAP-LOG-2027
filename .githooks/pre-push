@@ -1,0 +1,15 @@
+#!/bin/sh
+# Git pre-push hook to ensure TypeScript type safety
+
+echo "Running TypeScript type check (tsc --noEmit)..."
+
+npx tsc --noEmit
+
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript type check failed! Push aborted."
+  echo "Please fix the TypeScript errors above before pushing."
+  exit 1
+fi
+
+echo "✅ TypeScript type check passed successfully!"
+exit 0

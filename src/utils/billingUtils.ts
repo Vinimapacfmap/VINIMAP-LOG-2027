@@ -61,8 +61,8 @@ export function getOrderFreightValue(order: Order, clientPartners: ClientPartner
         if (matches.length > 0) {
           // Sort by effectiveFrom descending (latest first). Treat empty/undefined as '0000-00-00'
           matches.sort((a, b) => {
-            const dateA = a.effectiveFrom || '0000-00-00';
-            const dateB = b.effectiveFrom || '0000-00-00';
+            const dateA = String(a.effectiveFrom || '0000-00-00');
+            const dateB = String(b.effectiveFrom || '0000-00-00');
             return dateB.localeCompare(dateA);
           });
 
@@ -144,8 +144,8 @@ export function getOrderDriverRepassValue(
 
         if (matches.length > 0) {
           matches.sort((a, b) => {
-            const dateA = a.effectiveFrom || '0000-00-00';
-            const dateB = b.effectiveFrom || '0000-00-00';
+            const dateA = String(a.effectiveFrom || '0000-00-00');
+            const dateB = String(b.effectiveFrom || '0000-00-00');
             return dateB.localeCompare(dateA);
           });
 

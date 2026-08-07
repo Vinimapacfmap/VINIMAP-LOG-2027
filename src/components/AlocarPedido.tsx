@@ -550,8 +550,8 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     if (!sortConfig) return filteredOrders;
 
     return [...filteredOrders].sort((a, b) => {
-      let valA = getOrderColumnValue(a, sortConfig.key);
-      let valB = getOrderColumnValue(b, sortConfig.key);
+      let valA = String(getOrderColumnValue(a, sortConfig.key) ?? '');
+      let valB = String(getOrderColumnValue(b, sortConfig.key) ?? '');
 
       // Handle numeric sorting for values/numbers if applicable
       const numA = parseFloat(valA.replace(/[^\d.,-]/g, '').replace(',', '.'));

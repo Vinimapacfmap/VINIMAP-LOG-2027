@@ -600,9 +600,11 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
             ? (valueA as number) - (valueB as number) 
             : (valueB as number) - (valueA as number);
         } else {
+          const strA = String(valueA ?? '');
+          const strB = String(valueB ?? '');
           return sortDirection === 'asc'
-            ? (valueA as string).localeCompare(valueB as string)
-            : (valueB as string).localeCompare(valueA as string);
+            ? strA.localeCompare(strB)
+            : strB.localeCompare(strA);
         }
       });
   }, [transactions, activeTab, searchQuery, categoryFilter, statusFilter, costTypeFilter, recurrenceFilter, partnerFilter, sortField, sortDirection]);

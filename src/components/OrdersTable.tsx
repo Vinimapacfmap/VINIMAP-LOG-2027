@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { compressImage } from '../utils/imageCompressor';
 import { Order, OrderStatus, DeliveryRider, OrderHistoryEntry, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, formatOrderTime, extractISODateFromTimestamp } from '../utils/dateUtils';
@@ -175,7 +175,7 @@ const getCoordinates = (order: Order | null) => {
   }
 };
 
-export default function OrdersTable({ 
+function OrdersTable({ 
   orders, 
   riders, 
   clientPartners,
@@ -864,33 +864,36 @@ export default function OrdersTable({
       let valB = '';
 
       if (viewMode === 'spreadsheet') {
-        valA = getOrderColumnValue(a, sortConfig.key);
-        valB = getOrderColumnValue(b, sortConfig.key);
+        valA = String(getOrderColumnValue(a, sortConfig.key) ?? '');
+        valB = String(getOrderColumnValue(b, sortConfig.key) ?? '');
       } else {
         // Simplified fields sorting
         const key = sortConfig.key;
         if (key === 'Código') {
-          valA = a.id;
-          valB = b.id;
+          valA = String(a.id ?? '');
+          valB = String(b.id ?? '');
         } else if (key === 'Cliente') {
-          valA = a.clientName;
-          valB = b.clientName;
+          valA = String(a.clientName ?? '');
+          valB = String(b.clientName ?? '');
         } else if (key === 'Endereço') {
-          valA = a.address;
-          valB = b.address;
+          valA = String(a.address ?? '');
+          valB = String(b.address ?? '');
         } else if (key === 'Prioridade') {
-          valA = a.priority;
-          valB = b.priority;
+          valA = String(a.priority ?? '');
+          valB = String(b.priority ?? '');
         } else if (key === 'Status') {
-          valA = a.status;
-          valB = b.status;
+          valA = String(a.status ?? '');
+          valB = String(b.status ?? '');
         } else if (key === 'Valor') {
-          return sortConfig.direction === 'asc' ? a.value - b.value : b.value - a.value;
+          return sortConfig.direction === 'asc' ? (a.value || 0) - (b.value || 0) : (b.value || 0) - (a.value || 0);
         } else {
-          valA = a.id;
-          valB = b.id;
+          valA = String(a.id ?? '');
+          valB = String(b.id ?? '');
         }
       }
+
+      valA = String(valA ?? '');
+      valB = String(valB ?? '');
 
       const keyLower = sortConfig.key.toLowerCase();
 
@@ -904,8 +907,8 @@ export default function OrdersTable({
         (isBrDatePattern.test(valA) && isBrDatePattern.test(valB)) || 
         (isIsoDatePattern.test(valA) && isIsoDatePattern.test(valB))
       ) {
-        const toComparableDate = (str: string) => {
-          const clean = str.trim();
+        const toComparableDate = (str: any) => {
+          const clean = String(str || '').trim();
           if (isBrDatePattern.test(clean)) {
             const parts = clean.split('/');
             return `${parts[2]}${parts[1]}${parts[0]}`;
@@ -921,8 +924,8 @@ export default function OrdersTable({
         const dateB = toComparableDate(valB);
 
         return sortConfig.direction === 'asc' 
-          ? dateA.localeCompare(dateB) 
-          : dateB.localeCompare(dateA);
+          ? String(dateA || '').localeCompare(String(dateB || '')) 
+          : String(dateB || '').localeCompare(String(dateA || ''));
       }
 
       // 2. Is it a sequence/index column?
@@ -935,7 +938,7 @@ export default function OrdersTable({
       // 3. Robust numeric, currency, and alphanumeric prefix parsing
       const extractNumber = (str: string): number | null => {
         if (!str) return null;
-        let clean = str.trim();
+        let clean = String(str || '').trim();
 
         // Handle Brazilian currency, e.g., R$ 1.250,50 or R$ 12,50
         if (clean.includes('R$') || (clean.includes(',') && !clean.includes('/'))) {
@@ -959,8 +962,8 @@ export default function OrdersTable({
 
       // 4. Default natural Portuguese alphanumeric comparison
       return sortConfig.direction === 'asc' 
-        ? valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base', numeric: true }) 
-        : valB.localeCompare(valA, 'pt-BR', { sensitivity: 'base', numeric: true });
+        ? String(valA || '').localeCompare(String(valB || ''), 'pt-BR', { sensitivity: 'base', numeric: true }) 
+        : String(valB || '').localeCompare(String(valA || ''), 'pt-BR', { sensitivity: 'base', numeric: true });
     });
   }, [filteredOrders, sortConfig, viewMode]);
 
@@ -991,6 +994,18 @@ export default function OrdersTable({
       currentPage * itemsPerPage
     );
   }, [sortedOrders, currentPage, itemsPerPage]);
+
+  const memoizedClientPartnerOptions = useMemo(() => {
+    return clientPartners.map(cp => (
+      <option key={cp.id} value={cp.id}>{cp.name}</option>
+    ));
+  }, [clientPartners]);
+
+  const memoizedRiderOptions = useMemo(() => {
+    return riders.map(r => (
+      <option key={r.id} value={r.id}>{r.name} ({r.vehicle})</option>
+    ));
+  }, [riders]);
 
   const getPriorityColor = (priority: string) => {
     const p = String(priority || '').toLowerCase();
@@ -2278,9 +2293,7 @@ export default function OrdersTable({
                     className="w-full h-9 pl-9 pr-8 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
                   >
                     <option value="Todos">Todos os Parceiros</option>
-                    {clientPartners.map(cp => (
-                      <option key={cp.id} value={cp.id}>{cp.name}</option>
-                    ))}
+                    {memoizedClientPartnerOptions}
                   </select>
                   <ChevronDown size={13} className="absolute right-3 text-slate-400 pointer-events-none" />
                 </div>
@@ -2299,9 +2312,7 @@ export default function OrdersTable({
                     className="w-full h-9 pl-9 pr-8 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
                   >
                     <option value="Todos">Todos os Condutores</option>
-                    {riders.map(r => (
-                      <option key={r.id} value={r.id}>{r.name} ({r.vehicle})</option>
-                    ))}
+                    {memoizedRiderOptions}
                   </select>
                   <ChevronDown size={13} className="absolute right-3 text-slate-400 pointer-events-none" />
                 </div>
@@ -5179,3 +5190,5 @@ export default function OrdersTable({
     </div>
   );
 }
+
+export default memo(OrdersTable);

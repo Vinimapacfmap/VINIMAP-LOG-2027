@@ -3,17 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import { DeliveryRider } from '../types';
 import { 
   Search, 
-  MapPin, 
-  Smartphone, 
   Star, 
   Battery, 
-  TrendingUp, 
-  Compass, 
-  ChevronRight,
   ShieldAlert
 } from 'lucide-react';
 
@@ -23,22 +18,14 @@ interface RidersListProps {
   setSelectedRiderId: (id: string | null) => void;
 }
 
-export default function RidersList({ riders, selectedRiderId, setSelectedRiderId }: RidersListProps) {
-  const [searchTerm, setSearchTerm] = useState('');
+interface RiderItemProps {
+  rider: DeliveryRider;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+}
 
-  // Filter riders based on search name or vehicle type
-  const filteredRiders = (riders || []).filter(r => {
-    if (!r) return false;
-    const query = (searchTerm || '').toLowerCase();
-    const name = (r.name || '').toLowerCase();
-    const vehicle = (r.vehicle || '').toLowerCase();
-    const status = (r.status || '').toLowerCase();
-    return (
-      name.includes(query) ||
-      vehicle.includes(query) ||
-      status.includes(query)
-    );
-  });
+const RiderItem = memo(function RiderItem({ rider, isSelected, onSelect }: RiderItemProps) {
+  const batteryLow = rider.batteryPercent <= 20 && rider.status !== 'Offline';
 
   const getStatusClasses = (status: string) => {
     switch (status) {
@@ -61,6 +48,88 @@ export default function RidersList({ riders, selectedRiderId, setSelectedRiderId
       default: return 'bg-slate-400';
     }
   };
+
+  return (
+    <button
+      onClick={() => onSelect(rider.id)}
+      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer group ${
+        isSelected 
+          ? 'border-blue-500 bg-blue-50/20 shadow-md ring-2 ring-blue-50' 
+          : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50/50'
+      }`}
+      id={`riders-list-item-${rider.id}`}
+    >
+      {/* Left Details */}
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="relative shrink-0">
+          <img
+            src={rider.avatar}
+            alt={rider.name}
+            className="w-9 h-9 rounded-full object-cover border border-slate-200"
+            referrerPolicy="no-referrer"
+          />
+          <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${getStatusDot(rider.status)}`} />
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-xs text-slate-800 truncate group-hover:text-blue-600 transition-colors">
+              {rider.name}
+            </span>
+            {batteryLow && (
+              <span title="Bateria Crítica!">
+                <ShieldAlert size={12} className="text-rose-500 animate-pulse shrink-0" />
+              </span>
+            )}
+          </div>
+          
+          <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+            <span>{rider.vehicle}</span>
+            <span>•</span>
+            <span className="flex items-center gap-0.5 text-amber-500">
+              <Star size={10} className="fill-amber-500 stroke-amber-500 shrink-0" />
+              <strong>{rider.rating.toFixed(1)}</strong>
+            </span>
+          </p>
+        </div>
+      </div>
+
+      {/* Right Details / Status Badge */}
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <span className={`px-2 py-0.5 text-[9px] font-extrabold border rounded-full uppercase tracking-wider ${getStatusClasses(rider.status)}`}>
+          {rider.status}
+        </span>
+        <span className="text-[9px] text-slate-400 font-mono font-bold flex items-center gap-1">
+          <Battery size={10} className={batteryLow ? 'text-rose-500' : 'text-slate-400'} />
+          {rider.batteryPercent}%
+        </span>
+      </div>
+    </button>
+  );
+});
+
+function RidersList({ riders, selectedRiderId, setSelectedRiderId }: RidersListProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter riders based on search name or vehicle type with useMemo
+  const filteredRiders = useMemo(() => {
+    return (riders || []).filter(r => {
+      if (!r) return false;
+      const query = (searchTerm || '').toLowerCase();
+      const name = (r.name || '').toLowerCase();
+      const vehicle = (r.vehicle || '').toLowerCase();
+      const status = (r.status || '').toLowerCase();
+      return (
+        name.includes(query) ||
+        vehicle.includes(query) ||
+        status.includes(query)
+      );
+    });
+  }, [riders, searchTerm]);
+
+  const handleSelect = useCallback((id: string) => {
+    setSelectedRiderId(selectedRiderId === id ? null : id);
+  }, [selectedRiderId, setSelectedRiderId]);
 
   return (
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 flex flex-col justify-between h-[500px]" id="riders-list-container">
@@ -92,69 +161,14 @@ export default function RidersList({ riders, selectedRiderId, setSelectedRiderId
 
       {/* Riders List Viewport */}
       <div className="flex-1 overflow-y-auto mt-4 space-y-2.5 pr-1" id="riders-scroll-area">
-        {filteredRiders.map((rider) => {
-          const isSelected = selectedRiderId === rider.id;
-          const batteryLow = rider.batteryPercent <= 20 && rider.status !== 'Offline';
-
-          return (
-            <button
-              key={rider.id}
-              onClick={() => setSelectedRiderId(isSelected ? null : rider.id)}
-              className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer group ${
-                isSelected 
-                  ? 'border-blue-500 bg-blue-50/20 shadow-md ring-2 ring-blue-50' 
-                  : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50/50'
-              }`}
-              id={`riders-list-item-${rider.id}`}
-            >
-              {/* Left Details */}
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="relative shrink-0">
-                  <img
-                    src={rider.avatar}
-                    alt={rider.name}
-                    className="w-9 h-9 rounded-full object-cover border border-slate-200"
-                    referrerPolicy="no-referrer"
-                  />
-                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${getStatusDot(rider.status)}`} />
-                </div>
-
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-xs text-slate-800 truncate group-hover:text-blue-600 transition-colors">
-                      {rider.name}
-                    </span>
-                    {batteryLow && (
-                      <span title="Bateria Crítica!">
-                        <ShieldAlert size={12} className="text-rose-500 animate-pulse shrink-0" />
-                      </span>
-                    )}
-                  </div>
-                  
-                  <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-0.5">
-                    <span>{rider.vehicle}</span>
-                    <span>•</span>
-                    <span className="flex items-center gap-0.5 text-amber-500">
-                      <Star size={10} className="fill-amber-500 stroke-amber-500 shrink-0" />
-                      <strong>{rider.rating.toFixed(1)}</strong>
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Right Details / Status Badge */}
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
-                <span className={`px-2 py-0.5 text-[9px] font-extrabold border rounded-full uppercase tracking-wider ${getStatusClasses(rider.status)}`}>
-                  {rider.status}
-                </span>
-                <span className="text-[9px] text-slate-400 font-mono font-bold flex items-center gap-1">
-                  <Battery size={10} className={batteryLow ? 'text-rose-500' : 'text-slate-400'} />
-                  {rider.batteryPercent}%
-                </span>
-              </div>
-            </button>
-          );
-        })}
+        {filteredRiders.map((rider) => (
+          <RiderItem
+            key={rider.id}
+            rider={rider}
+            isSelected={selectedRiderId === rider.id}
+            onSelect={handleSelect}
+          />
+        ))}
 
         {filteredRiders.length === 0 && (
           <div className="text-center py-12 text-[11px] font-semibold text-slate-400">
@@ -174,3 +188,5 @@ export default function RidersList({ riders, selectedRiderId, setSelectedRiderId
     </div>
   );
 }
+
+export default memo(RidersList);

@@ -694,7 +694,7 @@ export default function App() {
         snapshot.forEach(doc => {
           docs.push(doc.data() as ActivityLog);
         });
-        docs.sort((a, b) => b.time.localeCompare(a.time));
+        docs.sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
         setLogs(docs);
       }, (error) => handleListenerError(error, 'activityLogs'))
     );
@@ -968,8 +968,8 @@ export default function App() {
           if (matches.length > 0) {
             // Sort by effectiveFrom descending (latest first). Treat empty/undefined as '0000-00-00'
             matches.sort((a, b) => {
-              const dateA = a.effectiveFrom || '0000-00-00';
-              const dateB = b.effectiveFrom || '0000-00-00';
+              const dateA = String(a.effectiveFrom || '0000-00-00');
+              const dateB = String(b.effectiveFrom || '0000-00-00');
               return dateB.localeCompare(dateA);
             });
 

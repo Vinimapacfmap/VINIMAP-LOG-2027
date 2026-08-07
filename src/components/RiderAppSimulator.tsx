@@ -1140,7 +1140,7 @@ export default function RiderAppSimulator({
     const seqA = a.sequence !== undefined ? a.sequence : 999999;
     const seqB = b.sequence !== undefined ? b.sequence : 999999;
     if (seqA !== seqB) return seqA - seqB;
-    return (a.createdAt || '').localeCompare(b.createdAt || '') || a.id.localeCompare(b.id);
+    return String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.id || '').localeCompare(String(b.id || ''));
   });
 
   // Dynamic KPIs synchronized with dashboard
