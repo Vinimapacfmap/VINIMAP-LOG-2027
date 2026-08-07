@@ -1,6 +1,6 @@
-const STATIC_CACHE_NAME = 'vinimap-static-v8';
-const TILE_CACHE_NAME = 'vinimap-tiles-v8';
-const DYNAMIC_CACHE_NAME = 'vinimap-dynamic-v8';
+const STATIC_CACHE_NAME = 'vinimap-static-v9';
+const TILE_CACHE_NAME = 'vinimap-tiles-v9';
+const DYNAMIC_CACHE_NAME = 'vinimap-dynamic-v9';
 
 // Core assets to pre-cache on SW installation
 const STATIC_ASSETS = [
