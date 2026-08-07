@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DeliveryRider, Order, RiderStatus, OrderStatus, CompanyHub } from '../types';
+import { getDriverAppInstallUrl } from '../utils/pwaUtils';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 import DateRangePicker from './DateRangePicker';
 import { getSaoPauloDateTimeShort } from '../utils/dateUtils';
@@ -1143,14 +1144,14 @@ export default function RiderTrackingView({ riders, orders, onUpdateRiderCoords,
   };
 
   const copyTrackingLink = (rider: DeliveryRider) => {
-    const mockUrl = `https://digital.vinimap.com.br/rastreio/v2/condutor.aspx?id=14d9340a-39f9-4cab-8aaa-0dd62ab9d1fa&rider=${rider.id}`;
-    navigator.clipboard.writeText(mockUrl);
+    const liveUrl = getDriverAppInstallUrl(rider.id);
+    navigator.clipboard.writeText(liveUrl);
     setCopiedRiderId(rider.id);
     
     const timeNow = new Date().toLocaleTimeString();
     setTelemetryLogs(prev => [
       ...prev,
-      { id: String(Date.now()), time: timeNow, message: `Link de rastreamento copiado para o condutor ${rider.name}.`, type: 'success' }
+      { id: String(Date.now()), time: timeNow, message: `Link do aplicativo do condutor ${rider.name} copiado.`, type: 'success' }
     ]);
 
     setTimeout(() => {
@@ -1160,9 +1161,10 @@ export default function RiderTrackingView({ riders, orders, onUpdateRiderCoords,
 
   // Generate dynamic WhatsApp link
   const getWhatsAppLink = (rider: DeliveryRider, order?: Order) => {
+    const liveUrl = getDriverAppInstallUrl(rider.id);
     const text = order
-      ? `Olá ${rider.name}, aqui é da equipe de logística. Por favor, verifique o andamento do pedido ${order.id.toUpperCase()} destinado a ${order.clientName} (${order.address}). Link de rastreio: https://digital.vinimap.com.br/rastreio/v2/condutor.aspx?rider=${rider.id}`
-      : `Olá ${rider.name}, enviando o link oficial do painel de rastreamento Vinimap para acompanhamento da sua jornada hoje: https://digital.vinimap.com.br/rastreio/v2/condutor.aspx?rider=${rider.id}`;
+      ? `Olá ${rider.name}, aqui é da equipe de logística. Por favor, verifique o andamento do pedido ${order.id.toUpperCase()} destinado a ${order.clientName} (${order.address}). Link de acesso: ${liveUrl}`
+      : `Olá ${rider.name}, enviando o link oficial do aplicativo Vinimap Condutor para acompanhamento da sua jornada hoje: ${liveUrl}`;
     
     return `https://api.whatsapp.com/send?phone=${rider.phone.replace(/\D/g, '')}&text=${encodeURIComponent(text)}`;
   };

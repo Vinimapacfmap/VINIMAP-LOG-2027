@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { DeliveryRider, CompanyHub } from '../types';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
+import { getDriverAppInstallUrl } from '../utils/pwaUtils';
 
 interface DriverAppInstallerModalProps {
   isOpen: boolean;
@@ -91,15 +92,7 @@ export const DriverAppInstallerModal: React.FC<DriverAppInstallerModalProps> = (
 
   // Generate mobile link for QR Code & WhatsApp (Supports Vercel base URL override)
   const getPublicMobileAppUrl = () => {
-    let origin = customBaseUrl.trim();
-    if (!origin && typeof window !== 'undefined') {
-      origin = window.location.origin;
-    }
-    if (!customBaseUrl.trim() && origin.includes('ais-dev-')) {
-      origin = origin.replace('ais-dev-', 'ais-pre-');
-    }
-    const cleanOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
-    return `${cleanOrigin}/?view=driver_mobile${selectedDriverId ? `&riderId=${selectedDriverId}` : ''}`;
+    return getDriverAppInstallUrl(selectedDriverId, customBaseUrl);
   };
   const mobileAppUrl = getPublicMobileAppUrl();
 

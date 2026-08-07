@@ -4,18 +4,21 @@
  */
 
 import { useState, useMemo, useCallback, memo } from 'react';
-import { DeliveryRider } from '../types';
+import { DeliveryRider, Order } from '../types';
+import { useCalculatedRiders } from '../hooks/useRiderCompletedDeliveries';
 import { 
   Search, 
   Star, 
   Battery, 
-  ShieldAlert
+  ShieldAlert,
+  CheckCircle2
 } from 'lucide-react';
 
 interface RidersListProps {
   riders: DeliveryRider[];
   selectedRiderId: string | null;
   setSelectedRiderId: (id: string | null) => void;
+  orders?: Order[];
 }
 
 interface RiderItemProps {
@@ -90,6 +93,11 @@ const RiderItem = memo(function RiderItem({ rider, isSelected, onSelect }: Rider
               <Star size={10} className="fill-amber-500 stroke-amber-500 shrink-0" />
               <strong>{rider.rating.toFixed(1)}</strong>
             </span>
+            <span>•</span>
+            <span className="text-emerald-700 font-extrabold flex items-center gap-0.5 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100/80">
+              <CheckCircle2 size={10} className="shrink-0 text-emerald-600" />
+              {rider.completedDeliveries} {rider.completedDeliveries === 1 ? 'concluída' : 'concluídas'}
+            </span>
           </p>
         </div>
       </div>
@@ -108,12 +116,20 @@ const RiderItem = memo(function RiderItem({ rider, isSelected, onSelect }: Rider
   );
 });
 
-function RidersList({ riders, selectedRiderId, setSelectedRiderId }: RidersListProps) {
+function RidersList({ riders, selectedRiderId, setSelectedRiderId, orders = [] }: RidersListProps) {
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Automatically recalculate completed deliveries in real time based strictly on orders with status 'Concluído'
+  const calculatedRiders = useCalculatedRiders(riders, orders);
+
+  // Total completed across all riders dynamically
+  const totalCompletedInTurn = useMemo(() => {
+    return calculatedRiders.reduce((acc, r) => acc + (r.completedDeliveries || 0), 0);
+  }, [calculatedRiders]);
 
   // Filter riders based on search name or vehicle type with useMemo
   const filteredRiders = useMemo(() => {
-    return (riders || []).filter(r => {
+    return (calculatedRiders || []).filter(r => {
       if (!r) return false;
       const query = (searchTerm || '').toLowerCase();
       const name = (r.name || '').toLowerCase();
@@ -125,7 +141,7 @@ function RidersList({ riders, selectedRiderId, setSelectedRiderId }: RidersListP
         status.includes(query)
       );
     });
-  }, [riders, searchTerm]);
+  }, [calculatedRiders, searchTerm]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedRiderId(selectedRiderId === id ? null : id);
@@ -179,9 +195,10 @@ function RidersList({ riders, selectedRiderId, setSelectedRiderId }: RidersListP
 
       {/* Quick Action Footer */}
       <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-[11px]" id="riders-footer">
-        <span className="text-slate-400 font-bold uppercase tracking-wider">Desempenho Geral</span>
-        <span className="font-extrabold text-slate-800 flex items-center gap-1">
-          🏆 Geral: 4.85 ★
+        <span className="text-slate-400 font-bold uppercase tracking-wider">Desempenho no Turno</span>
+        <span className="font-extrabold text-emerald-700 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
+          <CheckCircle2 size={12} className="text-emerald-600" />
+          {totalCompletedInTurn} {totalCompletedInTurn === 1 ? 'Entrega Concluída' : 'Entregas Concluídas'}
         </span>
       </div>
 

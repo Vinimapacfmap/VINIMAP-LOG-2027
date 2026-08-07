@@ -39,7 +39,7 @@ import DailyNotebook from './components/DailyNotebook';
 import OtimizadorRotasInteligente from './components/OtimizadorRotasInteligente';
 import HubRegistration from './components/HubRegistration';
 import LogoHubManager from './components/LogoHubManager';
-import { applyDynamicPwaManifestAndIcons } from './utils/pwaUtils';
+import { applyDynamicPwaManifestAndIcons, getDriverAppInstallUrl } from './utils/pwaUtils';
 import { calculateRiderCommissionForOrder } from './utils/billingUtils';
 import RiderAppSimulator from './components/RiderAppSimulator';
 import VolumeCalculator from './components/VolumeCalculator';
@@ -5148,15 +5148,8 @@ export default function App() {
                               Link de Instalação
                             </label>
                             {(() => {
-                              let origin = window.location.origin;
-                              let isDevMode = false;
-                              if (origin.includes('ais-dev-')) {
-                                origin = origin.replace('ais-dev-', 'ais-pre-');
-                                isDevMode = true;
-                              }
-                              const installLink = `${origin}/?view=driver_mobile${
-                                selectedRiderForInstallId ? `&riderId=${selectedRiderForInstallId}` : ''
-                              }`;
+                              const isDevMode = typeof window !== 'undefined' && window.location.origin.includes('ais-dev-');
+                              const installLink = getDriverAppInstallUrl(selectedRiderForInstallId);
                               
                               const handleCopy = () => {
                                 navigator.clipboard.writeText(installLink);
@@ -5571,6 +5564,7 @@ export default function App() {
                   <div>
                     <RidersList 
                       riders={riders} 
+                      orders={orders}
                       selectedRiderId={selectedRiderId} 
                       setSelectedRiderId={setSelectedRiderId} 
                     />

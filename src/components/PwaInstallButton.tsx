@@ -8,6 +8,7 @@ import { Download, CheckCircle2, Sparkles, X, ExternalLink, ChevronRight, Check,
 import { motion, AnimatePresence } from 'motion/react';
 import { DeliveryRider, CompanyHub } from '../types';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
+import { getDriverAppInstallUrl } from '../utils/pwaUtils';
 
 interface PwaInstallButtonProps {
   variant?: 'header' | 'sidebar' | 'banner';
@@ -277,8 +278,9 @@ export const PwaInstallButton: React.FC<PwaInstallButtonProps> = ({ variant = 'h
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(window.location.href);
-                    alert('Link copiado para a área de transferência!');
+                    const appUrl = getDriverAppInstallUrl();
+                    navigator.clipboard.writeText(appUrl);
+                    alert('Link do aplicativo copiado para a área de transferência!');
                   }}
                   className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
                 >

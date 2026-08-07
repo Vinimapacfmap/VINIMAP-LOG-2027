@@ -90,3 +90,23 @@ export function applyDynamicPwaManifestAndIcons(customLogoUrl?: string) {
     console.warn('Não foi possível atualizar o manifesto PWA dinâmico:', err);
   }
 }
+
+/**
+ * Helper to generate the public installation and direct access link for the driver/rider app.
+ * Handles automatic domain conversion from private dev environments (ais-dev-) to public preview (ais-pre-)
+ * so drivers opening the link on mobile devices do not encounter 403 Forbidden errors.
+ */
+export function getDriverAppInstallUrl(riderId?: string | null, customBaseUrl?: string): string {
+  let origin = customBaseUrl?.trim() || '';
+  if (!origin && typeof window !== 'undefined') {
+    origin = window.location.origin;
+  }
+  // Convert private dev URL (ais-dev-) to public preview URL (ais-pre-) to avoid 403 Forbidden on mobile devices
+  if (origin.includes('ais-dev-')) {
+    origin = origin.replace('ais-dev-', 'ais-pre-');
+  }
+  const cleanOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+  const paramRider = riderId ? `&riderId=${encodeURIComponent(riderId)}` : '';
+  return `${cleanOrigin}/?view=driver_mobile${paramRider}`;
+}
+

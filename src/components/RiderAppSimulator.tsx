@@ -75,7 +75,7 @@ import {
 } from 'lucide-react';
 import { SignatureCanvasModal } from './SignatureCanvasModal';
 import { DriverAppInstallerModal } from './DriverAppInstallerModal';
-import { applyDynamicPwaManifestAndIcons } from '../utils/pwaUtils';
+import { applyDynamicPwaManifestAndIcons, getDriverAppInstallUrl } from '../utils/pwaUtils';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 
 const convertToGeoLat = (svgLatPercent: number) => -23.52 - (svgLatPercent / 100) * 0.12;
@@ -5180,7 +5180,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 <button
                   type="button"
                   onClick={() => {
-                    const url = window.location.href;
+                    const url = getDriverAppInstallUrl(selectedRider?.id);
                     navigator.clipboard.writeText(url);
                     triggerPhoneNotification("Link Copiado!", "Cole no navegador do seu celular para instalar.", "success");
                   }}
