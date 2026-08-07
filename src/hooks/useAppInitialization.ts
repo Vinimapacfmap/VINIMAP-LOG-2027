@@ -33,45 +33,90 @@ export function useAppInitialization(): AppInitState {
 
   useEffect(() => {
     let isMounted = true;
-    console.log('[useAppInitialization] Iniciando verificação e inicialização assíncrona dos serviços...');
+    const startTime = performance.now();
+    console.log('[useAppInitialization] [START] Iniciando verificação e inicialização assíncrona dos serviços...', {
+      timestamp: new Date().toISOString()
+    });
 
     const initializeServices = async () => {
       try {
         // 1. Verificação assíncrona do Firebase Firestore (não-bloqueante)
+        console.log('[useAppInitialization] [FIREBASE INIT START]', {
+          timestamp: new Date().toISOString(),
+          dbAvailable: Boolean(db)
+        });
+
         if (db) {
           if (isMounted) setIsFirebaseReady(true);
-          console.log('[useAppInitialization] Instância do Firebase Firestore pronta.');
+          console.log('[useAppInitialization] [FIREBASE INIT END] Instância do Firebase Firestore pronta.', {
+            timestamp: new Date().toISOString()
+          });
         } else {
-          console.warn('[useAppInitialization] Firebase Firestore não está disponível.');
+          console.warn('[useAppInitialization] [FIREBASE INIT WARN] Firebase Firestore não está disponível.');
         }
 
         // 2. Verificação assíncrona do Supabase & Sessão de Autenticação
+        console.log('[useAppInitialization] [SUPABASE INIT START]', {
+          timestamp: new Date().toISOString(),
+          isSupabaseConfigured,
+          hasSupabaseClient: Boolean(supabase)
+        });
+
         if (isSupabaseConfigured && supabase) {
           if (isMounted) setIsSupabaseReady(true);
-          console.log('[useAppInitialization] Supabase verificado. Checando sessão de usuário com timeout de segurança...');
+          console.log('[useAppInitialization] [SUPABASE SESSION START] Checando sessão de usuário com timeout de segurança (1.5s)...', {
+            timestamp: new Date().toISOString()
+          });
 
           const loggedOut = localStorage.getItem('vinimap_logged_out');
           if (loggedOut === 'true') {
+            console.log('[useAppInitialization] [SUPABASE SESSION END] Usuário deslogado explicitamente no localStorage.');
             if (isMounted) setIsAdminAuthenticated(false);
           } else {
             try {
-              // Safety timeout for Supabase getSession (max 1.5s) to avoid blocking rendering on Vercel
-              const sessionPromise = supabase.auth.getSession();
-              const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
-                setTimeout(() => resolve({ data: { session: null } }), 1500)
+              let didTimeout = false;
+              const sessionPromise = supabase.auth.getSession()
+                .then((res) => ({ type: 'session' as const, res }))
+                .catch((err) => {
+                  console.warn('[useAppInitialization] [SUPABASE SESSION ERR] Rejeição na consulta de sessão:', err);
+                  return { type: 'error' as const, err };
+                });
+
+              const timeoutPromise = new Promise<{ type: 'timeout' }>((resolve) =>
+                setTimeout(() => {
+                  didTimeout = true;
+                  resolve({ type: 'timeout' });
+                }, 1500)
               );
 
-              const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
-              const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
-              if (isMounted) {
-                if (session || hasLocalSession) {
-                  setIsAdminAuthenticated(true);
-                } else {
-                  setIsAdminAuthenticated(false);
+              const raceResult = await Promise.race([sessionPromise, timeoutPromise]);
+
+              if (raceResult.type === 'timeout') {
+                console.warn('[useAppInitialization] [SUPABASE SESSION TIMEOUT] A chamada supabase.auth.getSession() excedeu 1.5s e acionou timeout de segurança para não travar a UI.', {
+                  timestamp: new Date().toISOString()
+                });
+                const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+                if (isMounted) setIsAdminAuthenticated(hasLocalSession);
+              } else if (raceResult.type === 'error') {
+                console.warn('[useAppInitialization] [SUPABASE SESSION FAIL] Erro de rede ao buscar sessão Supabase.', raceResult.err);
+                const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+                if (isMounted) setIsAdminAuthenticated(hasLocalSession);
+              } else {
+                const session = raceResult.res.data.session;
+                const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+                console.log('[useAppInitialization] [SUPABASE SESSION END] Sessão consultada com sucesso:', {
+                  timestamp: new Date().toISOString(),
+                  hasRemoteSession: Boolean(session),
+                  hasLocalSession,
+                  didTimeout
+                });
+
+                if (isMounted) {
+                  setIsAdminAuthenticated(Boolean(session || hasLocalSession));
                 }
               }
             } catch (authErr) {
-              console.warn('[useAppInitialization] Aviso ao consultar sessão Supabase:', authErr);
+              console.warn('[useAppInitialization] [SUPABASE SESSION CATCH] Exceção geral ao consultar sessão Supabase:', authErr);
               const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
               if (isMounted) {
                 setIsAdminAuthenticated(hasLocalSession);
@@ -79,7 +124,7 @@ export function useAppInitialization(): AppInitState {
             }
           }
         } else {
-          console.log('[useAppInitialization] Supabase não configurado. Utilizando autenticação/banco local/Firebase.');
+          console.log('[useAppInitialization] [SUPABASE INIT SKIP] Supabase não configurado. Utilizando autenticação/banco local/Firebase.');
           const loggedOut = localStorage.getItem('vinimap_logged_out');
           const localSession = localStorage.getItem('vinimap_admin_session') === 'true';
           if (isMounted) {
@@ -92,14 +137,17 @@ export function useAppInitialization(): AppInitState {
           }
         }
       } catch (err) {
-        console.error('[useAppInitialization] Falha ao inicializar serviços:', err);
+        console.error('[useAppInitialization] [INIT EXCEPTION] Falha ao inicializar serviços:', err);
         if (isMounted) {
           setInitError(err instanceof Error ? err.message : String(err));
         }
       } finally {
+        const duration = Math.round(performance.now() - startTime);
         if (isMounted) {
           setIsInitializing(false);
-          console.log('[useAppInitialization] Inicialização de serviços finalizada com sucesso.');
+          console.log(`[useAppInitialization] [FINISH] Inicialização de serviços concluída em ${duration}ms.`, {
+            timestamp: new Date().toISOString()
+          });
         }
       }
     };
@@ -110,9 +158,15 @@ export function useAppInitialization(): AppInitState {
     // Registra listener do Supabase Auth caso configurado
     let authSubscription: { unsubscribe: () => void } | null = null;
     if (isSupabaseConfigured && supabase) {
+      console.log('[useAppInitialization] [SUPABASE AUTH LISTENER START] Registrando listener onAuthStateChange...');
       try {
         const { data } = supabase.auth.onAuthStateChange((_event, session) => {
           if (!isMounted) return;
+          console.log('[useAppInitialization] [SUPABASE AUTH EVENT]', {
+            event: _event,
+            hasSession: Boolean(session),
+            timestamp: new Date().toISOString()
+          });
           const isOut = localStorage.getItem('vinimap_logged_out') === 'true';
           const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
 
@@ -127,8 +181,9 @@ export function useAppInitialization(): AppInitState {
           }
         });
         authSubscription = data.subscription;
+        console.log('[useAppInitialization] [SUPABASE AUTH LISTENER READY] Listener ativo.');
       } catch (e) {
-        console.warn('[useAppInitialization] Erro ao registrar escutador do Supabase Auth:', e);
+        console.warn('[useAppInitialization] [SUPABASE AUTH LISTENER ERR] Erro ao registrar escutador do Supabase Auth:', e);
       }
     }
 
