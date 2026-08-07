@@ -19,11 +19,18 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    console.error('[ViniMap ErrorBoundary] Capturado erro no getDerivedStateFromError:', error);
     return { hasError: true, error, errorInfo: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught Error in ViniMap App:', error, errorInfo);
+    console.error('[ViniMap ErrorBoundary] Uncaught Error em ViniMap App:', {
+      error,
+      message: error?.message,
+      stack: error?.stack,
+      componentStack: errorInfo?.componentStack,
+      timestamp: new Date().toISOString(),
+    });
     this.setState({ error, errorInfo });
   }
 
