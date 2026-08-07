@@ -135,6 +135,12 @@ export default function Header({
           <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded uppercase font-sans font-bold">Ao Vivo</span>
         </div>
 
+        {/* Vercel Environment Badge */}
+        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 text-white rounded-xl text-[11px] font-extrabold shadow-xs border border-slate-800" title="Vercel Ready / Production Environment">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span className="tracking-tight">Vercel OS</span>
+        </div>
+
         {/* Notifications Center */}
         <div className="relative" id="notifications-dropdown-container">
           <button

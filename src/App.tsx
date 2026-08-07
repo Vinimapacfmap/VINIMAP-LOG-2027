@@ -272,6 +272,7 @@ export default function App() {
   const [isRealDeviceMode, setIsRealDeviceMode] = useState(false);
   const [installMode, setInstallMode] = useState<'real' | 'simulador'>('real');
   const [selectedRiderForInstallId, setSelectedRiderForInstallId] = useState<string | null>(null);
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>('');
   const [copiedInstallLink, setCopiedInstallLink] = useState(false);
 
   useEffect(() => {
@@ -5142,14 +5143,40 @@ export default function App() {
                             </p>
                           </div>
 
+                          {/* Vercel / Custom Base URL Config */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase">
+                                Domínio do App / URL da Vercel (Opcional)
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setCustomBaseUrl('https://vinimap.vercel.app')}
+                                className="text-[10px] text-blue-600 hover:text-blue-800 font-extrabold cursor-pointer hover:underline"
+                              >
+                                Usar Vercel Demo
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              value={customBaseUrl}
+                              onChange={(e) => setCustomBaseUrl(e.target.value)}
+                              placeholder="https://vinimap.vercel.app"
+                              className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-[10px]"
+                            />
+                            <p className="text-[10px] text-slate-400 leading-tight">
+                              Se hospedado na Vercel ou em um domínio próprio, insira o endereço aqui para gerar o link e o QR Code.
+                            </p>
+                          </div>
+
                           {/* Link Generation and Copy Button */}
                           <div className="space-y-3">
                             <label className="block text-[10px] font-bold text-slate-400 uppercase">
-                              Link de Instalação
+                              Link de Instalação Final
                             </label>
                             {(() => {
-                              const isDevMode = typeof window !== 'undefined' && window.location.origin.includes('ais-dev-');
-                              const installLink = getDriverAppInstallUrl(selectedRiderForInstallId);
+                              const isDevMode = !customBaseUrl && typeof window !== 'undefined' && window.location.origin.includes('ais-dev-');
+                              const installLink = getDriverAppInstallUrl(selectedRiderForInstallId, customBaseUrl);
                               
                               const handleCopy = () => {
                                 navigator.clipboard.writeText(installLink);
