@@ -22,7 +22,7 @@
       ]
     },
     {
-      "source": "/assets/:path*",
+      "source": "/assets/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -33,11 +33,11 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
