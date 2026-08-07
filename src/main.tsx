@@ -2,6 +2,7 @@ import './utils/leafletPatch';
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './index.css';
 
 // Enforce America/Sao_Paulo timezone for all Intl and Date formatting operations across the system
@@ -17,6 +18,7 @@ const CustomDateTimeFormat = function (this: any, locale?: string | string[], op
 // Copy prototype and static properties to maintain 100% transparency
 CustomDateTimeFormat.prototype = OriginalDateTimeFormat.prototype;
 Object.setPrototypeOf(CustomDateTimeFormat, OriginalDateTimeFormat);
+Object.assign(CustomDateTimeFormat, OriginalDateTimeFormat);
 // @ts-ignore
 Intl.DateTimeFormat = CustomDateTimeFormat;
 
@@ -40,6 +42,8 @@ Date.prototype.toLocaleTimeString = function(this: Date, locales?: any, options?
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

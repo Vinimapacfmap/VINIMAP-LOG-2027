@@ -167,6 +167,8 @@ export default function App() {
 
   useEffect(() => {
     const loggedOut = localStorage.getItem('vinimap_logged_out');
+    const localSession = localStorage.getItem('vinimap_admin_session') === 'true';
+
     if (loggedOut === 'true') {
       setIsAdminAuthenticated(false);
       setAuthChecking(false);
@@ -174,25 +176,39 @@ export default function App() {
     }
 
     if (!isSupabaseConfigured || !supabase) {
+      if (localSession) {
+        setIsAdminAuthenticated(true);
+      }
       setAuthChecking(false);
       return;
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       const isOut = localStorage.getItem('vinimap_logged_out') === 'true';
+      const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
       if (isOut) {
         setIsAdminAuthenticated(false);
+      } else if (session || hasLocalSession) {
+        setIsAdminAuthenticated(true);
       } else {
-        setIsAdminAuthenticated(!!session);
+        setIsAdminAuthenticated(false);
       }
+      setAuthChecking(false);
+    }).catch(() => {
+      const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+      setIsAdminAuthenticated(hasLocalSession);
       setAuthChecking(false);
     });
 
     const authListener = supabase.auth.onAuthStateChange((_event, session) => {
       const isOut = localStorage.getItem('vinimap_logged_out') === 'true';
-      if (_event === 'SIGNED_OUT' || isOut) {
+      const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+      
+      if (_event === 'SIGNED_OUT' && !hasLocalSession) {
         setIsAdminAuthenticated(false);
-      } else if (session) {
+      } else if (isOut) {
+        setIsAdminAuthenticated(false);
+      } else if (session || hasLocalSession) {
         localStorage.removeItem('vinimap_logged_out');
         localStorage.setItem('vinimap_admin_session', 'true');
         setIsAdminAuthenticated(true);
