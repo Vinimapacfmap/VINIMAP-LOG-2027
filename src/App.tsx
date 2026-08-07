@@ -53,6 +53,7 @@ import { AdminLogin } from './components/AdminLogin';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { fetchAllStateFromSupabase, syncAllStateToSupabase } from './lib/supabaseService';
 import { FinancialTransaction } from './types';
+import { useAppInitialization } from './hooks/useAppInitialization';
 
 import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from './firebase';
@@ -153,86 +154,21 @@ const generateUniqueLogId = (prefix: string = 'log') => {
 };
 
 export default function App() {
-  console.log('[ViniMap App.tsx] Componente App montado/renderizado.', {
-    isSupabaseConfigured,
+  const {
+    isInitializing,
+    isAdminAuthenticated,
+    setIsAdminAuthenticated,
+    isFirebaseReady,
+    isSupabaseReady
+  } = useAppInitialization();
+
+  console.log('[ViniMap App.tsx] Componente App renderizando.', {
+    isInitializing,
+    isAdminAuthenticated,
+    isFirebaseReady,
+    isSupabaseReady,
     time: new Date().toISOString()
   });
-
-  // Admin Auth State
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const loggedOut = localStorage.getItem('vinimap_logged_out');
-      if (loggedOut === 'true') return false;
-      const localSession = localStorage.getItem('vinimap_admin_session');
-      if (localSession === 'true') return true;
-    }
-    return false;
-  });
-  const [authChecking, setAuthChecking] = useState(true);
-
-  useEffect(() => {
-    console.log('[ViniMap App.tsx] useEffect de inicialização executado.', {
-      isAdminAuthenticated,
-      isSupabaseConfigured
-    });
-
-    const loggedOut = localStorage.getItem('vinimap_logged_out');
-    const localSession = localStorage.getItem('vinimap_admin_session') === 'true';
-
-    if (loggedOut === 'true') {
-      setIsAdminAuthenticated(false);
-      setAuthChecking(false);
-      return;
-    }
-
-    if (!isSupabaseConfigured || !supabase) {
-      if (localSession) {
-        setIsAdminAuthenticated(true);
-      } else {
-        setIsAdminAuthenticated(false);
-      }
-      setAuthChecking(false);
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const isOut = localStorage.getItem('vinimap_logged_out') === 'true';
-      const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
-      if (isOut) {
-        setIsAdminAuthenticated(false);
-      } else if (session || hasLocalSession) {
-        setIsAdminAuthenticated(true);
-      } else {
-        setIsAdminAuthenticated(false);
-      }
-      setAuthChecking(false);
-    }).catch(() => {
-      const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
-      setIsAdminAuthenticated(hasLocalSession);
-      setAuthChecking(false);
-    });
-
-    const authListener = supabase.auth.onAuthStateChange((_event, session) => {
-      const isOut = localStorage.getItem('vinimap_logged_out') === 'true';
-      const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
-      
-      if (_event === 'SIGNED_OUT' && !hasLocalSession) {
-        setIsAdminAuthenticated(false);
-      } else if (isOut) {
-        setIsAdminAuthenticated(false);
-      } else if (session || hasLocalSession) {
-        localStorage.removeItem('vinimap_logged_out');
-        localStorage.setItem('vinimap_admin_session', 'true');
-        setIsAdminAuthenticated(true);
-      }
-    });
-
-    return () => {
-      if (authListener && authListener.data && authListener.data.subscription) {
-        authListener.data.subscription.unsubscribe();
-      }
-    };
-  }, []);
 
   const handleLogout = async () => {
     localStorage.setItem('vinimap_logged_out', 'true');
@@ -3202,7 +3138,7 @@ export default function App() {
   }
 
   if (!isAdminAuthenticated) {
-    if (authChecking) {
+    if (isInitializing) {
       return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-semibold">Carregando...</div>;
     }
     return (
