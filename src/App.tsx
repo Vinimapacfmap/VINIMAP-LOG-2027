@@ -153,6 +153,11 @@ const generateUniqueLogId = (prefix: string = 'log') => {
 };
 
 export default function App() {
+  console.log('[ViniMap App.tsx] Componente App montado/renderizado.', {
+    isSupabaseConfigured,
+    time: new Date().toISOString()
+  });
+
   // Admin Auth State
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -166,6 +171,11 @@ export default function App() {
   const [authChecking, setAuthChecking] = useState(true);
 
   useEffect(() => {
+    console.log('[ViniMap App.tsx] useEffect de inicialização executado.', {
+      isAdminAuthenticated,
+      isSupabaseConfigured
+    });
+
     const loggedOut = localStorage.getItem('vinimap_logged_out');
     const localSession = localStorage.getItem('vinimap_admin_session') === 'true';
 
