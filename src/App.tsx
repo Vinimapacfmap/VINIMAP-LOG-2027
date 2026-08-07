@@ -166,7 +166,7 @@ export default function App() {
       const localSession = localStorage.getItem('vinimap_admin_session');
       if (localSession === 'true') return true;
     }
-    return !isSupabaseConfigured;
+    return false;
   });
   const [authChecking, setAuthChecking] = useState(true);
 
@@ -188,6 +188,8 @@ export default function App() {
     if (!isSupabaseConfigured || !supabase) {
       if (localSession) {
         setIsAdminAuthenticated(true);
+      } else {
+        setIsAdminAuthenticated(false);
       }
       setAuthChecking(false);
       return;
