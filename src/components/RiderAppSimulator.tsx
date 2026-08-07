@@ -2905,9 +2905,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 </div>
                               </div>
                             </div>
-                            <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 rounded-lg text-[9px] font-extrabold text-emerald-300 uppercase tracking-wider shrink-0">
-                              Bloqueado
-                            </span>
                           </div>
                         </div>
                       ) : (
