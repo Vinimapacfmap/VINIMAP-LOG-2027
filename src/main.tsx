@@ -5,7 +5,13 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './index.css';
 
-console.log('[ViniMap main.tsx] Inicializando aplicação ViniMap...');
+console.log('[ViniMap main.tsx] Inicializando aplicação ViniMap (Vercel Production Mode)...');
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    console.warn('[ViniMap Global Async Safety] Uncaught promise rejection:', event.reason);
+  });
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

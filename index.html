@@ -19,18 +19,27 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
-    <!-- Service Worker Registration for PWA Installation -->
+    <!-- Service Worker Registration for PWA Installation & Auto-Update -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(
             function(reg) {
-              console.log('SW Registered with scope:', reg.scope);
+              console.log('[Vinimap SW] SW Registrado com sucesso:', reg.scope);
+              // Força verificação imediata de atualizações no Vercel
+              reg.update();
             },
-            function(err) { console.warn('SW Registration failed:', err); }
+            function(err) { console.warn('[Vinimap SW] Falha no registro do Service Worker:', err); }
           );
         });
       }
+
+      // Handler global de erros de carregamento de scripts no Vercel
+      window.addEventListener('error', function(e) {
+        if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+          console.warn('[ViniMap Diagnostic] Erro ao carregar recurso estático:', e.target.src || e.target.href);
+        }
+      }, true);
     </script>
 
     <!-- Leaflet CSS and JS CDN -->

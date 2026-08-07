@@ -1,6 +1,6 @@
-const STATIC_CACHE_NAME = 'vinimap-static-v6';
-const TILE_CACHE_NAME = 'vinimap-tiles-v6';
-const DYNAMIC_CACHE_NAME = 'vinimap-dynamic-v6';
+const STATIC_CACHE_NAME = 'vinimap-static-v8';
+const TILE_CACHE_NAME = 'vinimap-tiles-v8';
+const DYNAMIC_CACHE_NAME = 'vinimap-dynamic-v8';
 
 // Core assets to pre-cache on SW installation
 const STATIC_ASSETS = [
@@ -143,27 +143,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // --- STRATEGY C: STATIC ASSETS & CDN DEPENDENCIES ---
+  // --- STRATEGY C: STATIC ASSETS & CDN DEPENDENCIES (Network First -> Cache Fallback) ---
   if (isStaticOrCdnAsset(url)) {
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request)
-          .then((networkResponse) => {
-            if (
-              networkResponse &&
-              (networkResponse.status === 200 || networkResponse.type === 'opaque' || networkResponse.type === 'cors')
-            ) {
-              const responseClone = networkResponse.clone();
-              caches.open(STATIC_CACHE_NAME).then((cache) => {
-                cache.put(event.request, responseClone);
-              });
-            }
-            return networkResponse;
-          })
-          .catch(() => cachedResponse);
-
-        return cachedResponse || fetchPromise;
-      })
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (
+            networkResponse &&
+            (networkResponse.status === 200 || networkResponse.type === 'opaque' || networkResponse.type === 'cors')
+          ) {
+            const responseClone = networkResponse.clone();
+            caches.open(STATIC_CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
     );
     return;
   }
