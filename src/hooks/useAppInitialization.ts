@@ -48,14 +48,20 @@ export function useAppInitialization(): AppInitState {
         // 2. Verificação assíncrona do Supabase & Sessão de Autenticação
         if (isSupabaseConfigured && supabase) {
           if (isMounted) setIsSupabaseReady(true);
-          console.log('[useAppInitialization] Supabase verificado. Checando sessão de usuário...');
+          console.log('[useAppInitialization] Supabase verificado. Checando sessão de usuário com timeout de segurança...');
 
           const loggedOut = localStorage.getItem('vinimap_logged_out');
           if (loggedOut === 'true') {
             if (isMounted) setIsAdminAuthenticated(false);
           } else {
             try {
-              const { data: { session } } = await supabase.auth.getSession();
+              // Safety timeout for Supabase getSession (max 1.5s) to avoid blocking rendering on Vercel
+              const sessionPromise = supabase.auth.getSession();
+              const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
+                setTimeout(() => resolve({ data: { session: null } }), 1500)
+              );
+
+              const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
               const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
               if (isMounted) {
                 if (session || hasLocalSession) {

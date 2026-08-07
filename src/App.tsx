@@ -3138,9 +3138,6 @@ export default function App() {
   }
 
   if (!isAdminAuthenticated) {
-    if (isInitializing) {
-      return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-semibold">Carregando...</div>;
-    }
     return (
       <AdminLogin 
         onSuccess={() => {
