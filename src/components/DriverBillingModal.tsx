@@ -75,6 +75,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
   const [editingFixedFee, setEditingFixedFee] = useState<string>('10.00');
   const [editingVariablePercent, setEditingVariablePercent] = useState<string>('2.5');
   const [editingFreightPercent, setEditingFreightPercent] = useState<string>('80');
+  const [editingFractionalValue, setEditingFractionalValue] = useState<string>('12.50');
 
   const [isConfigExpanded, setIsConfigExpanded] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
@@ -86,6 +87,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
       setEditingFixedFee((rider.billingFixedFee !== undefined ? rider.billingFixedFee : 10).toFixed(2));
       setEditingVariablePercent((rider.billingVariablePercent !== undefined ? rider.billingVariablePercent : 2.5).toString());
       setEditingFreightPercent((rider.billingFreightPercent !== undefined ? rider.billingFreightPercent : 80).toString());
+      setEditingFractionalValue((rider.billingFractionalValue !== undefined ? rider.billingFractionalValue : 12.50).toFixed(2));
     }
   }, [rider]);
 
@@ -150,8 +152,9 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
       billingFixedFee: parseFloat(editingFixedFee) || 0,
       billingVariablePercent: parseFloat(editingVariablePercent) || 0,
       billingFreightPercent: parseFloat(editingFreightPercent) || 0,
+      billingFractionalValue: parseFloat(editingFractionalValue) || 0,
     };
-  }, [rider, editingModel, editingFixedFee, editingVariablePercent, editingFreightPercent]);
+  }, [rider, editingModel, editingFixedFee, editingVariablePercent, editingFreightPercent, editingFractionalValue]);
 
   // Calculations for billing metrics based on simulated/active rider parameters
   const stats = useMemo(() => {
@@ -380,6 +383,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
       billingFixedFee: parseFloat(editingFixedFee) || 0,
       billingVariablePercent: parseFloat(editingVariablePercent) || 0,
       billingFreightPercent: parseFloat(editingFreightPercent) || 0,
+      billingFractionalValue: parseFloat(editingFractionalValue) || 0,
     };
 
     onUpdateRider(updatedRider);
@@ -396,6 +400,8 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
         return 'Apenas Percentual do Pedido';
       case 'frete':
         return 'Repasse de Frete (Tabela CEP)';
+      case 'fracionado':
+        return 'Formato Fracionado (Inclusão Manual)';
       case 'misto':
       default:
         return 'Modelo Misto (Fixo + Percentual)';
@@ -603,6 +609,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                               <option value="fixo">Apenas Taxa Fixa por Viagem</option>
                               <option value="variavel">Apenas Percentual do Pedido</option>
                               <option value="frete">Repasse de Frete (Tabela CEP do Cliente)</option>
+                              <option value="fracionado">Formato Fracionado (Inclusão Manual do Valor Cobrado)</option>
                             </select>
                           </div>
 
@@ -662,6 +669,25 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                             </div>
                           )}
 
+                          {/* Fractional / Manual Input */}
+                          {editingModel === 'fracionado' && (
+                            <div className="space-y-1.5 col-span-2">
+                              <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Valor Fracionado Padrão / Inclusão Manual (R$)</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                                <input
+                                  type="number"
+                                  step="0.50"
+                                  min="0"
+                                  value={editingFractionalValue}
+                                  onChange={(e) => setEditingFractionalValue(e.target.value)}
+                                  className="w-full text-xs font-bold text-slate-700 pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="12.50"
+                                />
+                              </div>
+                            </div>
+                          )}
+
                         </div>
 
                         {/* Description & Action */}
@@ -673,6 +699,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                               {editingModel === 'fixo' && `Simulador Ativo: R$ ${parseFloat(editingFixedFee || '0').toFixed(2)} por entrega. Nenhum repasse sobre valor dos itens.`}
                               {editingModel === 'variavel' && `Simulador Ativo: ${editingVariablePercent}% do valor total do pedido concluído. Sem prêmio fixo.`}
                               {editingModel === 'frete' && `Simulador Ativo: Repassa ao condutor ${editingFreightPercent}% da taxa de frete cobrada do cliente parceiro por faixa de CEP.`}
+                              {editingModel === 'fracionado' && `Simulador Ativo: Formato Fracionado com inclusão manual do valor cobrado por entrega (Base padrão: R$ ${parseFloat(editingFractionalValue || '0').toFixed(2)} ou valor do pedido).`}
                             </span>
                           </p>
 

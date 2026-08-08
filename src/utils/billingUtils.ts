@@ -175,6 +175,7 @@ export function calculateRiderCommissionForOrder(
   fixed: number;
   variable: number;
   freight: number;
+  fractional: number;
   model: string;
 } {
   // REGRA: Ao desalocar ou cancelar o pedido, o frete/repasse NÃO é contabilizado para o condutor antigo (retorna 0).
@@ -185,6 +186,7 @@ export function calculateRiderCommissionForOrder(
       fixed: 0,
       variable: 0,
       freight: 0,
+      fractional: 0,
       model: rider?.billingModel || 'nenhum'
     };
   }
@@ -193,11 +195,13 @@ export function calculateRiderCommissionForOrder(
   const fixedFee = rider.billingFixedFee !== undefined ? rider.billingFixedFee : 10;
   const variablePercent = rider.billingVariablePercent !== undefined ? rider.billingVariablePercent : 2.5;
   const freightPercent = rider.billingFreightPercent !== undefined ? rider.billingFreightPercent : 80;
+  const fractionalDefault = rider.billingFractionalValue !== undefined ? rider.billingFractionalValue : 12.50;
 
   let total = 0;
   let fixed = 0;
   let variable = 0;
   let freight = 0;
+  let fractional = 0;
 
   if (order.status === 'Concluído') {
     switch (model) {
@@ -213,6 +217,25 @@ export function calculateRiderCommissionForOrder(
         freight = getOrderDriverRepassValue(order, clientPartners, freightPercent);
         total = freight;
         break;
+      case 'fracionado': {
+        // Prioritize manually included charged value on order (driverValue or rawData)
+        if (order.driverValue !== undefined && order.driverValue !== null && order.driverValue > 0) {
+          fractional = order.driverValue;
+        } else if (order.rawData) {
+          const rawVal = order.rawData['ValorCondutor'] || order.rawData['ValorCobrado'] || order.rawData['ValorFracionado'] || order.rawData['valorcondutor'] || order.rawData['valorcobrado'];
+          if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
+            const parsed = parseFloat(String(rawVal).replace(',', '.'));
+            if (!isNaN(parsed) && parsed > 0) {
+              fractional = parsed;
+            }
+          }
+        }
+        if (fractional === 0) {
+          fractional = fractionalDefault;
+        }
+        total = fractional;
+        break;
+      }
       case 'misto':
       default:
         fixed = fixedFee;
@@ -227,6 +250,7 @@ export function calculateRiderCommissionForOrder(
     fixed,
     variable,
     freight,
+    fractional,
     model
   };
 }

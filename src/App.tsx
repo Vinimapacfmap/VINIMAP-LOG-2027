@@ -1208,6 +1208,7 @@ export default function App() {
   const [newRiderBillingFixedFee, setNewRiderBillingFixedFee] = useState<string>('10.00');
   const [newRiderBillingVariablePercent, setNewRiderBillingVariablePercent] = useState<string>('2.5');
   const [newRiderBillingFreightPercent, setNewRiderBillingFreightPercent] = useState<string>('80');
+  const [newRiderBillingFractionalValue, setNewRiderBillingFractionalValue] = useState<string>('12.50');
   const [isNewRiderModalOpen, setIsNewRiderModalOpen] = useState(false);
   const [showRiderForm, setShowRiderForm] = useState(false);
   const [showRiderEarnings, setShowRiderEarnings] = useState<boolean>(true);
@@ -1359,6 +1360,7 @@ export default function App() {
         billingFixedFee: parseFloat(newRiderBillingFixedFee) || 0,
         billingVariablePercent: parseFloat(newRiderBillingVariablePercent) || 0,
         billingFreightPercent: parseFloat(newRiderBillingFreightPercent) || 0,
+        billingFractionalValue: parseFloat(newRiderBillingFractionalValue) || 0,
       };
 
       try {
@@ -1391,6 +1393,7 @@ export default function App() {
         setNewRiderBillingFixedFee('10.00');
         setNewRiderBillingVariablePercent('2.5');
         setNewRiderBillingFreightPercent('80');
+        setNewRiderBillingFractionalValue('12.50');
         setIsNewRiderModalOpen(false);
         setShowRiderForm(false);
       } catch (err: any) {
@@ -1425,6 +1428,7 @@ export default function App() {
       billingFixedFee: parseFloat(newRiderBillingFixedFee) || 0,
       billingVariablePercent: parseFloat(newRiderBillingVariablePercent) || 0,
       billingFreightPercent: parseFloat(newRiderBillingFreightPercent) || 0,
+      billingFractionalValue: parseFloat(newRiderBillingFractionalValue) || 0,
     };
 
     try {
@@ -4699,6 +4703,7 @@ export default function App() {
                                           setNewRiderBillingFixedFee((item.billingFixedFee ?? 10).toString());
                                           setNewRiderBillingVariablePercent((item.billingVariablePercent ?? 2.5).toString());
                                           setNewRiderBillingFreightPercent((item.billingFreightPercent ?? 80).toString());
+                                          setNewRiderBillingFractionalValue((item.billingFractionalValue ?? 12.50).toString());
                                           setNewRiderName(item.name);
                                           setNewRiderVehicle(item.vehicle);
                                           setNewRiderPhone(item.phone || '');

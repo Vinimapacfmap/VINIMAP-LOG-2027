@@ -131,7 +131,7 @@ export function isMatchingClientCode(partnerIdOrCode: string | undefined, target
   return false;
 }
 
-export type BillingModelType = 'misto' | 'fixo' | 'variavel' | 'frete';
+export type BillingModelType = 'misto' | 'fixo' | 'variavel' | 'frete' | 'fracionado';
 
 export interface DeliveryRider {
   id: string;
@@ -155,6 +155,7 @@ export interface DeliveryRider {
   billingFixedFee?: number;
   billingVariablePercent?: number;
   billingFreightPercent?: number;
+  billingFractionalValue?: number; // Valor fracionado padrão ou cobrado manualmente por entrega
   exibirValorTurno?: boolean;
   ocultarValoresProtocolos?: boolean;
   autorizarImprimirRecibo?: boolean;
