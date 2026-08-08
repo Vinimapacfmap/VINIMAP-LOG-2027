@@ -35,6 +35,7 @@ import {
   MapPin, 
   Navigation, 
   Compass,
+  ArrowLeft,
   Maximize2,
   Minimize2,
   CheckCircle2, 
@@ -320,6 +321,100 @@ export default function RiderAppSimulator({
   const [currentScreen, setCurrentScreen] = useState<'login' | 'dashboard' | 'map' | 'deliveries' | 'details'>('login');
   const [activeTab, setActiveTab] = useState<'home' | 'map' | 'tasks' | 'protocols' | 'help'>('home');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  // Helper to persist driver session and selected order before external map navigation
+  const prepareExternalMapNavigation = (orderToNavigate?: Order | null) => {
+    if (typeof window !== 'undefined') {
+      const targetRiderId = selectedRiderId || lockedRiderId;
+      if (targetRiderId) {
+        localStorage.setItem('vinimap_driver_id', targetRiderId);
+        localStorage.setItem('vinimap_driver_logged_in', 'true');
+      }
+      const targetOrd = orderToNavigate || selectedOrder;
+      if (targetOrd) {
+        setSelectedOrder(targetOrd);
+        localStorage.setItem('vinimap_driver_selected_order_id', targetOrd.id);
+        localStorage.setItem('vinimap_driver_active_screen', 'details');
+        localStorage.setItem('vinimap_driver_active_tab', 'tasks');
+      } else {
+        localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
+      }
+    }
+  };
+
+  // Persist driver active screen and selected order in localStorage so returning from Google Maps / map view doesn't reset to login screen
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (selectedRiderId && currentScreen !== 'login') {
+        localStorage.setItem('vinimap_driver_id', selectedRiderId);
+        localStorage.setItem('vinimap_driver_logged_in', 'true');
+        localStorage.setItem('vinimap_driver_active_screen', currentScreen);
+        localStorage.setItem('vinimap_driver_active_tab', activeTab);
+        if (selectedOrder) {
+          localStorage.setItem('vinimap_driver_selected_order_id', selectedOrder.id);
+        }
+      }
+    }
+  }, [selectedRiderId, currentScreen, activeTab, selectedOrder]);
+
+  // Restore active session and selected order when returning to the app (e.g., after viewing map)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const savedLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
+    const savedRiderId = localStorage.getItem('vinimap_driver_id') || lockedRiderId || selectedRiderId;
+    const savedOrderId = localStorage.getItem('vinimap_driver_selected_order_id');
+    const savedScreen = localStorage.getItem('vinimap_driver_active_screen');
+    const savedTab = localStorage.getItem('vinimap_driver_active_tab');
+
+    if (savedRiderId) {
+      const targetRider = riders.find(r => r.id === savedRiderId);
+      if (targetRider) {
+        if (!selectedRiderId || selectedRiderId !== targetRider.id) {
+          setSelectedRiderId(targetRider.id);
+        }
+        
+        // Auto restore order if saved
+        if (savedOrderId && orders.length > 0) {
+          const foundOrder = orders.find(o => o.id === savedOrderId);
+          if (foundOrder) {
+            setSelectedOrder(foundOrder);
+          }
+        }
+
+        // Auto restore logged-in screen instead of resetting to login
+        if (savedLoggedIn || targetRider.isLoggedIn || isStandalone || isEffectiveRealDevice) {
+          if (savedScreen === 'details' && savedOrderId) {
+            setCurrentScreen('details');
+            setActiveTab('tasks');
+          } else if (savedScreen === 'map' || savedTab === 'map') {
+            setActiveTab('map');
+            if (savedOrderId) {
+              setCurrentScreen('details');
+            } else {
+              setCurrentScreen('dashboard');
+            }
+          } else if (savedScreen === 'dashboard' || savedScreen === 'deliveries') {
+            setCurrentScreen('dashboard');
+            if (savedTab) setActiveTab(savedTab as any);
+          } else if (currentScreen === 'login') {
+            // Fallback for active driver session: restore details if order exists, otherwise dashboard
+            setCurrentScreen(savedOrderId ? 'details' : 'dashboard');
+          }
+        }
+      }
+    }
+  }, [riders, orders, isStandalone, isEffectiveRealDevice]);
+
+  // Keep selectedOrder synced with updated orders prop
+  useEffect(() => {
+    if (selectedOrder && orders.length > 0) {
+      const freshOrder = orders.find(o => o.id === selectedOrder.id);
+      if (freshOrder && freshOrder !== selectedOrder) {
+        setSelectedOrder(freshOrder);
+      }
+    }
+  }, [orders]);
 
   // Individual Login State
   const [phoneInput, setPhoneInput] = useState<string>('');
@@ -1581,7 +1676,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.address)}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              prepareExternalMapNavigation(order);
+                            }}
                             className="col-span-2 py-2 px-3 bg-slate-900 hover:bg-black text-white rounded-xl font-extrabold text-[10px] flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
                           >
                             <MapPin size={12} className="text-emerald-400 animate-pulse" />
@@ -3111,6 +3209,13 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               console.warn('Error saving logout state:', e);
                             }
                           }
+                          if (typeof window !== 'undefined') {
+                            localStorage.removeItem('vinimap_driver_logged_in');
+                            localStorage.removeItem('vinimap_driver_active_screen');
+                            localStorage.removeItem('vinimap_driver_active_tab');
+                            localStorage.removeItem('vinimap_driver_selected_order_id');
+                          }
+                          setSelectedOrder(null);
                           setCurrentScreen('login');
                         }}
                         className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
@@ -3530,6 +3635,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentNextOrder.address)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={() => prepareExternalMapNavigation(currentNextOrder)}
                                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-extrabold flex items-center gap-1.5 shadow-sm transition-all"
                               >
                                 <Navigation size={12} />
@@ -3546,6 +3652,21 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               </button>
                             )}
                           </div>
+
+                          {/* Button to Return to Selected Order */}
+                          {selectedOrder && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('tasks');
+                                setCurrentScreen('details');
+                              }}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] py-2 px-3 rounded-2xl flex items-center justify-center gap-1.5 shadow-lg cursor-pointer transition-all border border-blue-400/30"
+                            >
+                              <ArrowLeft size={13} />
+                              <span>Voltar ao Pedido Selecionado (#{selectedOrder.id})</span>
+                            </button>
+                          )}
 
                           {/* Real GPS live coordinates badge */}
                           {isRealGpsActive && realGpsData && (
@@ -3584,6 +3705,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentNextOrder.address)}`}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={() => prepareExternalMapNavigation(currentNextOrder)}
                               className="px-3 py-2 bg-slate-900 hover:bg-black text-white text-[10px] font-black rounded-xl cursor-pointer flex items-center gap-1.5 shadow-md"
                             >
                               <Navigation size={11} className="text-emerald-400" />
@@ -3744,6 +3866,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selectedOrder.address)}`}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => prepareExternalMapNavigation(selectedOrder)}
                             className="w-full py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                           >
                             <Navigation size={14} className="text-emerald-400 animate-pulse" />

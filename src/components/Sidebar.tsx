@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
+import { DiagnosticUtility } from './DiagnosticUtility';
 
 interface SidebarProps {
   activeSection: string;
@@ -313,6 +314,11 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
             );
           })}
         </nav>
+      </div>
+
+      {/* Vercel & Supabase Status inside Sidebar */}
+      <div className="p-2 border-t border-slate-100 shrink-0">
+        <DiagnosticUtility mode="sidebar" isExpanded={isExpanded} />
       </div>
 
       {/* Sidebar Footer */}

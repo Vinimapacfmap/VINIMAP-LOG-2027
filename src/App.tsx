@@ -5754,9 +5754,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Floating Vercel & Supabase Diagnostic Assistant */}
-      <DiagnosticUtility />
     </div>
   );
 }
