@@ -2199,27 +2199,17 @@ function OrdersTable({
     >
       <div className={`bg-white rounded-2xl flex flex-col h-full overflow-hidden ${isFullscreen ? 'shadow-2xl border border-slate-200' : ''}`}>
       
-      {/* 1. OPERATIONAL KPI DECK (INTERACTIVE FILTER TABS) */}
-      <div className="p-5 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-          <div>
-            <h3 className="font-extrabold text-slate-800 text-sm">Controle de Entregas</h3>
-            <p className="text-xs text-slate-400 mt-0.5 font-medium">Gestão inteligente de despacho, alocação de condutores e monitoramento de status</p>
-          </div>
-          <div className="text-[10px] text-slate-400 font-bold bg-white border border-slate-100 px-3 py-1 rounded-xl self-start md:self-auto">
-            SLA padrão: <span className="text-blue-600 font-black">SP Capital</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3" id="orders-kpi-deck">
+      {/* 1. COMPACT STATUS TABS FILTER BAR */}
+      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 rounded-t-2xl">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" id="orders-status-tabs">
           {[
-            { key: 'Todos', label: 'Todos os Pedidos', color: 'border-blue-200 text-blue-700 bg-blue-50/40 hover:bg-blue-50', icon: <Grid size={13} />, count: orders.length, desc: 'Acervo Geral' },
-            { key: 'Não iniciado', label: 'Não Iniciados', color: 'border-amber-200 text-amber-700 bg-amber-50/40 hover:bg-amber-50', icon: <Clock size={13} />, count: orders.filter(o => o.status === 'Não iniciado').length, desc: 'Aguard. Despacho' },
-            { key: 'Em rota', label: 'Em Rota', color: 'border-sky-200 text-sky-700 bg-sky-50/40 hover:bg-sky-50', icon: <Truck size={13} />, count: orders.filter(o => o.status === 'Em rota').length, desc: 'Em Trânsito' },
-            { key: 'Entregando', label: 'Entregando', color: 'border-indigo-200 text-indigo-700 bg-indigo-50/40 hover:bg-indigo-50', icon: <Truck size={13} />, count: orders.filter(o => o.status === 'Entregando').length, desc: 'Última Milha' },
-            { key: 'Concluído', label: 'Concluídos', color: 'border-emerald-200 text-emerald-700 bg-emerald-50/40 hover:bg-emerald-50', icon: <CheckCircle2 size={13} />, count: orders.filter(o => o.status === 'Concluído').length, desc: 'Sucesso Total' },
-            { key: 'Ocorrência', label: 'Ocorrências', color: 'border-rose-200 text-rose-700 bg-rose-50/40 hover:bg-rose-50', icon: <AlertCircle size={13} />, count: orders.filter(o => o.status === 'Ocorrência').length, desc: 'Atenção Crítica' },
-            { key: 'Cancelado', label: 'Cancelados', color: 'border-slate-200 text-slate-700 bg-slate-50/40 hover:bg-slate-50', icon: <Ban size={13} />, count: orders.filter(o => o.status === 'Cancelado').length, desc: 'Devolvidos' }
+            { key: 'Todos', label: 'Todos os Pedidos', activeColor: 'bg-blue-600 text-white shadow-sm shadow-blue-200', count: orders.length },
+            { key: 'Não iniciado', label: 'Não Iniciados', activeColor: 'bg-amber-600 text-white shadow-sm shadow-amber-200', count: orders.filter(o => o.status === 'Não iniciado').length },
+            { key: 'Em rota', label: 'Em Rota', activeColor: 'bg-sky-600 text-white shadow-sm shadow-sky-200', count: orders.filter(o => o.status === 'Em rota').length },
+            { key: 'Entregando', label: 'Entregando', activeColor: 'bg-indigo-600 text-white shadow-sm shadow-indigo-200', count: orders.filter(o => o.status === 'Entregando').length },
+            { key: 'Concluído', label: 'Concluídos', activeColor: 'bg-emerald-600 text-white shadow-sm shadow-emerald-200', count: orders.filter(o => o.status === 'Concluído').length },
+            { key: 'Ocorrência', label: 'Ocorrências', activeColor: 'bg-rose-600 text-white shadow-sm shadow-rose-200', count: orders.filter(o => o.status === 'Ocorrência').length },
+            { key: 'Cancelado', label: 'Cancelados', activeColor: 'bg-slate-700 text-white shadow-sm shadow-slate-200', count: orders.filter(o => o.status === 'Cancelado').length }
           ].map((item) => {
             const isActive = activeTab === item.key;
             return (
@@ -2231,26 +2221,18 @@ function OrdersTable({
                   setCurrentPage(1);
                   setSelectedIds(new Set());
                 }}
-                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between h-24 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-2 ${
                   isActive 
-                    ? `${item.color} border-2 ring-2 ring-blue-500/15 shadow-md transform scale-[1.01]` 
-                    : 'border-slate-100 bg-white hover:border-slate-200 shadow-sm'
+                    ? `${item.activeColor}` 
+                    : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-800 border border-slate-200/80 shadow-2xs'
                 }`}
               >
-                <div className="flex items-center justify-between w-full">
-                  <span className={`p-1.5 rounded-xl ${isActive ? 'bg-white/90 shadow-sm' : 'bg-slate-50 text-slate-400'}`}>
-                    {item.icon}
-                  </span>
-                  <span className={`text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full ${
-                    isActive ? 'bg-white text-slate-800 shadow-xs' : 'bg-slate-100 text-slate-500'
-                  }`}>
-                    {item.count}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="text-[11px] font-extrabold text-slate-800 leading-none truncate">{item.label}</h4>
-                  <p className="text-[9px] text-slate-400 font-semibold mt-1 leading-none">{item.desc}</p>
-                </div>
+                <span>{item.label}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-black ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  {item.count}
+                </span>
               </button>
             );
           })}

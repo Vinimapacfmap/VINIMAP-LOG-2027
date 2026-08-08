@@ -3177,10 +3177,12 @@ export default function App() {
           isSyncingSupabase={isSyncingSupabase}
           lastSupabaseSyncTime={lastSupabaseSyncTime}
           supabaseSyncStatus={supabaseSyncStatus}
+          orders={orders}
+          onNavigateToOrders={() => setActiveSection('pedidos')}
         />
 
         {/* Scrollable Stage area */}
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <main className={`flex-1 overflow-y-auto ${activeSection === 'pedidos' ? 'p-3 sm:p-5 space-y-4 w-full max-w-none' : 'p-6 space-y-6'}`}>
 
           <AnimatePresence mode="wait">
             
@@ -3355,35 +3357,16 @@ export default function App() {
               </motion.div>
             )}
 
-            {/* VIEW 2: FULL FOCUSED ORDERS SCREEN */}
+            {/* VIEW 2: FULL FOCUSED ORDERS SCREEN (FULL SCREEN WITH FILTERS DEFAULT) */}
             {activeSection === 'pedidos' && (
               <motion.div
                 key="pedidos-view"
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
-                className="w-full space-y-6"
+                className="w-full space-y-4"
                 id="view-pedidos"
               >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 border border-slate-100 rounded-2xl shadow-sm">
-                  <div>
-                    <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Central de Pedidos</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Gestão de faturamento, triagem, filtros avançados e despacho de encomendas.</p>
-                  </div>
-
-                  {filterPartner && (
-                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl">
-                      <span className="text-xs font-bold text-blue-800">Parceiro Filtrado: {filterPartner}</span>
-                      <button 
-                        onClick={() => setFilterPartner('')}
-                        className="text-blue-600 hover:text-blue-900 font-extrabold text-xs ml-1 cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-                </div>
-
                 {/* Global FiltersBar for Pedidos screen */}
                 <GlobalFilters
                   filterDateFrom={filterDateFrom}
