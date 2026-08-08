@@ -159,7 +159,9 @@ export default function App() {
     isAdminAuthenticated,
     setIsAdminAuthenticated,
     isFirebaseReady,
-    isSupabaseReady
+    isSupabaseReady,
+    isNetworkHealthy,
+    networkHealthError
   } = useAppInitialization();
 
   console.log('[ViniMap App.tsx] Componente App renderizando.', {

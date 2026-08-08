@@ -21,23 +21,58 @@
 
     <!-- Service Worker Registration for PWA Installation & Auto-Update -->
     <script>
+      // Função auxiliar para purgar Service Workers e Cache em caso de falha de bundle no Vercel
+      window.__vinimapPurgeCachesAndReload = function() {
+        if (sessionStorage.getItem('vinimap_reloaded_for_chunk_error')) return;
+        sessionStorage.setItem('vinimap_reloaded_for_chunk_error', 'true');
+        console.warn('[ViniMap Diagnostic] Purgando caches e recarregando para resolver versão obsoleta do Vercel...');
+        
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(reg) { reg.unregister(); });
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) { caches.delete(name); });
+          });
+        }
+        setTimeout(function() {
+          window.location.reload(true);
+        }, 300);
+      };
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(
             function(reg) {
               console.log('[Vinimap SW] SW Registrado com sucesso:', reg.scope);
-              // Força verificação imediata de atualizações no Vercel
               reg.update();
+
+              reg.onupdatefound = function() {
+                var installingWorker = reg.installing;
+                if (installingWorker) {
+                  installingWorker.onstatechange = function() {
+                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                      console.log('[Vinimap SW] Nova versão instalada. Notificando cliente...');
+                      if (installingWorker.postMessage) {
+                        installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                      }
+                    }
+                  };
+                }
+              };
             },
             function(err) { console.warn('[Vinimap SW] Falha no registro do Service Worker:', err); }
           );
         });
       }
 
-      // Handler global de erros de carregamento de scripts no Vercel
+      // Handler global de erros de carregamento de scripts/links no Vercel
       window.addEventListener('error', function(e) {
         if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
           console.warn('[ViniMap Diagnostic] Erro ao carregar recurso estático:', e.target.src || e.target.href);
+          window.__vinimapPurgeCachesAndReload();
         }
       }, true);
     </script>

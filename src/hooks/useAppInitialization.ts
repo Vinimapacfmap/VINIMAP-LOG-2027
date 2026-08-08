@@ -8,17 +8,21 @@ export interface AppInitState {
   setIsAdminAuthenticated: React.Dispatch<React.SetStateAction<boolean>>;
   isFirebaseReady: boolean;
   isSupabaseReady: boolean;
+  isNetworkHealthy: boolean;
+  networkHealthError: string | null;
   initError: string | null;
 }
 
 /**
  * Hook assíncrono para inicialização de serviços (Firebase, Supabase e Autenticação).
- * Previne bloqueios na renderização principal do aplicativo.
+ * Realiza health check de rede antes de conectar aos serviços externos para evitar telas em branco.
  */
 export function useAppInitialization(): AppInitState {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isFirebaseReady, setIsFirebaseReady] = useState(false);
   const [isSupabaseReady, setIsSupabaseReady] = useState(false);
+  const [isNetworkHealthy, setIsNetworkHealthy] = useState(true);
+  const [networkHealthError, setNetworkHealthError] = useState<string | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
 
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
@@ -34,12 +38,44 @@ export function useAppInitialization(): AppInitState {
   useEffect(() => {
     let isMounted = true;
     const startTime = performance.now();
-    console.log('[useAppInitialization] [START] Iniciando verificação e inicialização assíncrona dos serviços...', {
+    console.log('[useAppInitialization] [START] Iniciando verificação de saúde de rede e serviços...', {
       timestamp: new Date().toISOString()
     });
 
     const initializeServices = async () => {
       try {
+        // 0. Health Check de Rede Prévia (evita travamentos se offline ou instável)
+        const isOnlineNavigator = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        let pingSuccess = false;
+
+        if (isOnlineNavigator) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const response = await fetch('/manifest.json', { 
+              method: 'HEAD', 
+              signal: controller.signal,
+              cache: 'no-store'
+            }).catch(() => null);
+            clearTimeout(timeoutId);
+
+            if (response && (response.ok || response.status < 500)) {
+              pingSuccess = true;
+            }
+          } catch (_) {
+            pingSuccess = false;
+          }
+        }
+
+        const healthy = isOnlineNavigator && (pingSuccess || isOnlineNavigator);
+        if (isMounted) {
+          setIsNetworkHealthy(healthy);
+          if (!healthy) {
+            setNetworkHealthError('Conexão de rede limitada ou offline. A aplicação está operando com dados locais salvos.');
+            console.warn('[useAppInitialization] [HEALTH CHECK WARN] Dispositivo offline ou servidor inacessível.');
+          }
+        }
+
         // 1. Verificação assíncrona do Firebase Firestore (não-bloqueante)
         console.log('[useAppInitialization] [FIREBASE INIT START]', {
           timestamp: new Date().toISOString(),
@@ -201,6 +237,8 @@ export function useAppInitialization(): AppInitState {
     setIsAdminAuthenticated,
     isFirebaseReady,
     isSupabaseReady,
+    isNetworkHealthy,
+    networkHealthError,
     initError
   };
 }

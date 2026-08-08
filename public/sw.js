@@ -1,11 +1,10 @@
-const STATIC_CACHE_NAME = 'vinimap-static-v9';
-const TILE_CACHE_NAME = 'vinimap-tiles-v9';
-const DYNAMIC_CACHE_NAME = 'vinimap-dynamic-v9';
+const CACHE_VERSION = 'v10-fresh';
+const STATIC_CACHE_NAME = `vinimap-static-${CACHE_VERSION}`;
+const TILE_CACHE_NAME = `vinimap-tiles-${CACHE_VERSION}`;
+const DYNAMIC_CACHE_NAME = `vinimap-dynamic-${CACHE_VERSION}`;
 
-// Core assets to pre-cache on SW installation
+// Core assets to pre-cache on SW installation (exclui index.html para evitar mídias/bundles obsoletos no Vercel)
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -121,15 +120,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // --- STRATEGY B: HTML NAVIGATION (Network First -> SPA index.html Fallback) ---
+  // --- STRATEGY B: HTML NAVIGATION (Always Fresh Network First -> Cache Fallback) ---
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { cache: 'no-cache' })
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
             caches.open(STATIC_CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
+              cache.put('/index.html', responseClone);
             });
           }
           return networkResponse;
@@ -184,6 +183,19 @@ self.addEventListener('fetch', (event) => {
 
 // 4. Message Handler
 self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  if (event.data && event.data.type === 'CLEAR_ALL_CACHES') {
+    caches.keys().then((keys) => {
+      return Promise.all(keys.map((k) => caches.delete(k)));
+    }).then(() => {
+      console.log('[SW] Todos os caches do Service Worker foram purgados.');
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ success: true });
+      }
+    });
+  }
   if (event.data && event.data.type === 'CLEAR_TILE_CACHE') {
     caches.delete(TILE_CACHE_NAME).then(() => {
       console.log('[SW] Map tiles cache purged');
