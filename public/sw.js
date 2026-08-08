@@ -142,25 +142,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // --- STRATEGY C: STATIC ASSETS & CDN DEPENDENCIES (Network First -> Cache Fallback) ---
+  // --- STRATEGY C: STATIC ASSETS & CDN DEPENDENCIES (Stale-While-Revalidate) ---
   if (isStaticOrCdnAsset(url)) {
     event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          if (
-            networkResponse &&
-            (networkResponse.status === 200 || networkResponse.type === 'opaque' || networkResponse.type === 'cors')
-          ) {
-            const responseClone = networkResponse.clone();
-            caches.open(STATIC_CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
+      caches.open(STATIC_CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          // Background network fetch to revalidate and update cache
+          const fetchPromise = fetch(event.request)
+            .then((networkResponse) => {
+              if (
+                networkResponse &&
+                (networkResponse.status === 200 || networkResponse.type === 'opaque' || networkResponse.type === 'cors')
+              ) {
+                cache.put(event.request, networkResponse.clone());
+              }
+              return networkResponse;
+            })
+            .catch((err) => {
+              console.warn('[SW] Background revalidation fetch failed:', event.request.url, err);
+              return cachedResponse;
             });
-          }
-          return networkResponse;
-        })
-        .catch(() => {
-          return caches.match(event.request);
-        })
+
+          // Instantly return cached response if present, otherwise wait for network
+          return cachedResponse || fetchPromise;
+        });
+      })
     );
     return;
   }
