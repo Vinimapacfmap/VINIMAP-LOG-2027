@@ -1,21 +1,20 @@
 import { DeliveryRider, Order, ClientPartner, isMatchingClientCode } from '../types';
 
 export function getOrderFreightValue(order: Order, clientPartners: ClientPartner[]): number {
-  // 1. If there's an explicit delivery value already set on the order, preserve it for existing orders
-  if (order.deliveryValue !== undefined && order.deliveryValue !== null && order.deliveryValue > 0) {
-    return order.deliveryValue;
+  if (!order) return 10;
+
+  // Clean and validate order CEP
+  let orderCepClean = (order.cep || '').replace(/\D/g, '');
+  if (orderCepClean.length > 0 && orderCepClean.length < 8) {
+    orderCepClean = orderCepClean.padStart(8, '0');
   }
 
+  // 1. Prioritize partner's freight table (tabela de frete do parceiro)
   if (clientPartners && clientPartners.length > 0) {
     // Find matching client partner using standard robust code matching helper
     const cp = clientPartners.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente));
 
     if (cp && cp.cepRanges && cp.cepRanges.length > 0) {
-      let orderCepClean = (order.cep || '').replace(/\D/g, '');
-      if (orderCepClean.length > 0 && orderCepClean.length < 8) {
-        orderCepClean = orderCepClean.padStart(8, '0');
-      }
-
       if (orderCepClean.length === 8) {
         const orderCepNum = parseInt(orderCepClean, 10);
 
@@ -78,12 +77,12 @@ export function getOrderFreightValue(order: Order, clientPartners: ClientPartner
     }
   }
 
-  // Fallback if deliveryValue was 0 or not found in ranges
-  if (order.deliveryValue !== undefined && order.deliveryValue !== null && order.deliveryValue >= 0) {
+  // 2. Fallback to explicit delivery value on order if not matched in partner's freight table
+  if (order.deliveryValue !== undefined && order.deliveryValue !== null && order.deliveryValue > 0) {
     return order.deliveryValue;
   }
 
-  // 2. Fallback to rawData spreadsheet column if present
+  // 3. Fallback to rawData spreadsheet column if present
   if (order.rawData) {
     const rawVal = order.rawData['ValorEntrega'] || order.rawData['valorentrega'];
     if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
