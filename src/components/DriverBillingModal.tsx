@@ -234,12 +234,12 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
         const orderCommission = isConcluded ? commResult.total : 0;
         
         return {
-          'Cód/Protocolo': `#${order.protocolNumber || order.id.substring(0, 8)}`,
           'Nº do Pedido': order.id.replace('ped-', '') || order.id,
           'Data': formatToBrazilianDate(order.date),
           'Estabelecimento': getPartnerDisplayName(order.partnerName, clientPartners),
           'Cliente': order.clientName,
           'Endereço': order.address,
+          'CEP': order.cep || (order.rawData && (order.rawData.CEP || order.rawData.cep)) || 'N/D',
           'Status': order.status,
           'Frete (R$)': orderCommission
         };
@@ -298,19 +298,19 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
       doc.text(`Total de Repasse Acumulado: ${stats.totalCommission.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 52);
 
       // Table headers & body (excluding "Valor do Pedido", changing "Comissão" to "Frete")
-      const pdfHeaders = [['Cód/Protocolo', 'Nº Pedido', 'Data', 'Estabelecimento', 'Cliente', 'Endereço', 'Status', 'Frete']];
+      const pdfHeaders = [['Nº Pedido', 'Data', 'Estabelecimento', 'Cliente', 'Endereço', 'CEP', 'Status', 'Frete']];
       const pdfBody = filteredOrders.map(order => {
         const isConcluded = order.status === 'Concluído';
         const commResult = calculateRiderCommissionForOrder(simulatedRider || undefined, order, clientPartners);
         const orderCommission = isConcluded ? commResult.total : 0;
 
         return [
-          `#${order.protocolNumber || order.id.substring(0, 8)}`,
           order.id.replace('ped-', '') || order.id,
           formatToBrazilianDate(order.date),
           getPartnerDisplayName(order.partnerName, clientPartners),
           order.clientName,
           order.address,
+          order.cep || (order.rawData && (order.rawData.CEP || order.rawData.cep)) || '-',
           order.status,
           orderCommission.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         ];
@@ -933,12 +933,12 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                 <table className="min-w-full text-xs text-slate-600 border-collapse print-table">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase print:bg-slate-100 print:border-slate-300">
-                      <th className="px-4 py-3">Cód/Protocolo</th>
                       <th className="px-4 py-3">Nº Pedido</th>
                       <th className="px-4 py-3 text-center">Data</th>
                       <th className="px-4 py-3">Estabelecimento</th>
                       <th className="px-4 py-3">Cliente</th>
                       <th className="px-4 py-3">Endereço</th>
+                      <th className="px-4 py-3">CEP</th>
                       <th className="px-4 py-3 text-right print:hidden">Valor Pedido</th>
                       <th className="px-4 py-3 text-center">Status</th>
                       <th className="px-4 py-3 text-right">
@@ -959,13 +959,11 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                         const isConcluded = order.status === 'Concluído';
                         const commResult = calculateRiderCommissionForOrder(simulatedRider || undefined, order, clientPartners);
                         const orderCommission = commResult.total;
+                        const orderCep = order.cep || (order.rawData && (order.rawData.CEP || order.rawData.cep)) || '-';
                         
                         return (
                            <tr key={order.id} className="hover:bg-slate-50/40 print:hover:bg-transparent">
-                            <td className="px-4 py-3 font-bold text-slate-800">
-                              #{order.protocolNumber || order.id.substring(0, 8)}
-                            </td>
-                            <td className="px-4 py-3 font-mono text-[11px] text-slate-500 font-bold">
+                            <td className="px-4 py-3 font-mono text-[11px] text-slate-800 font-bold">
                               {order.id.replace('ped-', '') || order.id}
                             </td>
                             <td className="px-4 py-3 text-center whitespace-nowrap text-slate-500 font-semibold">
@@ -979,6 +977,9 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                             </td>
                             <td className="px-4 py-3 text-slate-500 font-medium truncate max-w-[150px]" title={order.address}>
                               {order.address}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 font-mono text-[11px] font-semibold whitespace-nowrap">
+                              {orderCep}
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-slate-700 print:hidden">
                               {order.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}

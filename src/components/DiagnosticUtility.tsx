@@ -50,7 +50,7 @@ export const DiagnosticUtility: React.FC = () => {
   };
 
   return (
-    <div id="diagnostic-utility-container" className="fixed bottom-4 right-4 z-[9999] font-sans">
+    <div id="diagnostic-utility-container" className="fixed top-18 right-4 z-[9999] font-sans">
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
