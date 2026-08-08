@@ -3369,6 +3369,8 @@ export default function App() {
               >
                 {/* Global FiltersBar for Pedidos screen */}
                 <GlobalFilters
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
                   filterDateFrom={filterDateFrom}
                   setFilterDateFrom={setFilterDateFrom}
                   filterDateTo={filterDateTo}

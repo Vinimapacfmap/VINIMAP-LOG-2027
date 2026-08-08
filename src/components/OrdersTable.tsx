@@ -122,42 +122,55 @@ const ALL_SPREADSHEET_COLUMNS = [
 ];
 
 const COLUMN_LABELS_MAP: Record<string, string> = {
-  'Status': 'Status do Pedido',
-  'Sequencia': 'Sequência (#)',
-  'Pedido': 'Nº do Pedido (Código)',
-  'CodigoCliente': 'Código / Nome Cliente',
-  'DataSolicitacao': 'Data da Solicitação',
-  'ProcurarPor': 'Destinatário (Procurar Por)',
-  'Endereco': 'Endereço de Destino',
+  'Status': 'Status',
+  'Sequencia': 'Seq.',
+  'Pedido': 'Pedido',
+  'CodigoCliente': 'Cliente',
+  'DataSolicitacao': 'Data Solicit.',
+  'ProcurarPor': 'Destinatário',
+  'Endereco': 'Endereço',
   'CEP': 'CEP',
-  'Telefone': 'Telefone / Contato',
-  'DispositivoCondutor': 'Condutor / Entregador',
-  'Complemento': 'Complemento Endereço',
-  'ValorNotaFiscal': 'Valor Nota Fiscal (R$)',
-  'HorarioFinal': 'Horário Final Limite',
-  'Email': 'E-mail Destinatário',
-  'DocumentoEmpresa': 'CNPJ / Doc Empresa',
-  'TipoEntrega': 'Tipo de Entrega',
-  'Chamado': 'Nº Chamado / Ocorrência',
-  'DANFE': 'Chave DANFE / NF-e',
-  'DataLimite': 'Data Limite SLA',
-  'NomeFantasia': 'Nome Fantasia Estabelecimento',
-  'HorarioInicio': 'Horário Inicial',
-  'DataAgendamento': 'Data de Agendamento',
-  'CidadeMunicipio': 'Cidade / Município',
-  'Estado': 'UF / Estado',
-  'Detalhe': 'Observações / Detalhes',
-  'ValorReceber': 'Valor a Receber (R$)',
-  'ValorEntrega': 'Taxa / Valor Entrega (R$)',
-  'Latitude': 'Latitude GPS',
-  'Longitude': 'Longitude GPS',
-  'DestinatarioCnpjCpf': 'CPF/CNPJ Destinatário',
-  'ValorCondutor': 'Repasse Condutor (R$)',
-  'Prioridade': 'Nível de Prioridade',
-  'DataConclusao': 'Data / Hora Conclusão'
+  'Telefone': 'Telefone',
+  'DispositivoCondutor': 'Entregador',
+  'Complemento': 'Complemento',
+  'ValorNotaFiscal': 'Valor NF',
+  'HorarioFinal': 'Horário Limite',
+  'Email': 'E-mail',
+  'DocumentoEmpresa': 'CNPJ/Doc',
+  'TipoEntrega': 'Tipo Entrega',
+  'Chamado': 'Nº Chamado',
+  'DANFE': 'Chave DANFE',
+  'DataLimite': 'Data Limite',
+  'NomeFantasia': 'Nome Fantasia',
+  'HorarioInicio': 'Horário Inicio',
+  'DataAgendamento': 'Data Agend.',
+  'CidadeMunicipio': 'Cidade',
+  'Estado': 'UF',
+  'Detalhe': 'Detalhe',
+  'ValorReceber': 'Valor Receber',
+  'ValorEntrega': 'Taxa Entrega',
+  'Latitude': 'Latitude',
+  'Longitude': 'Longitude',
+  'DestinatarioCnpjCpf': 'CPF/CNPJ Dest.',
+  'ValorCondutor': 'Repasse Condutor',
+  'Prioridade': 'Prioridade',
+  'DataConclusao': 'Data Conclusão'
 };
 
 const ALL_TOGGLEABLE_COLUMNS = ['Status', ...ALL_SPREADSHEET_COLUMNS];
+
+const FIRST_10_COLUMNS = [
+  'Status',
+  'Sequencia',
+  'Pedido',
+  'CodigoCliente',
+  'DataSolicitacao',
+  'ProcurarPor',
+  'Endereco',
+  'CEP',
+  'Telefone',
+  'DispositivoCondutor'
+];
 
 const getCoordinates = (order: Order | null) => {
   if (!order) return { lat: '-23.5505', lng: '-46.6333' };
@@ -213,7 +226,7 @@ function OrdersTable({
   };
   const [viewMode, setViewMode] = useState<'simplified' | 'spreadsheet'>('spreadsheet');
   const [columnsOrder, setColumnsOrder] = useState<string[]>(ALL_SPREADSHEET_COLUMNS);
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(ALL_TOGGLEABLE_COLUMNS));
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(FIRST_10_COLUMNS));
   const [showColumnFilterMenu, setShowColumnFilterMenu] = useState<boolean>(false);
   const [columnSearchTerm, setColumnSearchTerm] = useState<string>('');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -1157,7 +1170,7 @@ function OrdersTable({
     const isOpen = Boolean(order && activeStatusDropdownId === order.id);
 
     return (
-      <div className="flex flex-col items-center justify-center py-1 px-1.5 relative min-w-[120px] w-full h-full">
+      <div className="flex flex-col items-center justify-center py-0.5 px-1 relative min-w-[90px] w-full h-full">
         <div className={`absolute inset-0 ${gradientClass} pointer-events-none rounded-sm`} />
         
         <button
@@ -1166,7 +1179,7 @@ function OrdersTable({
             e.stopPropagation();
             setActiveStatusDropdownId(isOpen ? null : order.id);
           }}
-          className={`relative z-10 inline-flex items-center gap-1 px-2.5 py-0.5 text-[9px] font-extrabold border rounded-full leading-none whitespace-nowrap mb-1.5 shadow-xs transition-all cursor-pointer hover:scale-105 ${getStatusClasses(status as OrderStatus)}`}
+          className={`relative z-10 inline-flex items-center gap-1 px-2 py-0.5 text-[8.5px] font-extrabold border rounded-full leading-none whitespace-nowrap mb-0.5 shadow-xs transition-all cursor-pointer hover:scale-105 ${getStatusClasses(status as OrderStatus)}`}
           title="Clique para abrir o Menu de Status & Desalocação"
         >
           {getStatusIcon(status as OrderStatus)}
@@ -1222,10 +1235,10 @@ function OrdersTable({
           </>
         )}
 
-        <div className="relative z-10 w-full max-w-[85px] h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/40">
+        <div className="relative z-10 w-full max-w-[75px] h-1 bg-slate-100 rounded-full overflow-hidden border border-slate-200/40">
           <div className={`h-full ${barColorClass} rounded-full transition-all duration-500`} style={{ width: `${barWidthPercent}%` }} />
         </div>
-        <div className="relative z-10 flex justify-between items-center w-full max-w-[85px] mt-1 text-[8px] font-bold tracking-tight text-slate-400 select-none">
+        <div className="relative z-10 flex justify-between items-center w-full max-w-[75px] mt-0.5 text-[7.5px] font-bold tracking-tight text-slate-400 select-none">
           <span className={status === 'Concluído' ? 'text-emerald-600/85' : status === 'Cancelado' ? 'text-slate-400' : duration <= 15 ? 'text-emerald-600/85' : duration <= 35 ? 'text-amber-600/85' : 'text-rose-600/85 font-extrabold animate-pulse'}>
             {healthText}
           </span>
@@ -2239,114 +2252,11 @@ function OrdersTable({
         </div>
       </div>
 
-      {/* 2. ADVANCED FILTERS & ACTIONS CONTROL PANEL */}
-      <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60 space-y-3.5">
+      {/* 2. ACTIONS & LAYOUT TOOLS CONTROL PANEL */}
+      <div className="p-2 sm:p-3 border-b border-slate-100 bg-slate-50/60">
         
-        {/* Row 1: Operational Filters Grid */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            
-            {/* Filter Header & Active Count Badge */}
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
-                <Filter size={14} className="font-bold" />
-              </div>
-              <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Filtros Operacionais</span>
-              {(localPartner !== 'Todos' || localRider !== 'Todos' || localRegion !== 'Todos') && (
-                <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-extrabold rounded-full animate-pulse">
-                  {[localPartner, localRider, localRegion].filter(f => f !== 'Todos').length} ativo(s)
-                </span>
-              )}
-            </div>
-
-            {/* Filter Select Controls Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 flex-1 max-w-4xl">
-              
-              {/* Cliente Parceiro */}
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider pl-0.5">Cliente Parceiro</span>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3 text-slate-400 pointer-events-none">
-                    <Building2 size={14} />
-                  </div>
-                  <select
-                    value={localPartner}
-                    onChange={(e) => { setLocalPartner(e.target.value); setCurrentPage(1); }}
-                    className="w-full h-9 pl-9 pr-8 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
-                  >
-                    <option value="Todos">Todos os Parceiros</option>
-                    {memoizedClientPartnerOptions}
-                  </select>
-                  <ChevronDown size={13} className="absolute right-3 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Condutor Alocado */}
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider pl-0.5">Condutor Alocado</span>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3 text-slate-400 pointer-events-none">
-                    <UserCheck size={14} />
-                  </div>
-                  <select
-                    value={localRider}
-                    onChange={(e) => { setLocalRider(e.target.value); setCurrentPage(1); }}
-                    className="w-full h-9 pl-9 pr-8 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
-                  >
-                    <option value="Todos">Todos os Condutores</option>
-                    {memoizedRiderOptions}
-                  </select>
-                  <ChevronDown size={13} className="absolute right-3 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Região de Entrega */}
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider pl-0.5">Região de Entrega</span>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3 text-slate-400 pointer-events-none">
-                    <Compass size={14} />
-                  </div>
-                  <select
-                    value={localRegion}
-                    onChange={(e) => { setLocalRegion(e.target.value); setCurrentPage(1); }}
-                    className="w-full h-9 pl-9 pr-8 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
-                  >
-                    <option value="Todos">Todas as Regiões</option>
-                    <option value="Centro">Centro</option>
-                    <option value="Zona Sul">Zona Sul</option>
-                    <option value="Zona Oeste">Zona Oeste</option>
-                    <option value="Zona Norte">Zona Norte</option>
-                    <option value="Zona Leste">Zona Leste</option>
-                  </select>
-                  <ChevronDown size={13} className="absolute right-3 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-            </div>
-
-            {/* Clear Filters Button */}
-            {(localPartner !== 'Todos' || localRider !== 'Todos' || localRegion !== 'Todos') && (
-              <button
-                onClick={() => {
-                  setLocalPartner('Todos');
-                  setLocalRider('Todos');
-                  setLocalRegion('Todos');
-                  setCurrentPage(1);
-                }}
-                className="h-9 px-3.5 mt-auto bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 active:scale-[0.98]"
-                title="Limpar todos os filtros selecionados"
-              >
-                <FilterX size={14} />
-                <span>Limpar Filtros</span>
-              </button>
-            )}
-
-          </div>
-        </div>
-
-        {/* Row 2: Action Buttons & Layout Tools */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+        {/* Row 1: Action Buttons & Layout Tools */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           
           {/* Left Action Buttons Group */}
           <div className="flex flex-wrap items-center gap-2">
@@ -2526,16 +2436,16 @@ function OrdersTable({
                       <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">Visões Rápidas (Presets):</span>
                       <div className="flex flex-wrap gap-1">
                         <button
+                          onClick={() => setVisibleColumns(new Set(FIRST_10_COLUMNS))}
+                          className="text-[10px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-blue-200"
+                        >
+                          Primeiras 10 Colunas (10)
+                        </button>
+                        <button
                           onClick={() => setVisibleColumns(new Set(ALL_TOGGLEABLE_COLUMNS))}
                           className="text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-indigo-100/50"
                         >
                           Exibir Todas ({ALL_TOGGLEABLE_COLUMNS.length})
-                        </button>
-                        <button
-                          onClick={() => setVisibleColumns(new Set(['Status', 'Sequencia', 'Pedido', 'CodigoCliente', 'ProcurarPor', 'Endereco', 'CEP', 'Telefone', 'DispositivoCondutor', 'ValorNotaFiscal', 'Prioridade']))}
-                          className="text-[10px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-                        >
-                          Essenciais (11)
                         </button>
                         <button
                           onClick={() => setVisibleColumns(new Set(['Status', 'Pedido', 'Endereco', 'CEP', 'DispositivoCondutor', 'HorarioInicio', 'HorarioFinal', 'DataLimite', 'Prioridade']))}
@@ -2595,12 +2505,12 @@ function OrdersTable({
                     {/* Footer / Reset */}
                     <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold text-slate-400">
                       <span>{visibleColumns.size} colunas ativas</span>
-                      {visibleColumns.size < ALL_TOGGLEABLE_COLUMNS.length && (
+                      {visibleColumns.size !== FIRST_10_COLUMNS.length && (
                         <button
-                          onClick={() => setVisibleColumns(new Set(ALL_TOGGLEABLE_COLUMNS))}
-                          className="text-indigo-600 hover:underline cursor-pointer"
+                          onClick={() => setVisibleColumns(new Set(FIRST_10_COLUMNS))}
+                          className="text-blue-600 hover:underline cursor-pointer"
                         >
-                          Restaurar Padrão
+                          Restaurar 10 Padrão
                         </button>
                       )}
                     </div>
@@ -2958,26 +2868,26 @@ function OrdersTable({
 
       {/* Actual Data Table list */}
       <div className={`overflow-x-auto overflow-y-auto w-full border-t border-slate-100 ${isFullscreen ? 'flex-1 max-h-[calc(100vh-220px)]' : 'max-h-[620px]'}`} id="orders-table-wrapper">
-        <table className="orders-table min-w-full text-left text-xs text-slate-600 border-collapse">
+        <table className="orders-table min-w-full text-left text-[11px] text-slate-800 border-collapse">
           <thead className="sticky top-0 z-20 bg-slate-100/95 backdrop-blur-xs shadow-xs">
-            <tr className="bg-slate-50/50 border-b border-slate-100 font-bold text-slate-400 uppercase tracking-wider select-none text-[10px]">
+            <tr className="bg-slate-100/80 border-b border-slate-200 font-black text-slate-800 uppercase tracking-wider select-none text-[9.5px]">
               {/* Row Selector Checkbox Header */}
-              <th className="px-4 py-3 w-10 text-center">
+              <th className="px-1.5 py-1.5 w-7 text-center">
                 <input 
                   type="checkbox"
                   checked={isAllSelectedOnPage()}
                   onChange={handleSelectAll}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3 h-3 cursor-pointer"
                 />
               </th>
 
               {/* Actions shifted next to selection */}
-              <th className="px-6 py-3 text-center">Ações</th>
+              <th className="px-2 py-1.5 text-center text-slate-800 font-black">Ações</th>
 
               {/* Status column synchronized with dashboard */}
               {visibleColumns.has('Status') && (
-                <th className="px-6 py-3 text-center cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('Status')}>
-                  <div className="flex items-center justify-center gap-1.5">
+                <th className="px-2 py-1.5 text-center cursor-pointer hover:bg-slate-200/50 transition-colors text-slate-800 font-black" onClick={() => handleSort('Status')}>
+                  <div className="flex items-center justify-center gap-1">
                     <span>Status</span>
                     {sortConfig?.key === 'Status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </div>
@@ -2987,35 +2897,35 @@ function OrdersTable({
               {viewMode === 'simplified' ? (
                 <>
                   {(visibleColumns.has('Pedido') || visibleColumns.has('Código')) && (
-                    <th className="px-6 py-3 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('Código')}>
-                      <div className="flex items-center gap-1.5">
-                        <span>Código</span>
+                    <th className="px-2 py-1.5 cursor-pointer hover:bg-slate-200/50 transition-colors text-slate-800 font-black" onClick={() => handleSort('Código')}>
+                      <div className="flex items-center gap-1">
+                        <span>Pedido</span>
                         {sortConfig?.key === 'Código' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </div>
                     </th>
                   )}
                   {(visibleColumns.has('ProcurarPor') || visibleColumns.has('CodigoCliente')) && (
-                    <th className="px-6 py-3 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('Cliente')}>
-                      <div className="flex items-center gap-1.5">
-                        <span>Cliente / Região</span>
+                    <th className="px-2 py-1.5 cursor-pointer hover:bg-slate-200/50 transition-colors text-slate-800 font-black" onClick={() => handleSort('Cliente')}>
+                      <div className="flex items-center gap-1">
+                        <span>Cliente</span>
                         {sortConfig?.key === 'Cliente' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </div>
                     </th>
                   )}
                   {visibleColumns.has('Endereco') && (
-                    <th className="px-6 py-3 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('Endereço')}>
-                      <div className="flex items-center gap-1.5">
-                        <span>Endereço de Destino</span>
+                    <th className="px-2 py-1.5 cursor-pointer hover:bg-slate-200/50 transition-colors text-slate-800 font-black" onClick={() => handleSort('Endereço')}>
+                      <div className="flex items-center gap-1">
+                        <span>Endereço</span>
                         {sortConfig?.key === 'Endereço' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </div>
                     </th>
                   )}
                   {visibleColumns.has('DispositivoCondutor') && (
-                    <th className="px-6 py-3">Entregador</th>
+                    <th className="px-2 py-1.5 text-slate-800 font-black">Entregador</th>
                   )}
                   {visibleColumns.has('ValorNotaFiscal') && (
-                    <th className="px-6 py-3 text-right cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('Valor')}>
-                      <div className="flex items-center justify-end gap-1.5">
+                    <th className="px-2 py-1.5 text-right cursor-pointer hover:bg-slate-200/50 transition-colors text-slate-800 font-black" onClick={() => handleSort('Valor')}>
+                      <div className="flex items-center justify-end gap-1">
                         <span>Valor</span>
                         {sortConfig?.key === 'Valor' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </div>
@@ -3029,11 +2939,11 @@ function OrdersTable({
                   return (
                     <th 
                       key={col} 
-                      className="px-4 py-3 whitespace-nowrap min-w-[150px] relative group border-r border-slate-100"
+                      className="px-1.5 py-1 whitespace-nowrap relative group border-r border-slate-200 text-[9.5px] font-black text-slate-800"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort(col)}>
-                          <span className="font-extrabold text-slate-700">{COLUMN_LABELS_MAP[col] || col}</span>
+                          <span className="font-extrabold text-slate-800">{COLUMN_LABELS_MAP[col] || col}</span>
                           {sortConfig?.key === col && (sortConfig.direction === 'asc' ? ' ↑' : ' ↓')}
                         </div>
                         
@@ -3064,7 +2974,7 @@ function OrdersTable({
             </tr>
           </thead>
           
-          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+          <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
             <AnimatePresence mode="popLayout">
               {paginatedOrders.length > 0 ? (
                 paginatedOrders.map((order, index) => {
@@ -3086,7 +2996,7 @@ function OrdersTable({
                       }`}
                     >
                       {/* Row Selector Checkbox Cell */}
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-2 py-1.5 text-center">
                         <input 
                           type="checkbox"
                           checked={isSelected}
@@ -3096,21 +3006,21 @@ function OrdersTable({
                       </td>
 
                       {/* Interactive Operational Actions: Floating Dropdown Menu */}
-                      <td className="px-6 py-4">
+                      <td className="px-2.5 py-1.5">
                         <div className="flex items-center justify-center relative">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveActionMenuId(activeActionMenuId === order.id ? null : order.id);
                             }}
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer border shadow-2xs ${
+                            className={`p-1 rounded-lg transition-all cursor-pointer border shadow-2xs ${
                               activeActionMenuId === order.id
                                 ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
                                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300'
                             }`}
                             title="Ações do Pedido"
                           >
-                            <MoreVertical size={14} />
+                            <MoreVertical size={13} />
                           </button>
 
                           <AnimatePresence>
@@ -3244,7 +3154,7 @@ function OrdersTable({
 
                       {/* Status Badge Indicator synchronized with dashboard */}
                       {visibleColumns.has('Status') && (
-                        <td className="px-1 py-1 text-center whitespace-nowrap min-w-[130px]">
+                        <td className="px-1 py-1 text-center whitespace-nowrap min-w-[110px]">
                           {renderStatusCellWithHealth(order)}
                         </td>
                       )}
@@ -3253,26 +3163,26 @@ function OrdersTable({
                         <>
                           {/* Order Code / ID */}
                           {(visibleColumns.has('Pedido') || visibleColumns.has('Código')) && (
-                            <td className="px-6 py-4 font-mono font-bold text-slate-800">
+                            <td className="px-2.5 py-1.5 font-mono font-black text-slate-900 text-xs">
                               {order.id}
                             </td>
                           )}
 
                           {/* Client information */}
                           {(visibleColumns.has('ProcurarPor') || visibleColumns.has('CodigoCliente')) && (
-                            <td className="px-6 py-4">
-                              <span className="block font-extrabold text-slate-800 leading-tight">{order.clientName}</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded font-extrabold uppercase inline-block leading-none">
+                            <td className="px-2.5 py-1.5">
+                              <span className="block font-black text-slate-900 leading-tight text-xs">{order.clientName}</span>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded font-extrabold uppercase inline-block leading-none">
                                   {order.region}
                                 </span>
                                 {order.partnerName && (
-                                  <span className="text-[9px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-extrabold uppercase inline-block border border-amber-100/30 leading-none">
+                                  <span className="text-[9px] text-amber-700 bg-amber-50 px-1 py-0.2 rounded font-extrabold uppercase inline-block border border-amber-100/30 leading-none">
                                     {getPartnerDisplayName(order.partnerName)}
                                   </span>
                                 )}
                                 {order.priority && (
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase inline-flex items-center gap-1 border leading-none ${getPriorityColor(order.priority)}`}>
+                                  <span className={`text-[9px] px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5 border leading-none ${getPriorityColor(order.priority)}`}>
                                     {order.priority.toLowerCase() === 'expresso' ? '🚨 Urgente' : order.priority}
                                   </span>
                                 )}
@@ -3282,12 +3192,12 @@ function OrdersTable({
 
                           {/* Destination Address */}
                           {visibleColumns.has('Endereco') && (
-                            <td className="px-6 py-4 max-w-xs" title={order.address}>
-                              <span className="block text-slate-700 leading-normal text-xs font-semibold truncate max-w-[240px]">{order.address}</span>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <td className="px-2.5 py-1.5 max-w-[220px]" title={order.address}>
+                              <span className="block text-slate-800 leading-tight text-xs font-semibold truncate max-w-[210px]">{order.address}</span>
+                              <div className="flex flex-wrap items-center gap-1 mt-0.5">
                                 <button
                                   onClick={(e) => handleCopyAddressAndRoute(order, e)}
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold rounded transition-all border shadow-sm cursor-pointer ${
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-extrabold rounded transition-all border shadow-2xs cursor-pointer ${
                                     copiedOrderId === order.id 
                                       ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
                                       : 'bg-blue-50/60 hover:bg-blue-50 border-blue-100 text-blue-700'
@@ -3297,7 +3207,7 @@ function OrdersTable({
                                   {copiedOrderId === order.id ? (
                                     <>
                                       <Check size={9} />
-                                      <span>Copiado e Maps Aberto!</span>
+                                      <span>Copiado!</span>
                                     </>
                                   ) : (
                                     <>
@@ -3308,17 +3218,17 @@ function OrdersTable({
                                 </button>
 
                                 {order.cep && (
-                                  <span className="text-slate-500 font-mono bg-slate-100 px-1 py-0.2 rounded text-[9px] font-bold">
+                                  <span className="text-slate-600 font-mono bg-slate-100 px-1 py-0.2 rounded text-[9px] font-bold">
                                     CEP {order.cep}
                                   </span>
                                 )}
                               </div>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[9px] font-bold text-slate-400">
+                              <div className="flex flex-wrap items-center gap-1 mt-0.5 text-[9px] font-bold text-slate-500">
                                 <span>
                                   {order.itemsCount} {order.itemsCount === 1 ? 'item' : 'itens'}
                                 </span>
                                 {order.date && (
-                                  <span className="text-slate-400 bg-slate-50 border border-slate-100 px-1 py-0.2 rounded">
+                                  <span className="text-slate-500 bg-slate-100 border border-slate-200/60 px-1 py-0.2 rounded">
                                     {formatToBrazilianDate(order.date)}
                                   </span>
                                 )}
@@ -3328,22 +3238,22 @@ function OrdersTable({
 
                           {/* Assigned Delivery Rider */}
                           {visibleColumns.has('DispositivoCondutor') && (
-                            <td className="px-6 py-4 relative">
+                            <td className="px-2.5 py-1.5 relative">
                               {rider ? (
-                                <div className="flex items-center gap-2 relative group/rider">
+                                <div className="flex items-center gap-1.5 relative group/rider">
                                   <img
                                     src={rider.avatar}
                                     alt={rider.name}
-                                    className="w-6 h-6 rounded-full object-cover border border-slate-100"
+                                    className="w-5 h-5 rounded-full object-cover border border-slate-200"
                                     referrerPolicy="no-referrer"
                                   />
                                   <div className="text-left">
-                                    <span className="block font-bold text-slate-700 text-[11px] leading-tight">{rider.name}</span>
-                                    <span className="text-[9px] text-slate-400 font-medium">{rider.vehicle}</span>
+                                    <span className="block font-black text-slate-800 text-[11px] leading-tight">{rider.name}</span>
+                                    <span className="text-[9px] text-slate-500 font-semibold">{rider.vehicle}</span>
                                   </div>
                                   <button
                                     onClick={() => setShowRiderDropdown(showRiderDropdown === order.id ? null : order.id)}
-                                    className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer transition-colors ml-1"
+                                    className="p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer transition-colors ml-0.5"
                                     title="Opções de Alocação"
                                   >
                                     <ChevronDown size={11} />
@@ -3388,7 +3298,7 @@ function OrdersTable({
                                 <div className="relative">
                                   <button
                                     onClick={() => setShowRiderDropdown(showRiderDropdown === order.id ? null : order.id)}
-                                    className="px-2 py-1 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 text-slate-500 rounded-lg text-[10px] font-bold border border-slate-200/50 flex items-center gap-1 cursor-pointer transition-colors"
+                                    className="px-2 py-0.5 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-md text-[10px] font-extrabold border border-slate-200 flex items-center gap-1 cursor-pointer transition-colors"
                                     id={`assign-rider-btn-${order.id}`}
                                   >
                                     <UserCheck size={11} />
@@ -3438,7 +3348,7 @@ function OrdersTable({
 
                           {/* Order Pricing/Value */}
                           {visibleColumns.has('ValorNotaFiscal') && (
-                            <td className="px-6 py-4 text-right font-mono font-bold text-slate-800 text-xs">
+                            <td className="px-2.5 py-1.5 text-right font-mono font-black text-slate-900 text-xs">
                               {order.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                           )}
@@ -3452,7 +3362,7 @@ function OrdersTable({
                           
                           if (col === 'Status') {
                             return (
-                              <td key={col} className="px-1 py-1 border-r border-slate-50 text-center whitespace-nowrap min-w-[130px]">
+                              <td key={col} className="px-0.5 py-0.5 border-r border-slate-100 text-center whitespace-nowrap min-w-[90px]">
                                 {renderStatusCellWithHealth(order)}
                               </td>
                             );
@@ -3461,8 +3371,8 @@ function OrdersTable({
                           if (col === 'Prioridade') {
                             const isExpress = String(cellVal || '').toLowerCase() === 'expresso';
                             return (
-                              <td key={col} className="px-4 py-3 border-r border-slate-50 text-center whitespace-nowrap min-w-[120px]">
-                                <span className={`px-2 py-1 text-[10px] rounded-xl border font-black uppercase inline-flex items-center gap-1 ${getPriorityColor(cellVal)}`}>
+                              <td key={col} className="px-1 py-1 border-r border-slate-100 text-center whitespace-nowrap min-w-[65px]">
+                                <span className={`px-1 py-0.2 text-[8.5px] rounded-md border font-black uppercase inline-flex items-center gap-0.5 ${getPriorityColor(cellVal)}`}>
                                   {isExpress ? '🚨 Urgente' : cellVal}
                                 </span>
                               </td>
@@ -3473,14 +3383,14 @@ function OrdersTable({
                             return (
                               <td 
                                 key={col} 
-                                className="px-4 py-3 border-r border-slate-50 font-medium max-w-[200px] text-[11px] text-slate-600 relative group"
+                                className="px-1.5 py-1 border-r border-slate-100 font-medium max-w-[140px] text-[10px] text-slate-800 relative group"
                                 title={cellVal}
                               >
-                                <div className="flex items-center justify-between gap-1.5 min-w-0">
-                                  <span className="truncate flex-1">{cellVal}</span>
+                                <div className="flex items-center justify-between gap-1 min-w-0">
+                                  <span className="truncate flex-1 font-semibold text-slate-900 text-[10px]">{cellVal}</span>
                                   <button
                                     onClick={(e) => handleCopyAddressAndRoute(order, e)}
-                                    className={`opacity-0 group-hover:opacity-100 focus:opacity-100 inline-flex items-center justify-center p-1 rounded border shadow-sm transition-all shrink-0 cursor-pointer ${
+                                    className={`opacity-0 group-hover:opacity-100 focus:opacity-100 inline-flex items-center justify-center p-0.5 rounded border shadow-2xs transition-all shrink-0 cursor-pointer ${
                                       copiedOrderId === order.id 
                                         ? 'bg-emerald-50 border-emerald-200 text-emerald-700 opacity-100' 
                                         : 'bg-blue-50 hover:bg-blue-100 border-blue-100 text-blue-700'
@@ -3488,9 +3398,9 @@ function OrdersTable({
                                     title="Copiar endereço e abrir rota"
                                   >
                                     {copiedOrderId === order.id ? (
-                                      <Check size={10} />
+                                      <Check size={8} />
                                     ) : (
-                                      <Copy size={10} />
+                                      <Copy size={8} />
                                     )}
                                   </button>
                                 </div>
@@ -3501,8 +3411,8 @@ function OrdersTable({
                           return (
                             <td 
                               key={col} 
-                              className={`px-4 py-3 border-r border-slate-50 font-medium truncate max-w-[200px] text-[11px] ${
-                                isSpecial ? 'font-bold text-slate-900' : 'text-slate-600'
+                              className={`px-1.5 py-1 border-r border-slate-100 truncate max-w-[130px] text-[10px] ${
+                                isSpecial ? 'font-black text-slate-900' : 'text-slate-800 font-semibold'
                               }`}
                               title={cellVal}
                             >
