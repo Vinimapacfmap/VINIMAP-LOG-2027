@@ -25,21 +25,27 @@ const db = firebaseConfig.firestoreDatabaseId
 const auth = getAuth(app);
 
 async function testConnection() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    console.warn("[Firestore Diagnóstico] Dispositivo em modo offline; pulando teste de conectividade direta.");
+    return;
+  }
   try {
     console.log(`[Firestore Diagnóstico] Iniciando teste de conectividade com o banco '${firestoreDatabaseId}'...`);
     await getDocFromServer(doc(db, 'test', 'connection'));
     console.log(`[Firestore Diagnóstico] ✅ Conexão estabelecida e confirmada com sucesso no Firestore database '${firestoreDatabaseId}'!`);
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message.includes('the client is offline')) {
-        console.warn("[Firestore Diagnóstico] ⚠️ O cliente está offline ou sem conexão de rede.");
-      } else if (error.message.includes('permission-denied') || error.message.includes('insufficient permissions')) {
+      const code = (error as any)?.code;
+      const msg = error.message;
+      if (code === 'unavailable' || msg.includes('the client is offline') || msg.includes('Could not reach Cloud Firestore backend')) {
+        console.warn("[Firestore Diagnóstico] ⚠️ O cliente está operando em modo offline ou sem conexão direta com o Cloud Firestore backend.");
+      } else if (msg.includes('permission-denied') || msg.includes('insufficient permissions')) {
         console.info("[Firestore Diagnóstico] ℹ️ Conexão ativa com Firestore verificada (servidor respondeu às regras de segurança).");
       } else {
-        console.warn("[Firestore Diagnóstico] ⚠️ Resposta da verificação de conexão:", error.message);
+        console.warn("[Firestore Diagnóstico] ⚠️ Resposta da verificação de conexão:", msg);
       }
     } else {
-      console.warn("[Firestore Diagnóstico] ⚠️ Erro não tratado durante o teste de conexão:", error);
+      console.warn("[Firestore Diagnóstico] ⚠️ Erro durante o teste de conexão:", error);
     }
   }
 }

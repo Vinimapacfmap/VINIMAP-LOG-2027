@@ -618,6 +618,11 @@ export default function App() {
       if (getIsFirestoreQuotaExceeded()) {
         cleanupAllFirestoreListeners();
       }
+      const errMessage = error instanceof Error ? error.message : String(error);
+      const isUnavailable = (error as any)?.code === 'unavailable' || errMessage.includes('unavailable') || errMessage.includes('Could not reach Cloud Firestore backend');
+      if (isUnavailable) {
+        console.warn(`[Firestore Offline Fallback] Conexão indisponível para '${collectionName}'. Carregando estado de contingência local/Supabase.`);
+      }
       loadFallbackData();
     };
 

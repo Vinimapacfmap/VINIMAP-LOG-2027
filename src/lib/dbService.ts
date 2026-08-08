@@ -120,6 +120,8 @@ export function getIsFirestoreQuotaExceeded(): boolean {
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): void {
   const errMessage = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code;
+
   if (isQuotaError(error)) {
     isFirestoreQuotaExceededState = true;
     if (typeof window !== 'undefined') {
@@ -130,6 +132,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     console.warn(`Firestore quota reached [${operationType}] on "${path}". Operating in Local Storage & Supabase mode.`);
     return;
   }
+
+  if (code === 'unavailable' || errMessage.includes('Could not reach Cloud Firestore backend') || errMessage.includes('client is offline')) {
+    console.warn(`Firestore [${operationType}] backend indisponível no caminho "${path}". Operando temporariamente em modo offline/contingência.`);
+    return;
+  }
+
   const errInfo: FirestoreErrorInfo = {
     error: errMessage,
     authInfo: {
