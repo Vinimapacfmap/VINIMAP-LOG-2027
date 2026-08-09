@@ -159,6 +159,8 @@ export interface DeliveryRider {
   exibirValorTurno?: boolean;
   ocultarValoresProtocolos?: boolean;
   autorizarImprimirRecibo?: boolean;
+  enableSoundAlert?: boolean; // Alerta sonoro de novos pedidos (Ativo por padrão)
+  soundType?: string; // Tipo de som de notificação (ex: 'alerta_padrao', 'sinal_suave', 'sinal_urgente', 'pop_moderno')
   permiteImprimirRecibo?: boolean;
   deviceNumber?: string;
   isLoggedIn?: boolean;

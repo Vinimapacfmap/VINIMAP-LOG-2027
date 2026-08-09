@@ -398,17 +398,17 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
     const newOrders: Order[] = selectedValidRows.map(row => {
       const data = row.data;
       const rawValorReceber = getRowValue(data, 'ValorReceber') || getRowValue(data, 'valorreceber') || getRowValue(data, 'VALORRECEBER');
-      const rawValorNotaFiscal = getRowValue(data, 'ValorNotaFiscal') || getRowValue(data, 'valornotafiscal') || getRowValue(data, 'VALORNOTAFISCAL');
-      let valNF = 89.90;
+      const rawValorNotaFiscal = getRowValue(data, 'ValorNotaFiscal') || getRowValue(data, 'valornotafiscal') || getRowValue(data, 'VALORNOTAFISCAL') || getRowValue(data, 'ValorMercadoria') || getRowValue(data, 'valormercadoria');
+      let valNF = 0;
       
       if (rawValorReceber && rawValorReceber.trim() !== '') {
         const parsed = parseFloat(String(rawValorReceber).replace(',', '.'));
-        if (!isNaN(parsed)) {
+        if (!isNaN(parsed) && parsed > 0) {
           valNF = parsed;
         }
       } else if (rawValorNotaFiscal && rawValorNotaFiscal.trim() !== '') {
         const parsed = parseFloat(String(rawValorNotaFiscal).replace(',', '.'));
-        if (!isNaN(parsed)) {
+        if (!isNaN(parsed) && parsed > 0) {
           valNF = parsed;
         }
       }
@@ -1038,11 +1038,11 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
                             r.name.toLowerCase().includes(condutorVal)
                           );
                           
-                          const rawValNF = getRowValue(row.data, 'ValorNotaFiscal') || getRowValue(row.data, 'ValorReceber');
-                          let valNF = 89.90;
+                          const rawValNF = getRowValue(row.data, 'ValorNotaFiscal') || getRowValue(row.data, 'ValorReceber') || getRowValue(row.data, 'ValorMercadoria');
+                          let valNF = 0;
                           if (rawValNF && rawValNF.trim() !== '') {
                             const parsed = parseFloat(String(rawValNF).replace(',', '.'));
-                            if (!isNaN(parsed)) valNF = parsed;
+                            if (!isNaN(parsed) && parsed > 0) valNF = parsed;
                           }
 
                           const tempOrder: any = {

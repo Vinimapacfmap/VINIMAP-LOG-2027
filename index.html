@@ -47,7 +47,9 @@
           navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(
             function(reg) {
               console.log('[Vinimap SW] SW Registrado com sucesso:', reg.scope);
-              reg.update();
+              reg.update().catch(function(updateErr) {
+                console.warn('[Vinimap SW] Aviso na verificação de atualização do ServiceWorker:', updateErr);
+              });
 
               reg.onupdatefound = function() {
                 var installingWorker = reg.installing;

@@ -188,7 +188,7 @@ export function formatOrderTime(timeInput?: string | null): string {
  * or by any history entry status change that occurred within the selected period.
  */
 export function isOrderInDatePeriod(
-  order: { date?: string; deliveryDate?: string; occurrenceDate?: string; history?: { timestamp: string; action?: string; details?: string }[] },
+  order: { status?: string; date?: string; deliveryDate?: string; occurrenceDate?: string; history?: { timestamp: string; action?: string; details?: string }[] },
   dateFrom?: string,
   dateTo?: string,
   targetStatus?: string
@@ -198,19 +198,20 @@ export function isOrderInDatePeriod(
   const isoFrom = dateFrom ? (extractISODateFromTimestamp(dateFrom) || dateFrom) : undefined;
   const isoTo = dateTo ? (extractISODateFromTimestamp(dateTo) || dateTo) : undefined;
 
-  // 1. Direct check on order creation date, occurrenceDate, or deliveryDate
+  // Check if primary order date falls in date range
   const rawPrimary = order.occurrenceDate || order.date || order.deliveryDate;
+  let dateMatches = false;
   if (rawPrimary) {
     const primaryDate = extractISODateFromTimestamp(rawPrimary) || rawPrimary;
     const directFrom = !isoFrom || (primaryDate >= isoFrom);
     const directTo = !isoTo || (primaryDate <= isoTo);
     if (directFrom && directTo) {
-      return true;
+      dateMatches = true;
     }
   }
 
-  // 2. Check order history for status transitions or updates occurring within [dateFrom, dateTo]
-  if (order.history && order.history.length > 0) {
+  // Check if any history entry falls in date range
+  if (!dateMatches && order.history && order.history.length > 0) {
     for (const entry of order.history) {
       const entryIsoDate = extractISODateFromTimestamp(entry.timestamp);
       if (!entryIsoDate) continue;
@@ -219,19 +220,33 @@ export function isOrderInDatePeriod(
       const histTo = !isoTo || (entryIsoDate <= isoTo);
 
       if (histFrom && histTo) {
-        if (targetStatus && targetStatus !== 'Todos') {
-          const lowerAction = (entry.action || '').toLowerCase();
-          const lowerDetails = (entry.details || '').toLowerCase();
-          const lowerTarget = targetStatus.toLowerCase();
-          if (lowerAction.includes(lowerTarget) || lowerDetails.includes(lowerTarget)) {
-            return true;
-          }
-        } else {
-          return true;
-        }
+        dateMatches = true;
+        break;
       }
     }
   }
 
-  return false;
+  if (!dateMatches) {
+    return false;
+  }
+
+  // If a target status is specified, verify status match
+  if (targetStatus && targetStatus !== 'Todos' && targetStatus !== '') {
+    if (order.status && order.status === targetStatus) {
+      return true;
+    }
+    // Check history if status matches
+    if (order.history && order.history.length > 0) {
+      const lowerTarget = targetStatus.toLowerCase();
+      const hasHistoryMatch = order.history.some(entry => {
+        const lowerAction = (entry.action || '').toLowerCase();
+        const lowerDetails = (entry.details || '').toLowerCase();
+        return lowerAction.includes(lowerTarget) || lowerDetails.includes(lowerTarget);
+      });
+      if (hasHistoryMatch) return true;
+    }
+    return false;
+  }
+
+  return true;
 }

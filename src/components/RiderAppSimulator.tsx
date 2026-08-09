@@ -319,7 +319,7 @@ export default function RiderAppSimulator({
     }
   };
   const [currentScreen, setCurrentScreen] = useState<'login' | 'dashboard' | 'map' | 'deliveries' | 'details'>('login');
-  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'tasks' | 'protocols' | 'help'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'tasks' | 'protocols' | 'help' | 'audio'>('home');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   // Helper to persist driver session and selected order before external map navigation
@@ -459,8 +459,74 @@ export default function RiderAppSimulator({
     setTimeout(() => playBeep(330.00, 0.28), 160);
   };
 
+  const playNotificationSound = (soundType = 'alerta_padrao') => {
+    try {
+      if (soundType === 'sinal_suave') {
+        playBeep(523.25, 0.15);
+        setTimeout(() => playBeep(659.25, 0.15), 120);
+        setTimeout(() => playBeep(783.99, 0.2), 240);
+      } else if (soundType === 'sinal_urgente') {
+        playBeep(1200, 0.08);
+        setTimeout(() => playBeep(1500, 0.08), 90);
+        setTimeout(() => playBeep(1200, 0.08), 180);
+        setTimeout(() => playBeep(1500, 0.12), 270);
+      } else if (soundType === 'pop_moderno') {
+        playBeep(1046.5, 0.06);
+        setTimeout(() => playBeep(1318.5, 0.08), 70);
+        setTimeout(() => playBeep(1567.98, 0.1), 140);
+      } else {
+        // 'alerta_padrao'
+        playBeep(880, 0.1);
+        setTimeout(() => playBeep(1174, 0.15), 100);
+      }
+    } catch (e) {
+      console.warn("AudioContext notification failed:", e);
+    }
+  };
+
   // Live Simulated Push Notifications state
   const [phoneNotification, setPhoneNotification] = useState<{ title: string; body: string } | null>(null);
+
+  // Monitor newly assigned orders for current rider and trigger sound alert
+  const prevOrderIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!selectedRiderId || !selectedRider) return;
+
+    // Filter active orders assigned to selected driver
+    const currentRiderOrders = orders.filter(o =>
+      (o.riderId === selectedRiderId || o.riderId === selectedRider.id || o.riderId === selectedRider.name) &&
+      o.status !== 'Concluído' && o.status !== 'Cancelado'
+    );
+    const currentIds = new Set(currentRiderOrders.map(o => o.id));
+
+    // If initial load completed and new order IDs appear
+    if (prevOrderIdsRef.current.size > 0) {
+      let newlyAddedCount = 0;
+      currentIds.forEach(id => {
+        if (!prevOrderIdsRef.current.has(id)) {
+          newlyAddedCount++;
+        }
+      });
+
+      if (newlyAddedCount > 0) {
+        // Sound alert check (default: true)
+        const soundEnabled = selectedRider.enableSoundAlert !== false;
+        if (soundEnabled) {
+          playNotificationSound(selectedRider.soundType || 'alerta_padrao');
+        }
+
+        // Push notification on simulator screen
+        setPhoneNotification({
+          title: `🔔 Novo${newlyAddedCount > 1 ? 's' : ''} Pedido${newlyAddedCount > 1 ? 's' : ''} Recebido${newlyAddedCount > 1 ? 's' : ''}!`,
+          body: `Você recebeu ${newlyAddedCount} novo${newlyAddedCount > 1 ? 's' : ''} pedido${newlyAddedCount > 1 ? 's' : ''} de entrega.`
+        });
+        setTimeout(() => setPhoneNotification(null), 6000);
+      }
+    }
+
+    prevOrderIdsRef.current = currentIds;
+  }, [orders, selectedRiderId, selectedRider?.enableSoundAlert, selectedRider?.soundType]);
 
   // --- OFFLINE CACHE & NETWORK SIGNAL STATE ---
   const [isNetworkOffline, setIsNetworkOffline] = useState<boolean>(() => {
@@ -3998,6 +4064,104 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       </div>
                     )}
 
+                    {/* VIEW: AUDIO SETTINGS TAB */}
+                    {activeTab === 'audio' && selectedRider && (
+                      <div className="p-4 space-y-4 overflow-y-auto">
+                        <div className="space-y-1">
+                          <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <Volume2 size={16} className="text-blue-600" />
+                            <span>Configurações de Áudio</span>
+                          </h4>
+                          <p className="text-[10px] text-slate-400">Configure os alertas sonoros de novos pedidos recebidos no seu celular.</p>
+                        </div>
+
+                        {/* Sound Alert Main Switch */}
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="space-y-0.5">
+                              <span className="text-xs font-extrabold text-slate-800 block">Alerta Sonoro de Novos Pedidos</span>
+                              <span className="text-[9.5px] text-slate-500 block leading-tight">
+                                Tocar som automaticamente quando um novo pedido for atribuído a você pelo despacho.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const current = selectedRider.enableSoundAlert !== false;
+                                const updated: DeliveryRider = {
+                                  ...selectedRider,
+                                  enableSoundAlert: !current
+                                };
+                                setRiders(prev => prev.map(r => r.id === updated.id ? updated : r));
+                                try {
+                                  await dbSaveDeliveryRider(updated);
+                                } catch (e) {
+                                  console.warn("Save rider failed:", e);
+                                }
+                              }}
+                              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                                selectedRider.enableSoundAlert !== false ? 'bg-blue-600' : 'bg-slate-300'
+                              }`}
+                            >
+                              <span
+                                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform shadow-xs ${
+                                  selectedRider.enableSoundAlert !== false ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Sound Selector and Demo Test */}
+                        {selectedRider.enableSoundAlert !== false && (
+                          <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-2xs space-y-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                                Tipo de Som da Notificação
+                              </label>
+                              <select
+                                value={selectedRider.soundType || 'alerta_padrao'}
+                                onChange={async (e) => {
+                                  const val = e.target.value;
+                                  const updated: DeliveryRider = {
+                                    ...selectedRider,
+                                    soundType: val
+                                  };
+                                  setRiders(prev => prev.map(r => r.id === updated.id ? updated : r));
+                                  try {
+                                    await dbSaveDeliveryRider(updated);
+                                  } catch (err) {
+                                    console.warn("Save sound type failed:", err);
+                                  }
+                                  playNotificationSound(val);
+                                }}
+                                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden focus:border-blue-500 cursor-pointer"
+                              >
+                                <option value="alerta_padrao">🔔 Sinal Clássico (Padrão)</option>
+                                <option value="sinal_suave">🎵 Chime Melódico (Suave)</option>
+                                <option value="sinal_urgente">🚨 Sirene Dupla (Urgente)</option>
+                                <option value="pop_moderno">✨ Pop Digital (Moderno)</option>
+                              </select>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => playNotificationSound(selectedRider.soundType || 'alerta_padrao')}
+                              className="w-full py-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 text-xs font-bold rounded-xl border border-blue-200/80 transition-all cursor-pointer flex items-center justify-center gap-2"
+                            >
+                              <Volume2 size={15} />
+                              <span>Ouvir Demonstração (Testar Som)</span>
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="p-3 bg-slate-100/70 border border-slate-200/80 rounded-xl text-[9.5px] text-slate-500 leading-relaxed">
+                          <span className="font-bold text-slate-700 block mb-0.5">💡 Observação do Dispositivo:</span>
+                          Certifique-se de que o volume de mídia do celular está ativado para ouvir as notificações sonoras durante as entregas.
+                        </div>
+                      </div>
+                    )}
+
                   </div>
 
                   {/* BOTTOM simulated smartphone navigation menu */}
@@ -4042,7 +4206,16 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       )}
                     </button>
 
-
+                    <button
+                      onClick={() => {
+                        setActiveTab('audio');
+                      }}
+                      className={`flex flex-col items-center gap-0.5 cursor-pointer flex-1 py-1 ${activeTab === 'audio' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                      title="Configurações de Áudio e Notificações"
+                    >
+                      <Volume2 size={15} />
+                      <span className="text-[7.5px] font-bold uppercase">Áudio</span>
+                    </button>
 
                     <button
                       onClick={() => {

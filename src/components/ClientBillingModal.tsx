@@ -581,7 +581,7 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
                 <span>Regras de Cálculo de Frete do Parceiro</span>
               </h5>
               <p className="font-medium text-[11px] leading-relaxed">
-                As taxas de frete são calculadas estritamente sobre entregas com status <strong>Concluído</strong>. O cálculo baseia-se na tabela de faixas de CEP cadastrada para o parceiro. Se o CEP de destino da entrega não estiver coberto por nenhuma faixa, aplica-se o valor de frete individual pré-configurado no pedido ou a taxa padrão mínima (R$ 10,00). Entregas pendentes ou canceladas não são contabilizadas no faturamento consolidado.
+                Para efeito de faturamento, considera-se estritamente o <strong>Frete Cobrado do Parceiro</strong> sobre as entregas com status <strong>Concluído</strong> (calculado com base na tabela de faixas de CEP do parceiro ou taxa pré-configurada). Por padrão, o <strong>Valor da Mercadoria</strong> só é inserido e contabilizado caso o valor da Nota Fiscal esteja formalmente imputado.
               </p>
             </div>
 
@@ -640,7 +640,13 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
                               {order.cep || 'N/A'}
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-slate-700">
-                              {order.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {order.value > 0 ? (
+                                order.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                              ) : (
+                                <span className="text-slate-400 font-normal text-[11px]" title="Sem valor de Nota Fiscal imputado">
+                                  R$ 0,00 <span className="text-[9px] text-slate-400">(Sem NF)</span>
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-right font-extrabold text-slate-800">
                               {isConcluded ? (

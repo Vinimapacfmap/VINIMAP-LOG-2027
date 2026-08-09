@@ -15,6 +15,20 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+// Serve static assets from public directory
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+app.get('/sw.js', (req, res) => {
+  const swPath = path.join(process.cwd(), 'public', 'sw.js');
+  if (fs.existsSync(swPath)) {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Service-Worker-Allowed', '/');
+    return res.sendFile(swPath);
+  }
+  return res.status(404).send('Service worker script not found');
+});
+
 // Parse incoming JSON requests
 app.use(express.json());
 

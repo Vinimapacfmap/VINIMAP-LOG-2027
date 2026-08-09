@@ -397,21 +397,22 @@ export default function App() {
       console.warn('Erro ao salvar backup de contingência no localStorage:', err);
     }
 
-    // 2. Trigger forced browser JSON download
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.href = url;
-    downloadAnchor.download = `vinimap_contingencia_pedidos_parceiros_${dateToday}.json`;
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    URL.revokeObjectURL(url);
-
-    setLastContingencyBackupTime(fullStamp);
+    // 2. Trigger browser JSON download ONLY if manually clicked by the user (!isAuto)
     if (!isAuto) {
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.href = url;
+      downloadAnchor.download = `vinimap_contingencia_pedidos_parceiros_${dateToday}.json`;
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      URL.revokeObjectURL(url);
+
       alert(`✅ Contingência Exportada com Sucesso!\n\n• ${orders.length} pedidos\n• ${clientPartners.length} parceiros\n\nO arquivo JSON foi baixado para o seu computador e armazenado no armazenamento local do navegador.`);
     }
+
+    setLastContingencyBackupTime(fullStamp);
   }, [orders, clientPartners, riders, financialTransactions, companyHubs]);
 
   // Effect A: Auto-save continuous local storage backup whenever orders or partners change
@@ -1204,6 +1205,8 @@ export default function App() {
   const [newRiderExibirValorTurno, setNewRiderExibirValorTurno] = useState<boolean>(false);
   const [newRiderOcultarValoresProtocolos, setNewRiderOcultarValoresProtocolos] = useState<boolean>(false);
   const [newRiderAutorizarImprimirRecibo, setNewRiderAutorizarImprimirRecibo] = useState<boolean>(false);
+  const [newRiderEnableSoundAlert, setNewRiderEnableSoundAlert] = useState<boolean>(true);
+  const [newRiderSoundType, setNewRiderSoundType] = useState<string>('alerta_padrao');
   const [newRiderBillingModel, setNewRiderBillingModel] = useState<BillingModelType>('misto');
   const [newRiderBillingFixedFee, setNewRiderBillingFixedFee] = useState<string>('10.00');
   const [newRiderBillingVariablePercent, setNewRiderBillingVariablePercent] = useState<string>('2.5');
@@ -1350,6 +1353,8 @@ export default function App() {
         exibirValorTurno: newRiderExibirValorTurno,
         ocultarValoresProtocolos: newRiderOcultarValoresProtocolos,
         autorizarImprimirRecibo: newRiderAutorizarImprimirRecibo,
+        enableSoundAlert: newRiderEnableSoundAlert,
+        soundType: newRiderSoundType,
         deviceNumber: newRiderDeviceNumber || undefined,
         password: newRiderPassword || undefined,
         address: newRiderAddress || undefined,
@@ -1389,6 +1394,8 @@ export default function App() {
         setNewRiderExibirValorTurno(false);
         setNewRiderOcultarValoresProtocolos(false);
         setNewRiderAutorizarImprimirRecibo(false);
+        setNewRiderEnableSoundAlert(true);
+        setNewRiderSoundType('alerta_padrao');
         setNewRiderBillingModel('misto');
         setNewRiderBillingFixedFee('10.00');
         setNewRiderBillingVariablePercent('2.5');
@@ -1418,6 +1425,8 @@ export default function App() {
       exibirValorTurno: newRiderExibirValorTurno,
       ocultarValoresProtocolos: newRiderOcultarValoresProtocolos,
       autorizarImprimirRecibo: newRiderAutorizarImprimirRecibo,
+      enableSoundAlert: newRiderEnableSoundAlert,
+      soundType: newRiderSoundType,
       deviceNumber: newRiderDeviceNumber || undefined,
       password: newRiderPassword || undefined,
       address: newRiderAddress || undefined,
@@ -4715,7 +4724,7 @@ export default function App() {
                                           setNewRiderCnh(item.cnh || '');
                                           setNewRiderExibirValorTurno(item.exibirValorTurno || false);
                                           setNewRiderOcultarValoresProtocolos(item.ocultarValoresProtocolos || false);
-                                          setNewRiderAutorizarImprimirRecibo(item.autorizarImprimirRecibo || item.permiteImprimirRecibo || false);
+                                          setNewRiderAutorizarImprimirRecibo(item.autorizarImprimirRecibo || item.permiteImprimirRecibo || false);                                          setNewRiderEnableSoundAlert(item.enableSoundAlert !== false);                                          setNewRiderSoundType(item.soundType || 'alerta_padrao');
                                           setShowRiderForm(true);
                                         }}
                                         className="p-1 hover:bg-slate-100 text-slate-500 hover:text-slate-700 rounded-lg transition-colors cursor-pointer inline-flex items-center"
@@ -4990,6 +4999,31 @@ export default function App() {
                               <label htmlFor="autorizarImprimirRecibo" className="text-[11px] font-bold text-emerald-900 cursor-pointer select-none flex items-center gap-1">
                                 <span>Autorizar impressão de recibos no dispositivo</span>
                               </label>
+                            </div>
+
+                            {/* Sound Alert Configuration for Driver */}
+                            <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Volume2 size={16} className="text-blue-600 shrink-0" />
+                                  <div>
+                                    <label htmlFor="enableSoundAlert" className="text-[11px] font-bold text-slate-800 cursor-pointer select-none block">Alerta Sonoro de Novos Pedidos</label>
+                                    <span className="text-[9px] text-slate-500 block leading-tight">Emitir som ao receber novos pedidos (Ativo por padrão)</span>
+                                  </div>
+                                </div>
+                                <input type="checkbox" id="enableSoundAlert" checked={newRiderEnableSoundAlert} onChange={(e) => setNewRiderEnableSoundAlert(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer shrink-0" />
+                              </div>
+                              {newRiderEnableSoundAlert && (
+                                <div className="pt-1.5 border-t border-blue-200/60">
+                                  <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1">Som de Notificação</label>
+                                  <select value={newRiderSoundType} onChange={(e) => setNewRiderSoundType(e.target.value)} className="w-full px-2.5 py-1 text-xs bg-white border border-slate-200 rounded-lg font-bold text-slate-700">
+                                    <option value="alerta_padrao">🔔 Sinal Clássico (Padrão)</option>
+                                    <option value="sinal_suave">🎵 Chime Melódico (Suave)</option>
+                                    <option value="sinal_urgente">🚨 Sirene Dupla (Urgente)</option>
+                                    <option value="pop_moderno">✨ Pop Digital (Moderno)</option>
+                                  </select>
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex gap-2 pt-2">
@@ -5330,57 +5364,132 @@ export default function App() {
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
-                className="space-y-6"
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                 id="view-configuracoes"
               >
-                {/* General Operational Settings */}
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <Settings className="w-5 h-5 text-blue-600" />
-                        Parâmetros da Operação
-                      </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">Parâmetros operacionais e preferências globais do Vinimap Logistics OS.</p>
+                {/* Panel 1: General Operational Settings */}
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                      <div>
+                        <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                          <Settings className="w-5 h-5 text-blue-600 shrink-0" />
+                          <span>Parâmetros da Operação</span>
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-0.5">Parâmetros operacionais e preferências globais.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Despacho Inteligente</span>
+                        <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Ativado</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Ganhos no App do Condutor</span>
+                        <button
+                          onClick={() => setShowRiderEarnings(!showRiderEarnings)}
+                          className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                            showRiderEarnings
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                              : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                          }`}
+                        >
+                          {showRiderEarnings ? 'Ativado' : 'Desativado'}
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Alerta de Bateria Mínima</span>
+                        <span className="font-mono text-slate-800 font-bold">20%</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Moeda do Sistema</span>
+                        <span className="font-mono text-slate-800 font-bold">BRL (R$)</span>
+                      </div>
                     </div>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-                    <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
-                      <span className="text-slate-700">Despacho Inteligente</span>
-                      <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Ativado</span>
+                {/* Panel 2: Notifications & Sound Alerts */}
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                      <div>
+                        <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                          <Bell className="w-5 h-5 text-indigo-600 shrink-0" />
+                          <span>Notificações & Alertas</span>
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-0.5">Sinais sonoros e notificações de despacho.</p>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
-                      <span className="text-slate-700">Ganhos no App do Condutor</span>
-                      <button
-                        onClick={() => setShowRiderEarnings(!showRiderEarnings)}
-                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                          showRiderEarnings
-                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                            : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                        }`}
-                      >
-                        {showRiderEarnings ? 'Ativado' : 'Desativado'}
-                      </button>
+
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Som em Novos Pedidos</span>
+                        <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Ativado</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Som Padrão dos Condutores</span>
+                        <span className="text-slate-800 font-bold text-[11px]">🔔 Sinal Clássico</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Alerta de Pedidos Atrasados</span>
+                        <span className="text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">&gt;30 min</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Aviso Sonoro de Entrega</span>
+                        <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Ativado</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
-                      <span className="text-slate-700">Alerta de Bateria Mínima</span>
-                      <span className="font-mono text-slate-800 font-bold">20%</span>
+                  </div>
+                </div>
+
+                {/* Panel 3: Backup & Contingency */}
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                      <div>
+                        <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                          <Database className="w-5 h-5 text-emerald-600 shrink-0" />
+                          <span>Backup & Contingência</span>
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-0.5">Fuso horário e segurança de dados.</p>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
-                      <span className="text-slate-700">Moeda do Sistema</span>
-                      <span className="font-mono text-slate-800 font-bold">BRL (R$)</span>
+
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Fuso Horário Operacional</span>
+                        <span className="font-mono text-slate-800 font-bold text-[11px]">America/Sao_Paulo</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Auto-Backup Fim do Dia</span>
+                        <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">18:00h Ativo</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold">
+                        <span className="text-slate-700">Cache Local do Navegador</span>
+                        <span className="text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Sincronizado</span>
+                      </div>
+                      <div className="pt-1">
+                        <button
+                          onClick={() => exportDatabaseContingency(false)}
+                          className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+                        >
+                          <Download className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Baixar Contingência (JSON)</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Inline Editable CEP Ranges and Freight Values Table Panel */}
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4">
+                <div className="md:col-span-2 lg:col-span-3 bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
                       <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                        Gestão de Faixas de CEP e Tabelas de Frete
+                        <FileSpreadsheet className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <span>Gestão de Faixas de CEP e Tabelas de Frete</span>
                       </h2>
                       <p className="text-xs text-slate-400 mt-0.5">
                         Visualização e edição em tabela interativa, regras de repasse e vigência de frete por cliente.
