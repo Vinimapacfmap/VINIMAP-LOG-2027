@@ -131,7 +131,8 @@ import {
   BellOff,
   MessageSquare,
   ExternalLink,
-  GitBranch
+  GitBranch,
+  Volume2
 } from 'lucide-react';
 import NotificationSettingsManager from './components/NotificationSettingsManager';
 import { 
@@ -5368,7 +5369,7 @@ export default function App() {
                 id="view-configuracoes"
               >
                 {/* Panel 1: General Operational Settings */}
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between">
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between m-0 w-full">
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                       <div>
@@ -5411,7 +5412,7 @@ export default function App() {
                 </div>
 
                 {/* Panel 2: Notifications & Sound Alerts */}
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between">
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between m-0 w-full">
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                       <div>
@@ -5445,7 +5446,7 @@ export default function App() {
                 </div>
 
                 {/* Panel 3: Backup & Contingency */}
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between">
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 flex flex-col justify-between m-0 w-full">
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                       <div>
@@ -5484,7 +5485,7 @@ export default function App() {
                 </div>
 
                 {/* Inline Editable CEP Ranges and Freight Values Table Panel */}
-                <div className="md:col-span-2 lg:col-span-3 bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4">
+                <div className="md:col-span-2 lg:col-span-3 bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4 m-0 w-full">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
                       <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">

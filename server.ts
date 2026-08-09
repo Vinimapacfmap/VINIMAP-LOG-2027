@@ -1078,12 +1078,10 @@ app.post('/api/smtp/test', async (req, res) => {
     });
 
   } catch (err: any) {
-    console.error('[SMTP Test Error]:', err);
-    
     let userFriendlyError = err.message || 'Erro de conexão SMTP desconhecido';
     const rawMsg = (err.message || '') + ' ' + (err.response || '');
 
-    if (rawMsg.includes('535') || rawMsg.includes('Username and Password not accepted') || rawMsg.includes('Incorrect authentication data')) {
+    if (rawMsg.includes('535') || rawMsg.includes('Username and Password not accepted') || rawMsg.includes('Incorrect authentication data') || rawMsg.includes('Invalid login')) {
       userFriendlyError = `Autenticação Recusada (Erro 535): Usuário ou senha incorretos.\n\n💡 DICAS PARA RESOLVER:\n• Gmail/Google Workspace: O Google exige uma 'Senha de Aplicativo' de 16 dígitos em vez da sua senha pessoal do e-mail. Ative a Verificação em Duas Etapas na sua Conta do Google > Segurança > Senhas de app.\n• cPanel / Locaweb / Hostinger: Certifique-se de preencher o endereço de e-mail COMPLETO como Usuário (ex: contato@suaempresa.com.br).`;
     } else if (rawMsg.includes('Invalid greeting') || rawMsg.includes('IMAP4') || rawMsg.includes('Dovecot') || [993, 143, 995, 110].includes(Number(req.body.port))) {
       userFriendlyError = `Porta Incorreta / Servidor IMAP: A porta ${req.body.port} informada pertence a um protocolo de RECEBIMENTO de e-mails (IMAP/POP3).\n\n💡 DICA: Para ENVIO SMTP, altere a porta para 587 (Criptografia TLS/STARTTLS) ou 465 (Criptografia SSL).`;
@@ -1093,7 +1091,9 @@ app.post('/api/smtp/test', async (req, res) => {
       userFriendlyError = `Não foi possível conectar ao servidor SMTP (${req.body.host}:${req.body.port}).\n\n💡 DICAS:\n• Verifique se o Host está correto (ex: smtp.gmail.com, smtp.office365.com, smtplw.com.br).\n• Verifique se a porta (ex: 587 ou 465) não está bloqueada ou incorreta.`;
     }
 
-    return res.status(500).json({
+    console.warn('[SMTP Test Notice]:', userFriendlyError);
+
+    return res.status(400).json({
       success: false,
       error: userFriendlyError,
       rawError: err.message

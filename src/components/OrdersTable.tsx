@@ -234,7 +234,10 @@ function OrdersTable({
   // Selection states
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+  const [actionMenuState, setActionMenuState] = useState<{ id: string; order: Order; top?: number; bottom?: number; left: number; openUp: boolean } | null>(null);
   const [activeStatusDropdownId, setActiveStatusDropdownId] = useState<string | null>(null);
+  const [statusMenuState, setStatusMenuState] = useState<{ id: string; order: Order; top?: number; bottom?: number; left: number; openUp: boolean } | null>(null);
+  const [riderMenuState, setRiderMenuState] = useState<{ id: string; order: Order; top?: number; bottom?: number; left: number; openUp: boolean } | null>(null);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
@@ -1177,7 +1180,26 @@ function OrdersTable({
           onClick={(e) => {
             if (!order) return;
             e.stopPropagation();
-            setActiveStatusDropdownId(isOpen ? null : order.id);
+            if (statusMenuState?.id === order.id) {
+              setStatusMenuState(null);
+            } else {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const spaceBelow = window.innerHeight - rect.bottom;
+              const openUp = spaceBelow < 260;
+              const menuWidth = 208;
+              let leftPos = rect.left + (rect.width / 2) - (menuWidth / 2);
+              if (leftPos < 12) leftPos = 12;
+              if (leftPos + menuWidth > window.innerWidth - 12) leftPos = window.innerWidth - menuWidth - 12;
+
+              setStatusMenuState({
+                id: order.id,
+                order,
+                top: openUp ? undefined : rect.bottom + 6,
+                bottom: openUp ? (window.innerHeight - rect.top + 6) : undefined,
+                left: leftPos,
+                openUp
+              });
+            }
           }}
           className={`relative z-10 inline-flex items-center gap-1 px-2 py-0.5 text-[8.5px] font-extrabold border rounded-full leading-none whitespace-nowrap mb-0.5 shadow-xs transition-all cursor-pointer hover:scale-105 ${getStatusClasses(status as OrderStatus)}`}
           title="Clique para abrir o Menu de Status & Desalocação"
@@ -1186,54 +1208,6 @@ function OrdersTable({
           <span>{status}</span>
           {order && <ChevronDown size={8} className="opacity-60" />}
         </button>
-
-        {order && isOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveStatusDropdownId(null);
-              }}
-            />
-            <div className="absolute top-full mt-1 z-50 w-52 bg-white border border-slate-200/90 rounded-xl shadow-2xl py-1 text-left divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/80">
-                Menu Status #{order.id}
-              </div>
-              <div className="py-1 max-h-48 overflow-y-auto">
-                {(['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((st) => (
-                  <button
-                    key={st}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveStatusDropdownId(null);
-                      onUpdateStatus(order.id, st);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 text-[11px] font-bold flex items-center gap-2 hover:bg-slate-50 cursor-pointer ${
-                      order.status === st ? 'text-blue-600 bg-blue-50/50 font-black' : 'text-slate-700'
-                    }`}
-                  >
-                    {getStatusIcon(st)}
-                    <span>{st}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="py-1 bg-amber-50/40">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveStatusDropdownId(null);
-                    onAssignRider(order.id, 'unassign');
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-[11px] font-extrabold text-amber-700 hover:bg-amber-100/70 flex items-center gap-2 cursor-pointer"
-                >
-                  <UserX size={13} className="text-amber-600 shrink-0" />
-                  <span>Desalocar Condutor</span>
-                </button>
-              </div>
-            </div>
-          </>
-        )}
 
         <div className="relative z-10 w-full max-w-[75px] h-1 bg-slate-100 rounded-full overflow-hidden border border-slate-200/40">
           <div className={`h-full ${barColorClass} rounded-full transition-all duration-500`} style={{ width: `${barWidthPercent}%` }} />
@@ -3011,144 +2985,38 @@ function OrdersTable({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setActiveActionMenuId(activeActionMenuId === order.id ? null : order.id);
+                              if (actionMenuState?.id === order.id) {
+                                setActionMenuState(null);
+                                setActiveActionMenuId(null);
+                              } else {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const spaceBelow = window.innerHeight - rect.bottom;
+                                const openUp = spaceBelow < 280;
+                                const menuWidth = 224;
+                                let leftPos = rect.left + (rect.width / 2) - (menuWidth / 2);
+                                if (leftPos < 12) leftPos = 12;
+                                if (leftPos + menuWidth > window.innerWidth - 12) leftPos = window.innerWidth - menuWidth - 12;
+
+                                setActiveActionMenuId(order.id);
+                                setActionMenuState({
+                                  id: order.id,
+                                  order,
+                                  top: openUp ? undefined : rect.bottom + 6,
+                                  bottom: openUp ? (window.innerHeight - rect.top + 6) : undefined,
+                                  left: leftPos,
+                                  openUp
+                                });
+                              }
                             }}
-                            className={`p-1 rounded-lg transition-all cursor-pointer border shadow-2xs ${
-                              activeActionMenuId === order.id
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer border shadow-2xs ${
+                              actionMenuState?.id === order.id
                                 ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
                                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300'
                             }`}
                             title="Ações do Pedido"
                           >
-                            <MoreVertical size={13} />
+                            <MoreVertical size={14} />
                           </button>
-
-                          <AnimatePresence>
-                            {activeActionMenuId === order.id && (
-                              <>
-                                {/* Backdrop overlay to dismiss menu on outside click */}
-                                <div
-                                  className="fixed inset-0 z-40"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveActionMenuId(null);
-                                  }}
-                                />
-
-                                <motion.div
-                                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                                  transition={{ duration: 0.12 }}
-                                  className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-50 w-52 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 text-left divide-y divide-slate-100/80"
-                                >
-                                  {/* Section 1: Visualização e Edição (Hub) */}
-                                  <div className="py-1">
-                                    <button
-                                      onClick={() => {
-                                        setActiveActionMenuId(null);
-                                        openHub(order, 'crud');
-                                      }}
-                                      className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                    >
-                                      <Edit3 size={14} className="text-blue-500" />
-                                      <span>Editar / Detalhes (CRUD)</span>
-                                    </button>
-
-                                    <button
-                                      onClick={() => {
-                                        setActiveActionMenuId(null);
-                                        openHub(order, 'timeline');
-                                      }}
-                                      className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                    >
-                                      <GitBranch size={14} className="text-indigo-500" />
-                                      <span>Linha do Tempo</span>
-                                    </button>
-
-                                    <button
-                                      onClick={() => {
-                                        setActiveActionMenuId(null);
-                                        openHub(order, 'history');
-                                      }}
-                                      className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-teal-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                    >
-                                      <History size={14} className="text-teal-500" />
-                                      <span>Histórico de Auditoria</span>
-                                    </button>
-
-                                    <button
-                                      onClick={() => {
-                                        setActiveActionMenuId(null);
-                                        openHub(order, 'protocol');
-                                      }}
-                                      className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-emerald-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                    >
-                                      <FileCheck2 size={14} className="text-emerald-500" />
-                                      <span>Protocolo de Entrega</span>
-                                    </button>
-                                  </div>
-
-                                  {/* Section 2: Comunicação Rápida */}
-                                  <div className="py-1">
-                                    {(() => {
-                                      const contact = getOrderContactInfo(order);
-                                      return contact.hasPhone ? (
-                                        <a
-                                          href={`tel:${contact.cleanPhoneDigits}`}
-                                          onClick={() => setActiveActionMenuId(null)}
-                                          className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-emerald-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                        >
-                                          <Phone size={14} className="text-emerald-500" />
-                                          <div className="flex flex-col">
-                                            <span>Ligar para Cliente</span>
-                                            <span className="text-[10px] text-slate-400 font-mono">{contact.phone}</span>
-                                          </div>
-                                        </a>
-                                      ) : (
-                                        <div className="w-full px-3 py-2 text-xs font-medium text-slate-300 flex items-center gap-2.5 cursor-not-allowed">
-                                          <Phone size={14} className="text-slate-300" />
-                                          <span>Ligar (Sem telefone)</span>
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-
-                                  {/* Section 3: Desalocação e Cancelamento */}
-                                  <div className="py-1">
-                                    <button
-                                      onClick={() => {
-                                        setActiveActionMenuId(null);
-                                        onAssignRider(order.id, 'unassign');
-                                      }}
-                                      className="w-full px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                    >
-                                      <UserX size={14} className="text-amber-600" />
-                                      <span>Desalocar Condutor</span>
-                                    </button>
-
-                                    {order.status !== 'Concluído' && order.status !== 'Cancelado' ? (
-                                      <button
-                                        onClick={() => {
-                                          setActiveActionMenuId(null);
-                                          onUpdateStatus(order.id, 'Cancelado');
-                                        }}
-                                        className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                      >
-                                        <Ban size={14} className="text-rose-500" />
-                                        <span>Cancelar Pedido</span>
-                                      </button>
-                                    ) : (
-                                      <div className="w-full px-3 py-2 text-xs font-medium text-slate-300 flex items-center gap-2.5 cursor-not-allowed">
-                                        <Ban size={14} className="text-slate-300" />
-                                        <span>Cancelar (Inativo)</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </motion.div>
-                              </>
-                            )}
-                          </AnimatePresence>
                         </div>
                       </td>
 
@@ -3252,52 +3120,59 @@ function OrdersTable({
                                     <span className="text-[9px] text-slate-500 font-semibold">{rider.vehicle}</span>
                                   </div>
                                   <button
-                                    onClick={() => setShowRiderDropdown(showRiderDropdown === order.id ? null : order.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (riderMenuState?.id === order.id) {
+                                        setRiderMenuState(null);
+                                      } else {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const spaceBelow = window.innerHeight - rect.bottom;
+                                        const openUp = spaceBelow < 220;
+                                        const menuWidth = 208;
+                                        let leftPos = rect.left;
+                                        if (leftPos + menuWidth > window.innerWidth - 12) leftPos = window.innerWidth - menuWidth - 12;
+
+                                        setRiderMenuState({
+                                          id: order.id,
+                                          order,
+                                          top: openUp ? undefined : rect.bottom + 6,
+                                          bottom: openUp ? (window.innerHeight - rect.top + 6) : undefined,
+                                          left: leftPos,
+                                          openUp
+                                        });
+                                      }
+                                    }}
                                     className="p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer transition-colors ml-0.5"
                                     title="Opções de Alocação"
                                   >
                                     <ChevronDown size={11} />
                                   </button>
-
-                                  {showRiderDropdown === order.id && (
-                                    <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 max-h-52 overflow-y-auto text-left">
-                                      <button
-                                        onClick={() => {
-                                          onAssignRider(order.id, 'unassign');
-                                          setShowRiderDropdown(null);
-                                        }}
-                                        className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-2 cursor-pointer border-b border-slate-100"
-                                      >
-                                        <UserX size={12} className="text-amber-600 shrink-0" />
-                                        <span>Desalocar Condutor</span>
-                                      </button>
-                                      <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                        Reatribuir Condutor
-                                      </div>
-                                      {riders
-                                        .filter(r => r.status === 'Disponível' || r.status === 'Em rota')
-                                        .map(availRider => (
-                                          <button
-                                            key={availRider.id}
-                                            onClick={() => {
-                                              onAssignRider(order.id, availRider.id);
-                                              setShowRiderDropdown(null);
-                                            }}
-                                            className="w-full text-left px-3 py-1.5 hover:bg-blue-50/50 text-[11px] flex items-center gap-2 cursor-pointer font-semibold text-slate-700"
-                                          >
-                                            <img src={availRider.avatar} className="w-4 h-4 rounded-full object-cover" />
-                                            <div className="truncate">
-                                              <p className="font-bold leading-none">{availRider.name}</p>
-                                            </div>
-                                          </button>
-                                        ))}
-                                    </div>
-                                  )}
                                 </div>
                               ) : (
                                 <div className="relative">
                                   <button
-                                    onClick={() => setShowRiderDropdown(showRiderDropdown === order.id ? null : order.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (riderMenuState?.id === order.id) {
+                                        setRiderMenuState(null);
+                                      } else {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const spaceBelow = window.innerHeight - rect.bottom;
+                                        const openUp = spaceBelow < 220;
+                                        const menuWidth = 208;
+                                        let leftPos = rect.left;
+                                        if (leftPos + menuWidth > window.innerWidth - 12) leftPos = window.innerWidth - menuWidth - 12;
+
+                                        setRiderMenuState({
+                                          id: order.id,
+                                          order,
+                                          top: openUp ? undefined : rect.bottom + 6,
+                                          bottom: openUp ? (window.innerHeight - rect.top + 6) : undefined,
+                                          left: leftPos,
+                                          openUp
+                                        });
+                                      }
+                                    }}
                                     className="px-2 py-0.5 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-md text-[10px] font-extrabold border border-slate-200 flex items-center gap-1 cursor-pointer transition-colors"
                                     id={`assign-rider-btn-${order.id}`}
                                   >
@@ -3305,42 +3180,6 @@ function OrdersTable({
                                     <span>Vincular</span>
                                     <ChevronDown size={9} />
                                   </button>
-
-                                  {showRiderDropdown === order.id && (
-                                    <div className="absolute left-0 mt-1.5 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 max-h-48 overflow-y-auto">
-                                      <button
-                                        onClick={() => {
-                                          onAssignRider(order.id, 'unassign');
-                                          setShowRiderDropdown(null);
-                                        }}
-                                        className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-2 cursor-pointer border-b border-slate-100"
-                                      >
-                                        <UserX size={12} className="text-amber-600 shrink-0" />
-                                        <span>Desalocar Condutor</span>
-                                      </button>
-                                      <div className="px-2.5 py-1 border-b border-slate-100 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                        Selecione um Entregador
-                                      </div>
-                                      {riders
-                                        .filter(r => r.status === 'Disponível' || r.status === 'Em rota')
-                                        .map(availRider => (
-                                          <button
-                                            key={availRider.id}
-                                            onClick={() => {
-                                              onAssignRider(order.id, availRider.id);
-                                              setShowRiderDropdown(null);
-                                            }}
-                                            className="w-full text-left px-3 py-1.5 hover:bg-blue-50/50 text-[11px] flex items-center gap-2 cursor-pointer font-semibold text-slate-700"
-                                          >
-                                            <img src={availRider.avatar} className="w-5 h-5 rounded-full object-cover" />
-                                            <div className="truncate">
-                                              <p className="font-bold leading-none">{availRider.name}</p>
-                                              <p className="text-[9px] text-slate-400 mt-0.5">{availRider.vehicle} • {availRider.status}</p>
-                                            </div>
-                                          </button>
-                                        ))}
-                                    </div>
-                                  )}
                                 </div>
                               )}
                             </td>
@@ -5076,6 +4915,293 @@ function OrdersTable({
               />
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* FLOATING ACTION MENU (3 DOTS) PORTAL */}
+      <AnimatePresence>
+        {actionMenuState && (
+          <>
+            <div
+              className="fixed inset-0 z-[9998] bg-transparent"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActionMenuState(null);
+                setActiveActionMenuId(null);
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: actionMenuState.openUp ? 6 : -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: actionMenuState.openUp ? 6 : -6 }}
+              transition={{ duration: 0.12 }}
+              style={{
+                position: 'fixed',
+                left: `${actionMenuState.left}px`,
+                top: actionMenuState.top !== undefined ? `${actionMenuState.top}px` : 'auto',
+                bottom: actionMenuState.bottom !== undefined ? `${actionMenuState.bottom}px` : 'auto',
+              }}
+              className="z-[9999] w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 text-left divide-y divide-slate-100 max-h-[380px] overflow-y-auto custom-scrollbar"
+            >
+              {/* Section 1: Visualização e Edição (Hub) */}
+              <div className="py-1">
+                <div className="px-3.5 py-1 text-[9.5px] font-black text-slate-400 uppercase tracking-wider bg-slate-50/80 mb-0.5">
+                  Ações Pedido #{actionMenuState.order.id}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const ord = actionMenuState.order;
+                    setActionMenuState(null);
+                    setActiveActionMenuId(null);
+                    openHub(ord, 'crud');
+                  }}
+                  className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <Edit3 size={14} className="text-blue-500 shrink-0" />
+                  <span>Editar / Detalhes (CRUD)</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const ord = actionMenuState.order;
+                    setActionMenuState(null);
+                    setActiveActionMenuId(null);
+                    openHub(ord, 'timeline');
+                  }}
+                  className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <GitBranch size={14} className="text-indigo-500 shrink-0" />
+                  <span>Linha do Tempo</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const ord = actionMenuState.order;
+                    setActionMenuState(null);
+                    setActiveActionMenuId(null);
+                    openHub(ord, 'history');
+                  }}
+                  className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-teal-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <History size={14} className="text-teal-500 shrink-0" />
+                  <span>Histórico de Auditoria</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const ord = actionMenuState.order;
+                    setActionMenuState(null);
+                    setActiveActionMenuId(null);
+                    openHub(ord, 'protocol');
+                  }}
+                  className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-emerald-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <FileCheck2 size={14} className="text-emerald-500 shrink-0" />
+                  <span>Protocolo de Entrega</span>
+                </button>
+              </div>
+
+              {/* Section 2: Comunicação Rápida */}
+              <div className="py-1">
+                {(() => {
+                  const contact = getOrderContactInfo(actionMenuState.order);
+                  return contact.hasPhone ? (
+                    <a
+                      href={`tel:${contact.cleanPhoneDigits}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActionMenuState(null);
+                        setActiveActionMenuId(null);
+                      }}
+                      className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-emerald-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <Phone size={14} className="text-emerald-500 shrink-0" />
+                      <div className="flex flex-col">
+                        <span>Ligar para Cliente</span>
+                        <span className="text-[10px] text-slate-400 font-mono">{contact.phone}</span>
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="w-full px-3.5 py-2 text-xs font-medium text-slate-300 flex items-center gap-2.5 cursor-not-allowed">
+                      <Phone size={14} className="text-slate-300 shrink-0" />
+                      <span>Ligar (Sem telefone)</span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Section 3: Desalocação e Cancelamento */}
+              <div className="py-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const ordId = actionMenuState.order.id;
+                    setActionMenuState(null);
+                    setActiveActionMenuId(null);
+                    onAssignRider(ordId, 'unassign');
+                  }}
+                  className="w-full px-3.5 py-2 text-xs font-extrabold text-amber-700 hover:bg-amber-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <UserX size={14} className="text-amber-600 shrink-0" />
+                  <span>Desalocar Condutor</span>
+                </button>
+
+                {actionMenuState.order.status !== 'Concluído' && actionMenuState.order.status !== 'Cancelado' ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const ordId = actionMenuState.order.id;
+                      setActionMenuState(null);
+                      setActiveActionMenuId(null);
+                      onUpdateStatus(ordId, 'Cancelado');
+                    }}
+                    className="w-full px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <Ban size={14} className="text-rose-500 shrink-0" />
+                    <span>Cancelar Pedido</span>
+                  </button>
+                ) : (
+                  <div className="w-full px-3.5 py-2 text-xs font-medium text-slate-300 flex items-center gap-2.5 cursor-not-allowed">
+                    <Ban size={14} className="text-slate-300 shrink-0" />
+                    <span>Cancelar (Inativo)</span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* FLOATING STATUS SELECTOR MENU PORTAL */}
+      <AnimatePresence>
+        {statusMenuState && (
+          <>
+            <div
+              className="fixed inset-0 z-[9998] bg-transparent"
+              onClick={(e) => {
+                e.stopPropagation();
+                setStatusMenuState(null);
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: statusMenuState.openUp ? 6 : -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: statusMenuState.openUp ? 6 : -6 }}
+              transition={{ duration: 0.12 }}
+              style={{
+                position: 'fixed',
+                left: `${statusMenuState.left}px`,
+                top: statusMenuState.top !== undefined ? `${statusMenuState.top}px` : 'auto',
+                bottom: statusMenuState.bottom !== undefined ? `${statusMenuState.bottom}px` : 'auto',
+              }}
+              className="z-[9999] w-52 bg-white border border-slate-200 rounded-2xl shadow-2xl py-1 text-left divide-y divide-slate-100"
+            >
+              <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/80 rounded-t-2xl">
+                Menu Status #{statusMenuState.order.id}
+              </div>
+              <div className="py-1 max-h-48 overflow-y-auto custom-scrollbar">
+                {(['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((st) => (
+                  <button
+                    key={st}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const ordId = statusMenuState.order.id;
+                      setStatusMenuState(null);
+                      onUpdateStatus(ordId, st);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-[11px] font-bold flex items-center gap-2 hover:bg-slate-50 cursor-pointer ${
+                      statusMenuState.order.status === st ? 'text-blue-600 bg-blue-50/50 font-black' : 'text-slate-700'
+                    }`}
+                  >
+                    {getStatusIcon(st)}
+                    <span>{st}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="py-1 bg-amber-50/40 rounded-b-2xl">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const ordId = statusMenuState.order.id;
+                    setStatusMenuState(null);
+                    onAssignRider(ordId, 'unassign');
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-[11px] font-extrabold text-amber-700 hover:bg-amber-100/70 flex items-center gap-2 cursor-pointer"
+                >
+                  <UserX size={13} className="text-amber-600 shrink-0" />
+                  <span>Desalocar Condutor</span>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* FLOATING RIDER ALLOCATION MENU PORTAL */}
+      <AnimatePresence>
+        {riderMenuState && (
+          <>
+            <div
+              className="fixed inset-0 z-[9998] bg-transparent"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRiderMenuState(null);
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: riderMenuState.openUp ? 6 : -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: riderMenuState.openUp ? 6 : -6 }}
+              transition={{ duration: 0.12 }}
+              style={{
+                position: 'fixed',
+                left: `${riderMenuState.left}px`,
+                top: riderMenuState.top !== undefined ? `${riderMenuState.top}px` : 'auto',
+                bottom: riderMenuState.bottom !== undefined ? `${riderMenuState.bottom}px` : 'auto',
+              }}
+              className="z-[9999] w-52 bg-white border border-slate-200 rounded-2xl shadow-2xl py-1 text-left divide-y divide-slate-100 max-h-56 overflow-y-auto custom-scrollbar"
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const ordId = riderMenuState.order.id;
+                  setRiderMenuState(null);
+                  onAssignRider(ordId, 'unassign');
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-2 cursor-pointer border-b border-slate-100"
+              >
+                <UserX size={13} className="text-amber-600 shrink-0" />
+                <span>Desalocar Condutor</span>
+              </button>
+              <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/80">
+                Selecione um Condutor
+              </div>
+              {riders
+                .filter(r => r.status === 'Disponível' || r.status === 'Em rota')
+                .map(availRider => (
+                  <button
+                    key={availRider.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const ordId = riderMenuState.order.id;
+                      setRiderMenuState(null);
+                      onAssignRider(ordId, availRider.id);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50/50 text-[11px] flex items-center gap-2 cursor-pointer font-semibold text-slate-700"
+                  >
+                    <img src={availRider.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                    <div className="truncate">
+                      <p className="font-bold leading-none">{availRider.name}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">{availRider.vehicle} • {availRider.status}</p>
+                    </div>
+                  </button>
+                ))}
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

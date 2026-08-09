@@ -4092,7 +4092,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                   ...selectedRider,
                                   enableSoundAlert: !current
                                 };
-                                setRiders(prev => prev.map(r => r.id === updated.id ? updated : r));
                                 try {
                                   await dbSaveDeliveryRider(updated);
                                 } catch (e) {
@@ -4127,7 +4126,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                     ...selectedRider,
                                     soundType: val
                                   };
-                                  setRiders(prev => prev.map(r => r.id === updated.id ? updated : r));
                                   try {
                                     await dbSaveDeliveryRider(updated);
                                   } catch (err) {

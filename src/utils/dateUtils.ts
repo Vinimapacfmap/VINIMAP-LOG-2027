@@ -184,11 +184,14 @@ export function formatOrderTime(timeInput?: string | null): string {
 }
 
 /**
- * Checks if an order falls within a date period, either by its creation/delivery date (order.date)
- * or by any history entry status change that occurred within the selected period.
+ * Checks if an order falls within a date period.
+ * For completed orders, checks deliveryDate || dataConclusao || date.
+ * For occurrence orders, checks occurrenceDate || date.
+ * For other orders, checks order.date.
+ * Editing order data (metadata/audit history) does NOT alter the operational date or cause past orders to appear on today's view.
  */
 export function isOrderInDatePeriod(
-  order: { status?: string; date?: string; deliveryDate?: string; occurrenceDate?: string; history?: { timestamp: string; action?: string; details?: string }[] },
+  order: { status?: string; date?: string; deliveryDate?: string; dataConclusao?: string; occurrenceDate?: string; history?: { timestamp: string; action?: string; details?: string }[] },
   dateFrom?: string,
   dateTo?: string,
   targetStatus?: string
@@ -198,8 +201,14 @@ export function isOrderInDatePeriod(
   const isoFrom = dateFrom ? (extractISODateFromTimestamp(dateFrom) || dateFrom) : undefined;
   const isoTo = dateTo ? (extractISODateFromTimestamp(dateTo) || dateTo) : undefined;
 
-  // Check if primary order date falls in date range
-  const rawPrimary = order.occurrenceDate || order.date || order.deliveryDate;
+  // Determine operational date for the order
+  let rawPrimary = order.date;
+  if (order.status === 'Concluído') {
+    rawPrimary = order.deliveryDate || order.dataConclusao || order.date;
+  } else if (order.status === 'Ocorrência') {
+    rawPrimary = order.occurrenceDate || order.date;
+  }
+
   let dateMatches = false;
   if (rawPrimary) {
     const primaryDate = extractISODateFromTimestamp(rawPrimary) || rawPrimary;
@@ -210,9 +219,25 @@ export function isOrderInDatePeriod(
     }
   }
 
-  // Check if any history entry falls in date range
+  // If primary date didn't match, check history entries ONLY for actual status transition events,
+  // NEVER for administrative metadata edits (e.g., 'Dados do Pedido Alterados')
   if (!dateMatches && order.history && order.history.length > 0) {
     for (const entry of order.history) {
+      const actionLower = (entry.action || '').toLowerCase();
+      
+      // Ignore metadata edit actions, geocoding, notifications, and allocation logs
+      if (
+        actionLower.includes('dados do pedido') ||
+        actionLower.includes('pedido editado') ||
+        actionLower.includes('geocodificad') ||
+        actionLower.includes('protocolo') ||
+        actionLower.includes('notificação') ||
+        actionLower.includes('alocado') ||
+        actionLower.includes('desalocado')
+      ) {
+        continue;
+      }
+
       const entryIsoDate = extractISODateFromTimestamp(entry.timestamp);
       if (!entryIsoDate) continue;
 
@@ -234,16 +259,6 @@ export function isOrderInDatePeriod(
   if (targetStatus && targetStatus !== 'Todos' && targetStatus !== '') {
     if (order.status && order.status === targetStatus) {
       return true;
-    }
-    // Check history if status matches
-    if (order.history && order.history.length > 0) {
-      const lowerTarget = targetStatus.toLowerCase();
-      const hasHistoryMatch = order.history.some(entry => {
-        const lowerAction = (entry.action || '').toLowerCase();
-        const lowerDetails = (entry.details || '').toLowerCase();
-        return lowerAction.includes(lowerTarget) || lowerDetails.includes(lowerTarget);
-      });
-      if (hasHistoryMatch) return true;
     }
     return false;
   }

@@ -164,7 +164,20 @@ export function getOrderContactInfo(order: Order): {
 } {
   const rawData = order.rawData || {};
   const phone = order.phone || rawData.Telefone || rawData.telefone || rawData.Celular || rawData.celular || rawData.Phone || '';
-  const email = rawData.Email || rawData.email || rawData.ClienteEmail || (order as any).clientEmail || '';
+  const email = (
+    rawData.Email || 
+    rawData.email || 
+    rawData['E-mail'] || 
+    rawData['e-mail'] || 
+    rawData.ClienteEmail || 
+    rawData['Email Cliente'] || 
+    rawData['EmailCliente'] || 
+    rawData['Email Parceiro'] || 
+    rawData['EmailParceiro'] || 
+    (order as any).clientEmail || 
+    (order as any).email || 
+    ''
+  ).toString().trim();
 
   const cleanPhoneDigits = phone.replace(/\D/g, '');
   const formattedPhone = cleanPhoneDigits.length === 10 || cleanPhoneDigits.length === 11 ? `55${cleanPhoneDigits}` : cleanPhoneDigits;
