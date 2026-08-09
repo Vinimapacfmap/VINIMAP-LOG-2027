@@ -16,7 +16,10 @@ import {
   DollarSign, 
   AlertCircle,
   Truck,
-  CheckCircle2
+  CheckCircle2,
+  Mail,
+  Hash,
+  Building2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -30,7 +33,10 @@ interface NewOrderModalProps {
 export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartners }: NewOrderModalProps) {
   const [clientName, setClientName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  const [number, setNumber] = useState('');
+  const [complement, setComplement] = useState('');
   const [region, setRegion] = useState('Centro');
   const [value, setValue] = useState('0');
   const [priority, setPriority] = useState<OrderPriority>('Média');
@@ -116,10 +122,22 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
     const items = parseInt(itemsCount) || 1;
     const targetCep = cep || '01310-100';
 
+    let fullAddress = address.trim();
+    const cleanNum = number.trim();
+    const cleanComp = complement.trim();
+    const cleanEmail = email.trim();
+
+    if (cleanNum && !fullAddress.toLowerCase().includes(cleanNum.toLowerCase())) {
+      fullAddress = `${fullAddress}, Nº ${cleanNum}`;
+    }
+    if (cleanComp && !fullAddress.toLowerCase().includes(cleanComp.toLowerCase())) {
+      fullAddress = `${fullAddress} (${cleanComp})`;
+    }
+
     // Perform real backend geocoding via /api/geocode before saving
-    let coords = getCoordinatesFromCep(targetCep, region, address);
+    let coords = getCoordinatesFromCep(targetCep, region, fullAddress);
     try {
-      const backendGeo = await geocodeAddressBackend(address, targetCep, region);
+      const backendGeo = await geocodeAddressBackend(fullAddress, targetCep, region);
       if (backendGeo && typeof backendGeo.lat === 'number' && typeof backendGeo.lng === 'number') {
         coords = { lat: backendGeo.lat, lng: backendGeo.lng };
       }
@@ -132,7 +150,10 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
     onSubmit({
       clientName,
       phone: phone || '(11) 99999-9999',
-      address,
+      email: cleanEmail,
+      address: fullAddress,
+      number: cleanNum,
+      complement: cleanComp,
       region,
       value: orderValue,
       priority,
@@ -141,7 +162,15 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
       cep: targetCep,
       partnerName: partnerName || 'Outro',
       lat: coords.lat,
-      lng: coords.lng
+      lng: coords.lng,
+      rawData: {
+        'Email': cleanEmail,
+        'E-mail': cleanEmail,
+        'email': cleanEmail,
+        'Número': cleanNum,
+        'Numero': cleanNum,
+        'Complemento': cleanComp
+      }
     });
 
     setIsSuccess(true);
@@ -149,7 +178,10 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
       // Reset form states
       setClientName('');
       setPhone('');
+      setEmail('');
       setAddress('');
+      setNumber('');
+      setComplement('');
       setRegion('Centro');
       setValue('0');
       setPriority('Média');
@@ -237,34 +269,85 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
                     </div>
                   </div>
 
-                  {/* Client Phone */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Telefone de Contato</label>
-                    <div className="relative group">
-                      <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                      <input
-                        type="text"
-                        placeholder="Ex: (11) 98888-7777"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all"
-                      />
+                  {/* Client Contact Info: Phone & Email Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Client Phone */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Telefone de Contato</label>
+                      <div className="relative group">
+                        <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                          type="text"
+                          placeholder="Ex: (11) 98888-7777"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Client Email */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">E-mail do Cliente</label>
+                      <div className="relative group">
+                        <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                          type="email"
+                          placeholder="Ex: cliente@email.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all"
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {/* Delivery Address */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Endereço de Entrega *</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Endereço / Logradouro *</label>
                     <div className="relative group">
                       <MapPin size={14} className="absolute left-3 top-2.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                       <textarea
                         required
                         rows={2}
-                        placeholder="Rua, número, complemento e bairro..."
+                        placeholder="Av. Paulista, Rua Augusta, Bairro..."
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all resize-none"
                       />
+                    </div>
+                  </div>
+
+                  {/* Number & Complement Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Number */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Número</label>
+                      <div className="relative group">
+                        <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                          type="text"
+                          placeholder="Ex: 1000"
+                          value={number}
+                          onChange={(e) => setNumber(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Complement */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Complemento</label>
+                      <div className="relative group">
+                        <Building2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                          type="text"
+                          placeholder="Ex: Apto 42, Bloco B"
+                          value={complement}
+                          onChange={(e) => setComplement(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all"
+                        />
+                      </div>
                     </div>
                   </div>
 

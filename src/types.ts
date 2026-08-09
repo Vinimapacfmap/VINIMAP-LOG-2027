@@ -49,6 +49,9 @@ export interface Order {
   lat?: number;        // Explicit geocoded latitude
   lng?: number;        // Explicit geocoded longitude
   sequence?: number; // custom delivery sequence/order index
+  email?: string;      // E-mail do cliente
+  number?: string;     // Número do endereço
+  complement?: string; // Complemento do endereço
 }
 
 export interface CepRange {

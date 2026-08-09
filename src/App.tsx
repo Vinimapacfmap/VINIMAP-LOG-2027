@@ -1976,78 +1976,168 @@ export default function App() {
           let emailSubj = '';
           let emailBody = '';
 
-          if (notifSettings.autoSendWhatsapp && (contact.hasPhone || contact.phone)) {
-            waText = replaceNotificationPlaceholders(notifSettings.whatsappMessageTemplate, updatedOrderObj, riderName);
-            waUrl = generateWhatsappUrl(contact.cleanPhoneDigits, waText);
-          }
-
-          if (notifSettings.autoSendEmail && contact.hasEmail) {
-            emailSubj = replaceNotificationPlaceholders(notifSettings.emailSubjectTemplate, updatedOrderObj, riderName);
-            emailBody = replaceNotificationPlaceholders(notifSettings.emailMessageTemplate, updatedOrderObj, riderName);
-
-            // Auto-dispatch via partner custom SMTP server if enabled
-            if (notifSettings.smtpSettings?.enabled && notifSettings.smtpSettings.host) {
-              const cleanOrderCode = updatedOrderObj.id.replace('ped-', '').toUpperCase();
-              fetch('/api/smtp/send-order-completion', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  smtpSettings: notifSettings.smtpSettings,
-                  recipientEmail: contact.email,
-                  subject: emailSubj,
-                  body: emailBody,
-                  orderCode: cleanOrderCode
-                })
-              }).then(res => res.json()).then(data => {
-                const updatedSmtpSettings = { ...notifSettings.smtpSettings! };
-                if (data.success) {
-                  console.log('✅ E-mail disparado automaticamente via SMTP do parceiro com sucesso!', data);
-                  const newLog: SmtpLogEntry = {
-                    id: `smtp-log-${Date.now()}`,
-                    timestamp: new Date().toLocaleString('pt-BR'),
-                    recipient: contact.email,
-                    subject: emailSubj,
-                    orderCode: cleanOrderCode,
-                    status: 'success',
-                    messageId: data.messageId
-                  };
-                  updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
-                  saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
-                } else {
-                  console.warn('⚠️ Falha no disparo automático SMTP:', data.error);
-                  const newLog: SmtpLogEntry = {
-                    id: `smtp-log-${Date.now()}`,
-                    timestamp: new Date().toLocaleString('pt-BR'),
-                    recipient: contact.email,
-                    subject: emailSubj,
-                    orderCode: cleanOrderCode,
-                    status: 'error',
-                    errorDetails: data.error
-                  };
-                  updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
-                  saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+          // 1. WhatsApp Dispatch & Logging
+          if (notifSettings.autoSendWhatsapp) {
+            if (contact.hasPhone || contact.phone) {
+              waText = replaceNotificationPlaceholders(notifSettings.whatsappMessageTemplate, updatedOrderObj, riderName);
+              waUrl = generateWhatsappUrl(contact.cleanPhoneDigits, waText);
+              
+              try {
+                if (waUrl) {
+                  window.open(waUrl, '_blank', 'noopener,noreferrer');
                 }
-              }).catch(err => {
-                console.error('Erro ao disparar e-mail via SMTP no backend:', err);
-              });
+              } catch (e) {
+                console.warn('Pop-up do WhatsApp bloqueado pelo navegador:', e);
+              }
+
+              updatedOrderObj.history = [
+                ...(updatedOrderObj.history || []),
+                {
+                  timestamp: getSaoPauloDateTimeShort(),
+                  action: 'Notificação WhatsApp',
+                  user: 'Sistema de Notificações Automáticas',
+                  details: `Link/janela de envio do WhatsApp gerado e aberto para o cliente (${contact.phone}).`
+                }
+              ];
+            } else {
+              updatedOrderObj.history = [
+                ...(updatedOrderObj.history || []),
+                {
+                  timestamp: getSaoPauloDateTimeShort(),
+                  action: 'WhatsApp Não Enviado',
+                  user: 'Sistema de Notificações Automáticas',
+                  details: 'Telefone do cliente não cadastrado no pedido.'
+                }
+              ];
             }
           }
 
-          const notifDetails = [
-            contact.hasPhone ? `WhatsApp: ${contact.phone}` : null,
-            contact.hasEmail ? `E-mail: ${contact.email}` : null
-          ].filter(Boolean).join(' | ');
+          // 2. Email Dispatch & Logging
+          if (notifSettings.autoSendEmail) {
+            if (contact.hasEmail) {
+              emailSubj = replaceNotificationPlaceholders(notifSettings.emailSubjectTemplate, updatedOrderObj, riderName);
+              emailBody = replaceNotificationPlaceholders(notifSettings.emailMessageTemplate, updatedOrderObj, riderName);
 
-          if (notifDetails) {
-            updatedOrderObj.history = [
-              ...(updatedOrderObj.history || []),
-              {
-                timestamp: getSaoPauloDateTimeShort(),
-                action: 'Notificação Enviada ao Cliente',
-                user: 'Sistema de Notificações Automáticas',
-                details: `Mensagem enviada com sucesso ao cliente (${notifDetails}).`
+              // Auto-dispatch via partner custom SMTP server if enabled
+              if (notifSettings.smtpSettings?.enabled && notifSettings.smtpSettings.host) {
+                const cleanOrderCode = updatedOrderObj.id.replace('ped-', '').toUpperCase();
+                fetch('/api/smtp/send-order-completion', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    smtpSettings: notifSettings.smtpSettings,
+                    recipientEmail: contact.email,
+                    subject: emailSubj,
+                    body: emailBody,
+                    orderCode: cleanOrderCode
+                  })
+                }).then(res => res.json()).then(data => {
+                  const updatedSmtpSettings = { ...notifSettings.smtpSettings! };
+                  const currentTimestamp = getSaoPauloDateTimeShort();
+
+                  if (data.success) {
+                    console.log('✅ E-mail disparado automaticamente via SMTP do parceiro com sucesso!', data);
+                    const newLog: SmtpLogEntry = {
+                      id: `smtp-log-${Date.now()}`,
+                      timestamp: new Date().toLocaleString('pt-BR'),
+                      recipient: contact.email,
+                      subject: emailSubj,
+                      orderCode: cleanOrderCode,
+                      status: 'success',
+                      messageId: data.messageId
+                    };
+                    updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
+                    saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+
+                    // Append real success history entry to order and persist
+                    setOrders(prevOrders => prevOrders.map(o => {
+                      if (o.id !== updatedOrderObj.id) return o;
+                      const orderSuccessHistory: OrderHistoryEntry[] = [
+                        ...(o.history || []),
+                        {
+                          timestamp: currentTimestamp,
+                          action: 'E-mail Enviado via SMTP',
+                          user: 'Sistema de Notificações Automáticas',
+                          details: `E-mail de conclusão enviado com SUCESSO para ${contact.email} via servidor SMTP (${notifSettings.smtpSettings?.fromEmail || notifSettings.smtpSettings?.user}). Message-ID: ${data.messageId || 'OK'}`
+                        }
+                      ];
+                      const newOrderState = { ...o, history: orderSuccessHistory };
+                      dbSaveOrder(newOrderState);
+                      return newOrderState;
+                    }));
+                  } else {
+                    console.warn('⚠️ Falha no disparo automático SMTP:', data.error);
+                    const newLog: SmtpLogEntry = {
+                      id: `smtp-log-${Date.now()}`,
+                      timestamp: new Date().toLocaleString('pt-BR'),
+                      recipient: contact.email,
+                      subject: emailSubj,
+                      orderCode: cleanOrderCode,
+                      status: 'error',
+                      errorDetails: data.error
+                    };
+                    updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
+                    saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+
+                    // Append real failure history entry to order and persist
+                    setOrders(prevOrders => prevOrders.map(o => {
+                      if (o.id !== updatedOrderObj.id) return o;
+                      const orderFailHistory: OrderHistoryEntry[] = [
+                        ...(o.history || []),
+                        {
+                          timestamp: currentTimestamp,
+                          action: 'Falha no Envio de E-mail (SMTP)',
+                          user: 'Sistema de Notificações Automáticas',
+                          details: `FALHA ao disparar e-mail via SMTP para ${contact.email}: ${data.error || 'Verifique as credenciais SMTP no painel.'}`
+                        }
+                      ];
+                      const newOrderState = { ...o, history: orderFailHistory };
+                      dbSaveOrder(newOrderState);
+                      return newOrderState;
+                    }));
+                  }
+                }).catch(err => {
+                  console.error('Erro ao disparar e-mail via SMTP no backend:', err);
+                  const currentTimestamp = getSaoPauloDateTimeShort();
+                  setOrders(prevOrders => prevOrders.map(o => {
+                    if (o.id !== updatedOrderObj.id) return o;
+                    const orderErrHistory: OrderHistoryEntry[] = [
+                      ...(o.history || []),
+                      {
+                        timestamp: currentTimestamp,
+                        action: 'Erro de Conexão SMTP',
+                        user: 'Sistema de Notificações Automáticas',
+                        details: `Erro na requisição ao servidor SMTP para ${contact.email}: ${err.message || 'Erro de rede'}`
+                      }
+                    ];
+                    const newOrderState = { ...o, history: orderErrHistory };
+                    dbSaveOrder(newOrderState);
+                    return newOrderState;
+                  }));
+                });
+              } else {
+                // SMTP not configured or not active
+                updatedOrderObj.history = [
+                  ...(updatedOrderObj.history || []),
+                  {
+                    timestamp: getSaoPauloDateTimeShort(),
+                    action: 'E-mail Não Enviado (SMTP Inativo)',
+                    user: 'Sistema de Notificações Automáticas',
+                    details: `O e-mail para ${contact.email} não foi enviado pois o Servidor SMTP próprio não está ativo/configurado nas configurações.`
+                  }
+                ];
               }
-            ];
+            } else {
+              updatedOrderObj.history = [
+                ...(updatedOrderObj.history || []),
+                {
+                  timestamp: getSaoPauloDateTimeShort(),
+                  action: 'E-mail Não Enviado',
+                  user: 'Sistema de Notificações Automáticas',
+                  details: 'E-mail do cliente não cadastrado no pedido.'
+                }
+              ];
+            }
           }
 
           // Trigger floating completion notification toast

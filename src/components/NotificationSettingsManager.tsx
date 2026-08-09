@@ -157,6 +157,22 @@ export default function NotificationSettingsManager({ onSaveSuccess }: Notificat
         </div>
       </div>
 
+      {/* Info Banner on SMTP & WhatsApp Functionality */}
+      <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 text-xs text-amber-900 space-y-2">
+        <div className="flex items-center gap-2 font-extrabold text-amber-950">
+          <Info size={16} className="text-amber-600 shrink-0" />
+          <span>Como funcionam os envios de Notificação:</span>
+        </div>
+        <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-800 leading-relaxed font-medium">
+          <li>
+            <strong>E-mail Automático:</strong> Os e-mails reais de comprovante só chegam ao cliente se o <strong>Servidor SMTP Próprio</strong> estiver <u>ATIVO e configurado</u> na aba "Servidor SMTP" (com Host, Porta e Senha de App). Caso o SMTP não esteja configurado, o histórico do pedido registrará <em>"E-mail Não Enviado (SMTP Inativo)"</em>.
+          </li>
+          <li>
+            <strong>WhatsApp:</strong> Ao concluir o pedido com WhatsApp ativo, o navegador abre a janela oficial do WhatsApp Web com a mensagem de comprovante já preenchida para o cliente.
+          </li>
+        </ul>
+      </div>
+
       {/* Global Toggles */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* WhatsApp Dispatch Switch */}

@@ -322,6 +322,19 @@ function OrdersTable({
         };
         updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
         saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+
+        if (onUpdateOrder) {
+          const newHistory = [
+            ...(order.history || []),
+            {
+              timestamp: getSaoPauloDateTimeShort(),
+              action: 'E-mail Disparado Manualmente (SMTP)',
+              user: 'Operador / Painel',
+              details: `E-mail enviado com SUCESSO via SMTP para ${recipientEmail}. Message-ID: ${data.messageId || 'OK'}`
+            }
+          ];
+          onUpdateOrder({ ...order, history: newHistory });
+        }
       } else {
         alert(`❌ Falha ao enviar e-mail via SMTP:\n${data.error || 'Erro desconhecido'}`);
         const updatedSmtpSettings = { ...notifSettings.smtpSettings };
@@ -336,6 +349,19 @@ function OrdersTable({
         };
         updatedSmtpSettings.logs = [newLog, ...(updatedSmtpSettings.logs || [])].slice(0, 50);
         saveNotificationSettings({ ...notifSettings, smtpSettings: updatedSmtpSettings });
+
+        if (onUpdateOrder) {
+          const newHistory = [
+            ...(order.history || []),
+            {
+              timestamp: getSaoPauloDateTimeShort(),
+              action: 'Falha no Disparo Manual (SMTP)',
+              user: 'Operador / Painel',
+              details: `FALHA ao enviar e-mail via SMTP para ${recipientEmail}: ${data.error || 'Erro desconhecido'}`
+            }
+          ];
+          onUpdateOrder({ ...order, history: newHistory });
+        }
       }
     } catch (err: any) {
       alert(`Erro ao conectar ao servidor de e-mail: ${err.message || 'Erro de rede'}`);
