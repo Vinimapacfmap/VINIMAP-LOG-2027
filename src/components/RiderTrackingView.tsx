@@ -94,7 +94,13 @@ export interface RiderLocationPoint {
   source: string;
 }
 
-export default function RiderTrackingView({ riders, orders, onUpdateRiderCoords, onUpdateOrderStatus, activeHub }: RiderTrackingViewProps) {
+const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
+const MOCK_ORDER_IDS = ['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'];
+
+export default function RiderTrackingView({ riders: propsRiders, orders: propsOrders, onUpdateRiderCoords, onUpdateOrderStatus, activeHub }: RiderTrackingViewProps) {
+  const riders = useMemo(() => propsRiders.filter(r => !MOCK_RIDER_IDS.includes(r.id)), [propsRiders]);
+  const orders = useMemo(() => propsOrders.filter(o => !MOCK_ORDER_IDS.includes(o.id)), [propsOrders]);
+
   const [selectedRiderId, setSelectedRiderId] = useState<string | null>(null);
   const [selectedTimelineRider, setSelectedTimelineRider] = useState<DeliveryRider | null>(null);
   const [locationHistories, setLocationHistories] = useState<Record<string, RiderLocationPoint[]>>({});

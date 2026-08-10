@@ -18,7 +18,9 @@ import {
   HelpCircle,
   ExternalLink,
   ShieldCheck,
-  Server
+  Server,
+  History,
+  Info
 } from 'lucide-react';
 import { 
   NotificationSettings, 
@@ -62,7 +64,7 @@ const SAMPLE_ORDER: Order = {
 
 export default function NotificationSettingsManager({ onSaveSuccess }: NotificationSettingsManagerProps) {
   const [settings, setSettings] = useState<NotificationSettings>(getNotificationSettings());
-  const [activeTab, setActiveTab] = useState<'whatsapp' | 'email' | 'smtp' | 'preview'>('whatsapp');
+  const [activeTab, setActiveTab] = useState<'whatsapp' | 'email' | 'smtp' | 'logs' | 'preview'>('whatsapp');
   const [isSaved, setIsSaved] = useState(false);
   const [focusedField, setFocusedField] = useState<'subject' | 'emailBody' | 'waBody'>('waBody');
 
@@ -297,6 +299,24 @@ export default function NotificationSettingsManager({ onSaveSuccess }: Notificat
 
         <button
           type="button"
+          onClick={() => setActiveTab('logs')}
+          className={`px-4 py-2.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'logs'
+              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <History size={16} />
+          <span>Logs de Disparo de E-mail</span>
+          {(settings.smtpSettings?.logs?.length || 0) > 0 && (
+            <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-800 text-[10px] font-bold rounded-full">
+              {settings.smtpSettings?.logs?.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('preview')}
           className={`px-4 py-2.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
             activeTab === 'preview'
@@ -310,7 +330,7 @@ export default function NotificationSettingsManager({ onSaveSuccess }: Notificat
       </div>
 
       {/* TAB SMTP: CUSTOM SMTP CONFIGURATION */}
-      {activeTab === 'smtp' && (
+      {(activeTab === 'smtp' || activeTab === 'logs') && (
         <SmtpSettingsPanel
           smtpSettings={settings.smtpSettings || DEFAULT_SMTP_SETTINGS}
           onChange={(updatedSmtp) => setSettings(prev => ({ ...prev, smtpSettings: updatedSmtp }))}

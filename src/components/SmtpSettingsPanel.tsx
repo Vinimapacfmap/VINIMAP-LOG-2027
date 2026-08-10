@@ -45,6 +45,8 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
   const [showHelpGuide, setShowHelpGuide] = useState(false);
   const [internalSaved, setInternalSaved] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [logSearch, setLogSearch] = useState('');
+  const [logFilterStatus, setLogFilterStatus] = useState<'all' | 'success' | 'error'>('all');
 
   const handleSaveClick = () => {
     if (onSave) {
@@ -688,11 +690,11 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
 
       {/* Dispatch History / Logs */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <History size={16} className="text-slate-600" />
             <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-              Histórico de Disparos via SMTP
+              Logs de Disparo de E-mail
             </h4>
             <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full">
               {smtpSettings.logs?.length || 0} registros
@@ -710,6 +712,54 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
           )}
         </div>
 
+        {/* Filter & Search Bar */}
+        {(smtpSettings.logs?.length || 0) > 0 && (
+          <div className="flex flex-col sm:flex-row items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+            <input
+              type="text"
+              value={logSearch}
+              onChange={(e) => setLogSearch(e.target.value)}
+              placeholder="🔍 Buscar por ID do Pedido (#PED-101), destinatário ou assunto..."
+              className="w-full sm:flex-1 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+            />
+            <div className="flex items-center gap-1 shrink-0 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setLogFilterStatus('all')}
+                className={`px-2.5 py-1 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer ${
+                  logFilterStatus === 'all'
+                    ? 'bg-slate-800 text-white shadow-xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                onClick={() => setLogFilterStatus('success')}
+                className={`px-2.5 py-1 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer ${
+                  logFilterStatus === 'success'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white border border-slate-200 text-emerald-700 hover:bg-emerald-50'
+                }`}
+              >
+                Sucesso
+              </button>
+              <button
+                type="button"
+                onClick={() => setLogFilterStatus('error')}
+                className={`px-2.5 py-1 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer ${
+                  logFilterStatus === 'error'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-white border border-slate-200 text-rose-700 hover:bg-rose-50'
+                }`}
+              >
+                Falhas
+              </button>
+            </div>
+          </div>
+        )}
+
         {(!smtpSettings.logs || smtpSettings.logs.length === 0) ? (
           <div className="text-center py-6 text-slate-400 text-xs">
             <Mail size={24} className="mx-auto mb-2 opacity-40" />
@@ -724,40 +774,64 @@ export const SmtpSettingsPanel: React.FC<SmtpSettingsPanelProps> = ({
               <thead>
                 <tr className="border-b border-slate-100 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                   <th className="py-2 px-3">Data e Hora</th>
+                  <th className="py-2 px-3">ID do Pedido</th>
                   <th className="py-2 px-3">Destinatário</th>
                   <th className="py-2 px-3">Assunto</th>
                   <th className="py-2 px-3">Status</th>
-                  <th className="py-2 px-3 text-right">Detalhes / ID</th>
+                  <th className="py-2 px-3 text-right">Detalhes / Message-ID</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {smtpSettings.logs.slice(0, 15).map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                      {log.timestamp}
-                    </td>
-                    <td className="py-2.5 px-3 font-semibold text-slate-800 whitespace-nowrap">
-                      {log.recipient}
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-600 truncate max-w-[200px]">
-                      {log.subject}
-                    </td>
-                    <td className="py-2.5 px-3 whitespace-nowrap">
-                      {log.status === 'success' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-extrabold rounded-md border border-emerald-200">
-                          <Check size={12} /> Enviado
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 text-[10px] font-extrabold rounded-md border border-red-200">
-                          <XCircle size={12} /> Falhou
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-[10px] text-slate-400 truncate max-w-[150px]">
-                      {log.messageId || log.errorDetails || '-'}
-                    </td>
-                  </tr>
-                ))}
+                {smtpSettings.logs
+                  .filter(log => {
+                    if (logFilterStatus === 'success' && log.status !== 'success') return false;
+                    if (logFilterStatus === 'error' && log.status !== 'error') return false;
+                    if (logSearch.trim()) {
+                      const q = logSearch.toLowerCase();
+                      const matchCode = (log.orderCode || '').toLowerCase().includes(q);
+                      const matchRec = (log.recipient || '').toLowerCase().includes(q);
+                      const matchSubj = (log.subject || '').toLowerCase().includes(q);
+                      return matchCode || matchRec || matchSubj;
+                    }
+                    return true;
+                  })
+                  .slice(0, 50)
+                  .map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                        {log.timestamp}
+                      </td>
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        {log.orderCode ? (
+                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-mono font-extrabold text-[10.5px] rounded-md border border-blue-200">
+                            #{log.orderCode}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono text-[10px]">-</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 font-semibold text-slate-800 whitespace-nowrap">
+                        {log.recipient}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600 truncate max-w-[200px]">
+                        {log.subject}
+                      </td>
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        {log.status === 'success' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-extrabold rounded-md border border-emerald-200">
+                            <Check size={12} /> Enviado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 text-[10px] font-extrabold rounded-md border border-red-200">
+                            <XCircle size={12} /> Falhou
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-[10px] text-slate-400 truncate max-w-[150px]" title={log.errorDetails || log.messageId}>
+                        {log.messageId || log.errorDetails || '-'}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

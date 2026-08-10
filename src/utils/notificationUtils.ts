@@ -94,6 +94,8 @@ Agradecemos a preferência! 🚀`,
 
 const STORAGE_KEY = 'vinimap_notification_settings';
 
+import { dbSaveNotificationSettings, dbGetNotificationSettings } from '../lib/dbService';
+
 export function getNotificationSettings(): NotificationSettings {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -117,9 +119,31 @@ export function getNotificationSettings(): NotificationSettings {
 export function saveNotificationSettings(settings: NotificationSettings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    dbSaveNotificationSettings(settings).catch(() => {});
   } catch (e) {
     console.warn('[NotificationSettings] Erro ao salvar configurações no localStorage:', e);
   }
+}
+
+export async function dbSyncNotificationSettings(): Promise<NotificationSettings> {
+  try {
+    const cloudSettings = await dbGetNotificationSettings();
+    if (cloudSettings) {
+      const merged: NotificationSettings = {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        ...cloudSettings,
+        smtpSettings: {
+          ...DEFAULT_SMTP_SETTINGS,
+          ...(cloudSettings.smtpSettings || {})
+        }
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      return merged;
+    }
+  } catch (e) {
+    console.warn('[dbSyncNotificationSettings WARN]:', e);
+  }
+  return getNotificationSettings();
 }
 
 export function replaceNotificationPlaceholders(
@@ -165,6 +189,7 @@ export function getOrderContactInfo(order: Order): {
   const rawData = order.rawData || {};
   const phone = order.phone || rawData.Telefone || rawData.telefone || rawData.Celular || rawData.celular || rawData.Phone || '';
   const email = (
+    order.email ||
     rawData.Email || 
     rawData.email || 
     rawData['E-mail'] || 

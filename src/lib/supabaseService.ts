@@ -321,25 +321,33 @@ export async function sbSaveOrder(order: Order) {
     console.log('[Supabase sbSaveOrder] Supabase not configured. Skipping remote write.');
     return;
   }
-  console.log(`[Supabase sbSaveOrder] Upserting order #${order.id}...`);
-  const dbOrder = mapOrderToDb(order);
-  const { error } = await supabase.from('orders').upsert(dbOrder);
-  if (error) {
-    console.warn(`[Supabase sbSaveOrder] Error saving order #${order.id}:`, error);
-    throw error;
+  try {
+    console.log(`[Supabase sbSaveOrder] Upserting order #${order.id}...`);
+    const dbOrder = mapOrderToDb(order);
+    const { error } = await supabase.from('orders').upsert(dbOrder);
+    if (error) {
+      console.warn(`[Supabase sbSaveOrder] Error saving order #${order.id}:`, error);
+    } else {
+      console.log(`[Supabase sbSaveOrder] Order #${order.id} saved successfully.`);
+    }
+  } catch (err) {
+    console.warn(`[Supabase sbSaveOrder] Exception saving order #${order.id}:`, err);
   }
-  console.log(`[Supabase sbSaveOrder] Order #${order.id} saved successfully.`);
 }
 
 export async function sbDeleteOrder(orderId: string) {
   if (!isSupabaseConfigured || !supabase) return;
-  console.log(`[Supabase sbDeleteOrder] Deleting order #${orderId}...`);
-  const { error } = await supabase.from('orders').delete().eq('id', orderId);
-  if (error) {
-    console.warn(`[Supabase sbDeleteOrder] Error deleting order #${orderId}:`, error);
-    throw error;
+  try {
+    console.log(`[Supabase sbDeleteOrder] Deleting order #${orderId}...`);
+    const { error } = await supabase.from('orders').delete().eq('id', orderId);
+    if (error) {
+      console.warn(`[Supabase sbDeleteOrder] Error deleting order #${orderId}:`, error);
+    } else {
+      console.log(`[Supabase sbDeleteOrder] Order #${orderId} deleted successfully.`);
+    }
+  } catch (err) {
+    console.warn(`[Supabase sbDeleteOrder] Exception deleting order #${orderId}:`, err);
   }
-  console.log(`[Supabase sbDeleteOrder] Order #${orderId} deleted successfully.`);
 }
 
 export async function sbSaveClientPartner(client: ClientPartner) {
@@ -347,36 +355,43 @@ export async function sbSaveClientPartner(client: ClientPartner) {
     console.log('[Supabase sbSaveClientPartner] Supabase not configured. Skipping remote write.');
     return;
   }
-  console.log(`[Supabase sbSaveClientPartner] Upserting client #${client.id} (${client.name})...`);
-  const dbClient = mapClientPartnerToDb(client);
-  const { error } = await supabase.from('client_partners').upsert(dbClient);
-  if (error) {
-    // If column missing in schema cache, attempt fallback without newly added optional columns
-    if (error.message?.includes('enable_completion_notifications') || error.message?.includes('column') || error.code === 'PGRST204' || error.code === '42703') {
-      console.warn(`[Supabase sbSaveClientPartner] Missing column in schema cache, retrying without optional columns...`);
-      const { enable_completion_notifications, cep_ranges_history, ...fallbackClient } = dbClient as any;
-      const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackClient);
-      if (retryErr) {
-        console.warn(`[Supabase sbSaveClientPartner] Error saving client #${client.id} on retry:`, retryErr);
-        throw retryErr;
+  try {
+    console.log(`[Supabase sbSaveClientPartner] Upserting client #${client.id} (${client.name})...`);
+    const dbClient = mapClientPartnerToDb(client);
+    const { error } = await supabase.from('client_partners').upsert(dbClient);
+    if (error) {
+      // If column missing in schema cache, attempt fallback without newly added optional columns
+      if (error.message?.includes('enable_completion_notifications') || error.message?.includes('column') || error.code === 'PGRST204' || error.code === '42703') {
+        console.warn(`[Supabase sbSaveClientPartner] Missing column in schema cache, retrying without optional columns...`);
+        const { enable_completion_notifications, cep_ranges_history, ...fallbackClient } = dbClient as any;
+        const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackClient);
+        if (retryErr) {
+          console.warn(`[Supabase sbSaveClientPartner] Error saving client #${client.id} on retry:`, retryErr);
+        }
+        return;
       }
-      return;
+      console.warn(`[Supabase sbSaveClientPartner] Error saving client #${client.id}:`, error);
+    } else {
+      console.log(`[Supabase sbSaveClientPartner] Client #${client.id} saved successfully.`);
     }
-    console.warn(`[Supabase sbSaveClientPartner] Error saving client #${client.id}:`, error);
-    throw error;
+  } catch (err) {
+    console.warn(`[Supabase sbSaveClientPartner] Exception saving client #${client.id}:`, err);
   }
-  console.log(`[Supabase sbSaveClientPartner] Client #${client.id} saved successfully.`);
 }
 
 export async function sbDeleteClientPartner(clientId: string) {
   if (!isSupabaseConfigured || !supabase) return;
-  console.log(`[Supabase sbDeleteClientPartner] Deleting client #${clientId}...`);
-  const { error } = await supabase.from('client_partners').delete().eq('id', clientId);
-  if (error) {
-    console.warn(`[Supabase sbDeleteClientPartner] Error deleting client #${clientId}:`, error);
-    throw error;
+  try {
+    console.log(`[Supabase sbDeleteClientPartner] Deleting client #${clientId}...`);
+    const { error } = await supabase.from('client_partners').delete().eq('id', clientId);
+    if (error) {
+      console.warn(`[Supabase sbDeleteClientPartner] Error deleting client #${clientId}:`, error);
+    } else {
+      console.log(`[Supabase sbDeleteClientPartner] Client #${clientId} deleted successfully.`);
+    }
+  } catch (err) {
+    console.warn(`[Supabase sbDeleteClientPartner] Exception deleting client #${clientId}:`, err);
   }
-  console.log(`[Supabase sbDeleteClientPartner] Client #${clientId} deleted successfully.`);
 }
 
 export async function sbSaveDeliveryRider(rider: DeliveryRider) {
@@ -384,25 +399,33 @@ export async function sbSaveDeliveryRider(rider: DeliveryRider) {
     console.log('[Supabase sbSaveDeliveryRider] Supabase not configured. Skipping remote write.');
     return;
   }
-  console.log(`[Supabase sbSaveDeliveryRider] Upserting rider #${rider.id} (${rider.name})...`);
-  const dbRider = mapDeliveryRiderToDb(rider);
-  const { error } = await supabase.from('delivery_riders').upsert(dbRider);
-  if (error) {
-    console.warn(`[Supabase sbSaveDeliveryRider] Error saving rider #${rider.id}:`, error);
-    throw error;
+  try {
+    console.log(`[Supabase sbSaveDeliveryRider] Upserting rider #${rider.id} (${rider.name})...`);
+    const dbRider = mapDeliveryRiderToDb(rider);
+    const { error } = await supabase.from('delivery_riders').upsert(dbRider);
+    if (error) {
+      console.warn(`[Supabase sbSaveDeliveryRider] Error saving rider #${rider.id}:`, error);
+    } else {
+      console.log(`[Supabase sbSaveDeliveryRider] Rider #${rider.id} saved successfully.`);
+    }
+  } catch (err) {
+    console.warn(`[Supabase sbSaveDeliveryRider] Exception saving rider #${rider.id}:`, err);
   }
-  console.log(`[Supabase sbSaveDeliveryRider] Rider #${rider.id} saved successfully.`);
 }
 
 export async function sbDeleteDeliveryRider(riderId: string) {
   if (!isSupabaseConfigured || !supabase) return;
-  console.log(`[Supabase sbDeleteDeliveryRider] Deleting rider #${riderId}...`);
-  const { error } = await supabase.from('delivery_riders').delete().eq('id', riderId);
-  if (error) {
-    console.warn(`[Supabase sbDeleteDeliveryRider] Error deleting rider #${riderId}:`, error);
-    throw error;
+  try {
+    console.log(`[Supabase sbDeleteDeliveryRider] Deleting rider #${riderId}...`);
+    const { error } = await supabase.from('delivery_riders').delete().eq('id', riderId);
+    if (error) {
+      console.warn(`[Supabase sbDeleteDeliveryRider] Error deleting rider #${riderId}:`, error);
+    } else {
+      console.log(`[Supabase sbDeleteDeliveryRider] Rider #${riderId} deleted successfully.`);
+    }
+  } catch (err) {
+    console.warn(`[Supabase sbDeleteDeliveryRider] Exception deleting rider #${riderId}:`, err);
   }
-  console.log(`[Supabase sbDeleteDeliveryRider] Rider #${riderId} deleted successfully.`);
 }
 
 export async function sbSaveFinancialTransaction(tx: FinancialTransaction) {
@@ -410,22 +433,29 @@ export async function sbSaveFinancialTransaction(tx: FinancialTransaction) {
     console.log('[Supabase sbSaveFinancialTransaction] Supabase not configured. Skipping remote write.');
     return;
   }
-  console.log(`[Supabase sbSaveFinancialTransaction] Upserting transaction #${tx.id}...`);
-  const dbTx = mapFinancialTransactionToDb(tx);
-  const { error } = await supabase.from('financial_transactions').upsert(dbTx);
-  if (error) {
-    console.warn(`[Supabase sbSaveFinancialTransaction] Error saving transaction #${tx.id}:`, error);
-    throw error;
+  try {
+    console.log(`[Supabase sbSaveFinancialTransaction] Upserting transaction #${tx.id}...`);
+    const dbTx = mapFinancialTransactionToDb(tx);
+    const { error } = await supabase.from('financial_transactions').upsert(dbTx);
+    if (error) {
+      console.warn(`[Supabase sbSaveFinancialTransaction] Error saving transaction #${tx.id}:`, error);
+    } else {
+      console.log(`[Supabase sbSaveFinancialTransaction] Transaction #${tx.id} saved successfully.`);
+    }
+  } catch (err) {
+    console.warn(`[Supabase sbSaveFinancialTransaction] Exception saving transaction #${tx.id}:`, err);
   }
-  console.log(`[Supabase sbSaveFinancialTransaction] Transaction #${tx.id} saved successfully.`);
 }
 
 export async function sbDeleteFinancialTransaction(txId: string) {
   if (!isSupabaseConfigured || !supabase) return;
-  const { error } = await supabase.from('financial_transactions').delete().eq('id', txId);
-  if (error) {
-    console.warn('Supabase Error deleting financial transaction:', error);
-    throw error;
+  try {
+    const { error } = await supabase.from('financial_transactions').delete().eq('id', txId);
+    if (error) {
+      console.warn('Supabase Error deleting financial transaction:', error);
+    }
+  } catch (err) {
+    console.warn('Supabase Exception deleting financial transaction:', err);
   }
 }
 
@@ -434,9 +464,13 @@ export async function sbBulkDeleteFinancialTransactions(txIds: string[]) {
   // Delete in batches of 200
   for (let i = 0; i < txIds.length; i += 200) {
     const chunk = txIds.slice(i, i + 200);
-    const { error } = await supabase.from('financial_transactions').delete().in('id', chunk);
-    if (error) {
-      console.warn('Supabase Error bulk deleting financial transactions:', error);
+    try {
+      const { error } = await supabase.from('financial_transactions').delete().in('id', chunk);
+      if (error) {
+        console.warn('Supabase Error bulk deleting financial transactions:', error);
+      }
+    } catch (err) {
+      console.warn('Supabase Exception bulk deleting financial transactions:', err);
     }
   }
 }
@@ -455,30 +489,39 @@ export async function sbPurgeTable(tableName: string) {
 
 export async function sbSaveCompanyHub(hub: CompanyHub) {
   if (!isSupabaseConfigured || !supabase) return;
-  const dbHub = mapCompanyHubToDb(hub);
-  const { error } = await supabase.from('company_hubs').upsert(dbHub);
-  if (error) {
-    console.warn('Supabase Error writing company hub:', error);
-    throw error;
+  try {
+    const dbHub = mapCompanyHubToDb(hub);
+    const { error } = await supabase.from('company_hubs').upsert(dbHub);
+    if (error) {
+      console.warn('Supabase Error writing company hub:', error);
+    }
+  } catch (err) {
+    console.warn('Supabase Exception writing company hub:', err);
   }
 }
 
 export async function sbDeleteCompanyHub(hubId: string) {
   if (!isSupabaseConfigured || !supabase) return;
-  const { error } = await supabase.from('company_hubs').delete().eq('id', hubId);
-  if (error) {
-    console.warn('Supabase Error deleting company hub:', error);
-    throw error;
+  try {
+    const { error } = await supabase.from('company_hubs').delete().eq('id', hubId);
+    if (error) {
+      console.warn('Supabase Error deleting company hub:', error);
+    }
+  } catch (err) {
+    console.warn('Supabase Exception deleting company hub:', err);
   }
 }
 
 export async function sbAddActivityLog(log: ActivityLog) {
   if (!isSupabaseConfigured || !supabase) return;
-  const dbLog = mapActivityLogToDb(log);
-  const { error } = await supabase.from('activity_logs').upsert(dbLog);
-  if (error) {
-    console.warn('Supabase Error writing log:', error);
-    throw error;
+  try {
+    const dbLog = mapActivityLogToDb(log);
+    const { error } = await supabase.from('activity_logs').upsert(dbLog);
+    if (error) {
+      console.warn('Supabase Error writing log:', error);
+    }
+  } catch (err) {
+    console.warn('Supabase Exception writing log:', err);
   }
 }
 
@@ -591,40 +634,63 @@ export interface SupabaseLoadedState {
   txs: FinancialTransaction[];
 }
 
+async function safeQueryTable(tableName: string) {
+  try {
+    if (!supabase) return { data: [], error: null };
+    const res = await supabase.from(tableName).select('*');
+    return { data: res.data || [], error: res.error };
+  } catch (err) {
+    console.warn(`[safeQueryTable] Exception fetching table ${tableName}:`, err);
+    return { data: [], error: err };
+  }
+}
+
 export async function fetchAllStateFromSupabase(): Promise<SupabaseLoadedState> {
   if (!isSupabaseConfigured || !supabase) {
     throw new Error('Supabase is not configured.');
   }
 
-  const [
-    { data: hubs, error: hubsErr },
-    { data: clients, error: clientsErr },
-    { data: riders, error: ridersErr },
-    { data: orders, error: ordersErr },
-    { data: logs, error: logsErr },
-    { data: txs, error: txsErr }
-  ] = await Promise.all([
-    supabase.from('company_hubs').select('*'),
-    supabase.from('client_partners').select('*'),
-    supabase.from('delivery_riders').select('*'),
-    supabase.from('orders').select('*'),
-    supabase.from('activity_logs').select('*'),
-    supabase.from('financial_transactions').select('*')
-  ]);
+  try {
+    const [
+      { data: hubs, error: hubsErr },
+      { data: clients, error: clientsErr },
+      { data: riders, error: ridersErr },
+      { data: orders, error: ordersErr },
+      { data: logs, error: logsErr },
+      { data: txs, error: txsErr }
+    ] = await Promise.all([
+      safeQueryTable('company_hubs'),
+      safeQueryTable('client_partners'),
+      safeQueryTable('delivery_riders'),
+      safeQueryTable('orders'),
+      safeQueryTable('activity_logs'),
+      safeQueryTable('financial_transactions')
+    ]);
 
-  if (hubsErr) throw hubsErr;
-  if (clientsErr) throw clientsErr;
-  if (ridersErr) throw ridersErr;
-  if (ordersErr) throw ordersErr;
-  if (logsErr) throw logsErr;
-  if (txsErr) throw txsErr;
+    if (hubsErr) console.warn('Supabase hubs query warning:', hubsErr);
+    if (clientsErr) console.warn('Supabase clients query warning:', clientsErr);
+    if (ridersErr) console.warn('Supabase riders query warning:', ridersErr);
+    if (ordersErr) console.warn('Supabase orders query warning:', ordersErr);
+    if (logsErr) console.warn('Supabase logs query warning:', logsErr);
+    if (txsErr) console.warn('Supabase txs query warning:', txsErr);
 
-  return {
-    hubs: (hubs || []).map(mapCompanyHubFromDb),
-    clients: (clients || []).map(mapClientPartnerFromDb),
-    riders: (riders || []).map(mapDeliveryRiderFromDb),
-    orders: (orders || []).map(mapOrderFromDb),
-    logs: (logs || []).map(mapActivityLogFromDb),
-    txs: (txs || []).map(mapFinancialTransactionFromDb)
-  };
+    return {
+      hubs: (hubs || []).map(mapCompanyHubFromDb),
+      clients: (clients || []).map(mapClientPartnerFromDb),
+      riders: (riders || []).map(mapDeliveryRiderFromDb),
+      orders: (orders || []).map(mapOrderFromDb),
+      logs: (logs || []).map(mapActivityLogFromDb),
+      txs: (txs || []).map(mapFinancialTransactionFromDb)
+    };
+  } catch (err: any) {
+    console.warn('[fetchAllStateFromSupabase] Exception loading state from Supabase:', err);
+    return {
+      hubs: [],
+      clients: [],
+      riders: [],
+      orders: [],
+      logs: [],
+      txs: []
+    };
+  }
 }

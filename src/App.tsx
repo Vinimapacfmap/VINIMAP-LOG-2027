@@ -61,7 +61,10 @@ import {
   seedInitialDataIfEmpty,
   INITIAL_CLIENT_PARTNERS,
   MOCK_CLIENT_IDS,
+  MOCK_RIDER_IDS,
+  MOCK_ORDER_IDS,
   dbPurgeMockClientPartners,
+  dbPurgeMockRidersAndOrders,
   dbSaveOrder,
   dbDeleteOrder,
   dbBulkSaveOrders,
@@ -584,16 +587,17 @@ export default function App() {
 
       // 3. Fallback to initial mock data if React state is empty
       if (isCancelled) return;
-      setOrders(prev => prev.length === 0 ? INITIAL_ORDERS : prev);
+      setOrders(prev => prev.filter(o => !MOCK_ORDER_IDS.includes(o.id)));
       setClientPartners(prev => prev.filter(c => !MOCK_CLIENT_IDS.includes(c.id)));
-      setRiders(prev => prev.length === 0 ? INITIAL_RIDERS : prev);
+      setRiders(prev => prev.filter(r => !MOCK_RIDER_IDS.includes(r.id)));
       setLogs(prev => prev.length === 0 ? INITIAL_LOGS : prev);
       setFinancialTransactions(prev => prev.length === 0 ? INITIAL_FINANCIAL_TRANSACTIONS : prev);
       setCompanyHubs(prev => prev.length === 0 ? INITIAL_COMPANY_HUBS : prev);
     };
 
-    // Auto purge mock client partners if any exist in remote database
+    // Auto purge mock client partners, riders and orders if any exist in remote database
     dbPurgeMockClientPartners().catch(() => {});
+    dbPurgeMockRidersAndOrders().catch(() => {});
 
     // 1. Ensure any stale or previous listeners are actively cleaned up
     cleanupAllFirestoreListeners();

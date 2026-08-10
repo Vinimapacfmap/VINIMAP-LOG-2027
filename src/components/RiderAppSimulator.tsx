@@ -72,7 +72,10 @@ import {
   ArrowUp,
   ArrowDown,
   FileSignature,
-  Lock as LockIcon
+  Lock as LockIcon,
+  Menu,
+  Users,
+  LogOut
 } from 'lucide-react';
 import { SignatureCanvasModal } from './SignatureCanvasModal';
 import { DriverAppInstallerModal } from './DriverAppInstallerModal';
@@ -226,6 +229,7 @@ export default function RiderAppSimulator({
 }: RiderAppSimulatorProps) {
   const effectiveLogo = activeHub?.logoUrl || vinimapLogo;
   const [isUserFullScreen, setIsUserFullScreen] = useState(false);
+  const [isDrawerMenuOpen, setIsDrawerMenuOpen] = useState(false);
   
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -257,18 +261,31 @@ export default function RiderAppSimulator({
     applyDynamicPwaManifestAndIcons(activeHub?.logoUrl);
   }, [activeHub]);
 
-  // Check URL parameters or local storage for riderId lock when opened directly via link
+  // Check URL parameters for standalone driver device link (?riderId=xxx)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const urlRiderId = params.get('riderId') || localStorage.getItem('vinimap_driver_id') || activeRiderId;
-      if (urlRiderId) {
-        setLockedRiderId(urlRiderId);
-        setSelectedRiderId(urlRiderId);
-        const targetRider = riders.find(r => r.id === urlRiderId);
+      const urlRiderParam = params.get('riderId');
+      if (urlRiderParam) {
+        setLockedRiderId(urlRiderParam);
+        setSelectedRiderId(urlRiderParam);
+        const targetRider = riders.find(r => r.id === urlRiderParam);
         if (targetRider) {
           setPhoneInput(prev => prev || targetRider.deviceNumber || targetRider.phone || '');
           setPasswordInput(prev => prev || targetRider.password || '1234');
+        }
+      } else {
+        if (!selectedRiderId && riders.length > 0) {
+          const storedRiderId = localStorage.getItem('vinimap_driver_id') || activeRiderId;
+          const initial = (storedRiderId && riders.some(r => r.id === storedRiderId))
+            ? storedRiderId
+            : riders[0].id;
+          setSelectedRiderId(initial);
+          const targetRider = riders.find(r => r.id === initial);
+          if (targetRider) {
+            setPhoneInput(prev => prev || targetRider.deviceNumber || targetRider.phone || '');
+            setPasswordInput(prev => prev || targetRider.password || '1234');
+          }
         }
       }
     }
@@ -276,18 +293,35 @@ export default function RiderAppSimulator({
 
   // Sync state with parent activeRiderId
   useEffect(() => {
-    if (lockedRiderId) {
-      setSelectedRiderId(lockedRiderId);
-    } else if (activeRiderId && activeRiderId !== selectedRiderId) {
+    if (activeRiderId && activeRiderId !== selectedRiderId) {
       setSelectedRiderId(activeRiderId);
     }
-  }, [activeRiderId, lockedRiderId]);
+  }, [activeRiderId]);
 
   const changeSelectedRiderId = (id: string) => {
-    const effectiveId = lockedRiderId || id;
-    setSelectedRiderId(effectiveId);
+    if (!id) return;
+    setSelectedRiderId(id);
+    if (lockedRiderId) {
+      setLockedRiderId(id);
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('vinimap_driver_id', id);
+    }
+    const targetRider = riders.find(r => r.id === id);
+    if (targetRider) {
+      setPhoneInput(targetRider.deviceNumber || targetRider.phone || '');
+      setPasswordInput(targetRider.password || '1234');
+      setLoginError(null);
+    }
+    // Clear selected order if it belongs to another driver
+    if (selectedOrder && selectedOrder.riderId !== id && selectedRider && selectedOrder.riderId !== selectedRider.name) {
+      setSelectedOrder(null);
+      if (currentScreen === 'details') {
+        setCurrentScreen('dashboard');
+      }
+    }
     if (onActiveRiderChange) {
-      onActiveRiderChange(effectiveId);
+      onActiveRiderChange(id);
     }
   };
 
@@ -357,12 +391,17 @@ export default function RiderAppSimulator({
     }
   }, [selectedRiderId, currentScreen, activeTab, selectedOrder]);
 
+  const hasRestoredSessionRef = useRef(false);
+
   // Restore active session and selected order when returning to the app (e.g., after viewing map)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || hasRestoredSessionRef.current) return;
+    if (riders.length === 0) return;
+
+    hasRestoredSessionRef.current = true;
     
     const savedLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
-    const savedRiderId = localStorage.getItem('vinimap_driver_id') || lockedRiderId || selectedRiderId;
+    const savedRiderId = localStorage.getItem('vinimap_driver_id') || lockedRiderId;
     const savedOrderId = localStorage.getItem('vinimap_driver_selected_order_id');
     const savedScreen = localStorage.getItem('vinimap_driver_active_screen');
     const savedTab = localStorage.getItem('vinimap_driver_active_tab');
@@ -370,9 +409,7 @@ export default function RiderAppSimulator({
     if (savedRiderId) {
       const targetRider = riders.find(r => r.id === savedRiderId);
       if (targetRider) {
-        if (!selectedRiderId || selectedRiderId !== targetRider.id) {
-          setSelectedRiderId(targetRider.id);
-        }
+        setSelectedRiderId(targetRider.id);
         
         // Auto restore order if saved
         if (savedOrderId && orders.length > 0) {
@@ -2765,6 +2802,157 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
         </div>
       )}
 
+      {/* ADMIN DRIVER SELECTION PANEL */}
+      {!isFloating && !isEffectiveRealDevice && (
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl p-5 shadow-lg border border-slate-700/80 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-700/60">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-sky-500/20 text-sky-400 rounded-xl border border-sky-400/30">
+                <Users size={20} />
+              </div>
+              <div>
+                <span className="text-[9px] font-black tracking-widest text-sky-400 uppercase block">
+                  Painel do Administrador
+                </span>
+                <h3 className="text-sm font-extrabold text-white">
+                  Selecionar Condutor Cadastrado para Simulação
+                </h3>
+              </div>
+            </div>
+
+            {selectedRider && (
+              <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
+                <img src={selectedRider.avatar} className="w-6 h-6 rounded-full object-cover border border-sky-400" />
+                <div className="text-left">
+                  <span className="text-[10px] font-extrabold text-white block leading-tight">{selectedRider.name}</span>
+                  <span className="text-[8px] font-bold text-sky-300 uppercase">{selectedRider.vehicle || 'Veículo'}</span>
+                </div>
+                <span className={`ml-2 text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
+                  selectedRider.status === 'Em rota' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                  selectedRider.status === 'Disponível' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                  'bg-slate-700 text-slate-300'
+                }`}>
+                  {selectedRider.status}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+            {/* Dropdown Select */}
+            <div className="md:col-span-6 space-y-1">
+              <label className="text-[10px] font-bold text-slate-300 block uppercase tracking-wider">
+                Condutor Ativo no Simulador:
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedRiderId}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    if (newId) {
+                      changeSelectedRiderId(newId);
+                      const targetRider = riders.find(r => r.id === newId);
+                      if (targetRider) {
+                        setPhoneInput(targetRider.deviceNumber || targetRider.phone || '');
+                        setPasswordInput(targetRider.password || '1234');
+                      }
+                    }
+                  }}
+                  className="w-full bg-slate-950 border border-slate-700 hover:border-sky-400 focus:border-sky-400 rounded-xl px-3.5 py-2 text-xs font-extrabold text-white focus:outline-none transition-all cursor-pointer shadow-inner"
+                >
+                  <option value="" className="bg-slate-900 text-slate-400">-- Selecione um Condutor da Frota --</option>
+                  {riders.map((r) => {
+                    const pendingCount = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                    return (
+                      <option key={r.id} value={r.id} className="bg-slate-900 text-white font-semibold">
+                        {r.name} ({r.vehicle || 'Moto'}) — Dispositivo: {r.deviceNumber || r.phone || 'Geral'} [{pendingCount} entregas]
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="md:col-span-6 flex items-center gap-2 flex-wrap md:justify-end pt-2 md:pt-4">
+              {selectedRider ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentScreen('dashboard');
+                      setActiveTab('home');
+                      setPhoneInput('');
+                      setPasswordInput('');
+                      setLoginError(null);
+                    }}
+                    className="px-3.5 py-2 bg-sky-500 hover:bg-sky-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>Conectar / Simular {selectedRider.name.split(' ')[0]}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentScreen('login');
+                      setPhoneInput(selectedRider.deviceNumber || selectedRider.phone || '');
+                      setPasswordInput(selectedRider.password || '1234');
+                      setLoginError(null);
+                    }}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <LockIcon size={14} className="text-amber-400" />
+                    <span>Ver Tela de Login</span>
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-slate-400 italic">Selecione um condutor acima para iniciar a simulação no dispositivo.</span>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Rider Selection Cards */}
+          <div className="pt-2 border-t border-slate-800">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+              ⚡ Clique em um condutor para alternar a simulação instantaneamente:
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {riders.map((r) => {
+                const isSelected = selectedRiderId === r.id;
+                const pendingCount = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      changeSelectedRiderId(r.id);
+                      setPhoneInput(r.deviceNumber || r.phone || '');
+                      setPasswordInput(r.password || '1234');
+                      setLoginError(null);
+                    }}
+                    className={`p-2 rounded-xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                      isSelected
+                        ? 'bg-sky-500/20 border-sky-400 text-white shadow-md ring-1 ring-sky-400'
+                        : 'bg-slate-950/60 hover:bg-slate-800 border-slate-800 text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <img src={r.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                      <span className="text-[10.5px] font-extrabold truncate">{r.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[8.5px] text-slate-400 font-medium">
+                      <span>{r.vehicle || 'Moto'}</span>
+                      <span className="px-1.5 py-0.2 bg-slate-800 rounded font-bold text-sky-300">{pendingCount} ord.</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CORE WRAPPER LAYOUT */}
       <div className={isEffectiveRealDevice ? "fixed inset-0 w-full h-full bg-slate-900 z-50 font-sans antialiased flex flex-col overflow-hidden p-0" : `grid grid-cols-1 ${isFloating ? 'grid-cols-1' : 'lg:grid-cols-12'} gap-6`}>
         
@@ -3209,16 +3397,26 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 <div className="flex-1 flex flex-col overflow-hidden">
                   
                   {/* APP TOP ACTION HEADER */}
-                  <div className="bg-white border-b border-slate-200/50 px-4 py-3 shrink-0 flex items-center justify-between shadow-xs">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <img src={selectedRider?.avatar} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
+                  <div className="bg-white border-b border-slate-200/50 px-3 py-2.5 shrink-0 flex items-center justify-between shadow-xs relative z-30">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {/* Hamburger Menu Toggle Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsDrawerMenuOpen(true)}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all cursor-pointer flex items-center justify-center shrink-0"
+                        title="Abrir Menu Lateral do Condutor"
+                      >
+                        <Menu size={16} />
+                      </button>
+
+                      <img src={selectedRider?.avatar} className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0" />
                       <div className="min-w-0">
                         <div className="font-extrabold text-[11px] truncate text-slate-800">{selectedRider?.name}</div>
                         <div className="text-[9px] text-slate-400 font-bold uppercase">{selectedRider?.vehicle}</div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       {/* GPS Localização Button */}
                       <button
                         type="button"
@@ -3291,6 +3489,212 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       </button>
                     </div>
                   </div>
+
+                  {/* LATERAL DRAWER MENU OVERLAY */}
+                  <AnimatePresence>
+                    {isDrawerMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex"
+                        onClick={() => setIsDrawerMenuOpen(false)}
+                      >
+                        <motion.div
+                          initial={{ x: '-100%' }}
+                          animate={{ x: 0 }}
+                          exit={{ x: '-100%' }}
+                          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4/5 max-w-[280px] h-full bg-slate-900 text-white flex flex-col shadow-2xl overflow-y-auto"
+                        >
+                          {/* Drawer Header */}
+                          <div className="p-4 bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700/80 flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <img src={selectedRider?.avatar} className="w-9 h-9 rounded-full object-cover border-2 border-sky-400 shrink-0" />
+                              <div className="min-w-0">
+                                <h4 className="font-extrabold text-xs text-white truncate">{selectedRider?.name || 'Condutor'}</h4>
+                                <span className="text-[9px] font-bold text-sky-400 block uppercase">{selectedRider?.vehicle || 'Veículo'}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setIsDrawerMenuOpen(false)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+
+                          {/* DRIVER SELECTION SECTION IN LATERAL MENU */}
+                          <div className="p-4 border-b border-slate-800 space-y-3 bg-slate-950/60 shrink-0">
+                            <div className="flex items-center gap-1.5 text-sky-400 font-extrabold text-[10px] uppercase tracking-wider">
+                              <Users size={14} />
+                              <span>Selecionar Condutor</span>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-semibold text-slate-400 block">
+                                Alternar condutor ativo no App:
+                              </label>
+                              <select
+                                value={selectedRiderId}
+                                onChange={(e) => {
+                                  const newId = e.target.value;
+                                  if (newId) {
+                                    changeSelectedRiderId(newId);
+                                    const targetRider = riders.find(r => r.id === newId);
+                                    if (targetRider) {
+                                      setPhoneInput(targetRider.deviceNumber || targetRider.phone || '');
+                                      setPasswordInput(targetRider.password || '1234');
+                                    }
+                                    setIsDrawerMenuOpen(false);
+                                  }
+                                }}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-sky-400 cursor-pointer"
+                              >
+                                <option value="">-- Selecione o Condutor --</option>
+                                {riders.map(r => (
+                                  <option key={r.id} value={r.id}>
+                                    {r.name} ({r.vehicle || 'Moto'})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="space-y-1 max-h-[130px] overflow-y-auto pr-1">
+                              {riders.map(r => (
+                                <button
+                                  key={r.id}
+                                  type="button"
+                                  onClick={() => {
+                                    changeSelectedRiderId(r.id);
+                                    setPhoneInput(r.deviceNumber || r.phone || '');
+                                    setPasswordInput(r.password || '1234');
+                                    setIsDrawerMenuOpen(false);
+                                  }}
+                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-between transition-all cursor-pointer ${
+                                    selectedRiderId === r.id
+                                      ? 'bg-sky-600 text-white font-extrabold shadow-sm'
+                                      : 'bg-slate-800/60 hover:bg-slate-800 text-slate-300'
+                                  }`}
+                                >
+                                  <span className="truncate">{r.name}</span>
+                                  {selectedRiderId === r.id && <Check size={13} className="shrink-0" />}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Drawer Menu Navigation Items */}
+                          <div className="p-3 space-y-1 flex-1 overflow-y-auto">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('home');
+                                setCurrentScreen('dashboard');
+                                setIsDrawerMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                activeTab === 'home' ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30' : 'text-slate-300 hover:bg-slate-800'
+                              }`}
+                            >
+                              <User size={15} />
+                              <span>Painel do Condutor</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('map');
+                                setIsDrawerMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                activeTab === 'map' ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30' : 'text-slate-300 hover:bg-slate-800'
+                              }`}
+                            >
+                              <MapIcon size={15} />
+                              <span>Mapa e Rota GPS</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('tasks');
+                                setIsDrawerMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                activeTab === 'tasks' ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30' : 'text-slate-300 hover:bg-slate-800'
+                              }`}
+                            >
+                              <CheckCircle2 size={15} />
+                              <span>Minhas Entregas ({riderPendingOrders.length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('audio');
+                                setIsDrawerMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                activeTab === 'audio' ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30' : 'text-slate-300 hover:bg-slate-800'
+                              }`}
+                            >
+                              <Volume2 size={15} />
+                              <span>Áudio & Notificações</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleTriggerInstallPwa();
+                                setIsDrawerMenuOpen(false);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-emerald-400 hover:bg-emerald-950/30 transition-all cursor-pointer"
+                            >
+                              <Download size={15} />
+                              <span>Instalar Aplicativo PWA</span>
+                            </button>
+                          </div>
+
+                          {/* Drawer Footer Logout */}
+                          <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setIsDrawerMenuOpen(false);
+                                if (selectedRider) {
+                                  const loggedOutRider: DeliveryRider = {
+                                    ...selectedRider,
+                                    isLoggedIn: false,
+                                    activeDeviceId: undefined
+                                  };
+                                  try {
+                                    await dbSaveDeliveryRider(loggedOutRider);
+                                  } catch (e) {
+                                    console.warn('Error saving logout state:', e);
+                                  }
+                                }
+                                if (typeof window !== 'undefined') {
+                                  localStorage.removeItem('vinimap_driver_logged_in');
+                                  localStorage.removeItem('vinimap_driver_active_screen');
+                                  localStorage.removeItem('vinimap_driver_active_tab');
+                                  localStorage.removeItem('vinimap_driver_selected_order_id');
+                                }
+                                setSelectedOrder(null);
+                                setCurrentScreen('login');
+                              }}
+                              className="w-full py-2.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                            >
+                              <LogOut size={15} />
+                              <span>Sair do Aplicativo</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* SCREEN BODY VIEWS */}
                   <div className="flex-1 overflow-y-auto bg-slate-50 relative">

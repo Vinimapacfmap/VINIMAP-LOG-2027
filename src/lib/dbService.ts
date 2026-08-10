@@ -46,6 +46,10 @@ export const INITIAL_CLIENT_PARTNERS: ClientPartner[] = [];
 // Known list of mock client partner IDs to allow permanent deletion across Firestore and Supabase
 export const MOCK_CLIENT_IDS = ['CL1-001', 'CL1-002', 'CL1-003', 'CL1-004', 'CL1-005', 'CL1-006', 'CL1-007'];
 
+// Known list of mock rider and mock order IDs to allow permanent deletion in real mode
+export const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
+export const MOCK_ORDER_IDS = ['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'];
+
 // Helper function to recursively remove undefined fields before saving to Firestore
 function removeUndefinedFields<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
@@ -618,6 +622,24 @@ export async function dbPurgeMockClientPartners(): Promise<void> {
   }
 }
 
+// Function to permanently purge mock riders and mock orders from Firestore, Supabase, and local storage
+export async function dbPurgeMockRidersAndOrders(): Promise<void> {
+  for (const mockId of MOCK_RIDER_IDS) {
+    try {
+      await dbDeleteDeliveryRider(mockId);
+    } catch (err) {
+      console.warn(`Could not delete mock rider ${mockId}:`, err);
+    }
+  }
+  for (const mockId of MOCK_ORDER_IDS) {
+    try {
+      await dbDeleteOrder(mockId);
+    } catch (err) {
+      console.warn(`Could not delete mock order ${mockId}:`, err);
+    }
+  }
+}
+
 // Rider CRUD operations
 export async function validateRiderDeviceSession(
   inputDeviceOrPhone: string,
@@ -1118,6 +1140,29 @@ export async function dbBulkSaveRiders(riders: DeliveryRider[]) {
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'deliveryRiders');
   }
+}
+
+export async function dbSaveNotificationSettings(settings: any) {
+  if (getIsFirestoreQuotaExceeded()) return;
+  try {
+    await setDoc(doc(db, 'systemConfig', 'notificationSettings'), removeUndefinedFields(settings));
+    console.log('[dbSaveNotificationSettings SUCCESS] Global notification settings saved to Firestore.');
+  } catch (err) {
+    console.warn('[dbSaveNotificationSettings WARN]:', err);
+  }
+}
+
+export async function dbGetNotificationSettings(): Promise<any | null> {
+  if (getIsFirestoreQuotaExceeded()) return null;
+  try {
+    const snap = await getDoc(doc(db, 'systemConfig', 'notificationSettings'));
+    if (snap.exists()) {
+      return snap.data();
+    }
+  } catch (err) {
+    console.warn('[dbGetNotificationSettings WARN]:', err);
+  }
+  return null;
 }
 
 
