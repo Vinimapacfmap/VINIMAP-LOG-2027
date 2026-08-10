@@ -3451,6 +3451,7 @@ export default function App() {
                     onUpdateStatus={handleUpdateStatus} 
                     onAssignRider={handleAssignRider}
                     searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
                     activeTab={activeOrderTab}
                     setActiveTab={setActiveOrderTab}
                     onUpdateOrder={handleUpdateOrder}
@@ -3543,6 +3544,7 @@ export default function App() {
                   onUpdateStatus={handleUpdateStatus} 
                   onAssignRider={handleAssignRider}
                   searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
                   activeTab={activeOrderTab}
                   setActiveTab={setActiveOrderTab}
                   onUpdateOrder={handleUpdateOrder}
