@@ -58,7 +58,7 @@ export const DEFAULT_SMTP_SETTINGS: SmtpSettings = {
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   autoSendEmail: true,
-  autoSendWhatsapp: true,
+  autoSendWhatsapp: false,
   senderEmailName: 'ViniMap Logística & Notificações',
   smtpSettings: DEFAULT_SMTP_SETTINGS,
   emailSubjectTemplate: 'Seu Pedido #{codigo} foi CONCLUÍDO com sucesso! - {parceiro}',

@@ -184,9 +184,14 @@ export default function NotificationSettingsManager({ onSaveSuccess }: Notificat
               <MessageSquare size={18} />
             </span>
             <div>
-              <h4 className="font-extrabold text-xs text-slate-800">Notificação via WhatsApp / SMS</h4>
+              <h4 className="font-extrabold text-xs text-slate-800 flex items-center gap-2">
+                <span>Notificação via WhatsApp / SMS</span>
+                <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-md font-semibold">
+                  {settings.autoSendWhatsapp ? 'Ativado pelo Administrador' : 'Desativado por padrão'}
+                </span>
+              </h4>
               <p className="text-[11px] text-slate-600 mt-0.5">
-                Exibir link/ação instantânea de envio de WhatsApp com o comprovante no encerramento.
+                Abrir janela/janela de envio de WhatsApp com o comprovante no encerramento (somente quando ativado pelo administrador).
               </p>
             </div>
           </div>
