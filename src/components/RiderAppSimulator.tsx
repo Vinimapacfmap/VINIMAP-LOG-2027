@@ -1566,12 +1566,12 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-[9px] font-bold text-slate-400">#{order.id}</span>
-                    <span className={`text-[8.5px] px-2 py-0.5 rounded-full font-bold border uppercase tracking-wider ${badgeColor}`}>
+                    <span className="font-mono text-[10px] font-extrabold text-slate-700">#{order.id}</span>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-black border uppercase tracking-wider ${badgeColor}`}>
                       {order.status}
                     </span>
                     {order.priority === 'Alta' && (
-                      <span className="bg-rose-50 text-rose-600 border border-rose-100 text-[8.5px] px-1.5 py-0.2 rounded font-extrabold">
+                      <span className="bg-rose-100 text-rose-800 border border-rose-300 text-[8.5px] px-1.5 py-0.2 rounded font-black">
                         URGENTE
                       </span>
                     )}
@@ -1583,29 +1583,29 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     )}
                   </div>
                   
-                  <h4 className="font-extrabold text-[12px] text-slate-800 truncate leading-tight">
+                  <h4 className="font-black text-[13px] text-slate-950 truncate leading-tight">
                     {order.clientName}
                   </h4>
                   
-                  <div className="flex items-center gap-1.5 text-slate-500">
-                    <MapPin size={10} className="shrink-0 text-slate-400" />
-                    <p className="text-[10px] truncate max-w-[200px]">{order.address}</p>
+                  <div className="flex items-center gap-1.5 text-slate-800 font-semibold">
+                    <MapPin size={11} className="shrink-0 text-slate-700" />
+                    <p className="text-[11px] truncate max-w-[200px] font-bold text-slate-900">{order.address}</p>
                   </div>
                 </div>
 
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   {!selectedRider?.ocultarValoresProtocolos && (
-                    <span className="font-mono font-black text-xs text-slate-800">
+                    <span className="font-mono font-black text-xs text-slate-950">
                       R$ {order.value.toFixed(2)}
                     </span>
                   )}
                   
                   <div className="flex items-center gap-1">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase">{order.region}</span>
+                    <span className="text-[9.5px] text-slate-700 font-extrabold uppercase">{order.region}</span>
                     <motion.div
                       animate={{ rotate: isExpanded ? 180 : 0 }}
                       transition={{ duration: 0.2 }}
-                      className="text-slate-400"
+                      className="text-slate-600"
                     >
                       <ChevronDown size={14} />
                     </motion.div>
@@ -1622,16 +1622,16 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.25, ease: "easeInOut" }}
                   >
-                    <div className="border-t border-slate-100 bg-slate-50/55 p-3.5 space-y-3.5">
+                    <div className="border-t border-slate-200 bg-slate-50 p-3.5 space-y-3.5">
                       
                       {/* Delivery Reading / Metadata Block */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl p-3 space-y-2.5 shadow-3xs">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">📄 Dados para Leitura da Entrega</span>
+                      <div className="bg-white border border-slate-300 rounded-xl p-3 space-y-2.5 shadow-xs">
+                        <span className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider block">📄 Dados para Leitura da Entrega</span>
                         
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[10px]">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[10.5px]">
                           <div>
-                            <span className="text-slate-400 block font-semibold">ESTABELECIMENTO:</span>
-                            <span className="font-extrabold text-slate-700">
+                            <span className="text-slate-600 block font-bold">ESTABELECIMENTO:</span>
+                            <span className="font-black text-slate-950">
                               {(() => {
                                 const cp = clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente));
                                 return cp ? cp.name : (order.partnerName || 'Estabelecimento Parceiro');
@@ -1639,20 +1639,20 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             </span>
                           </div>
                           <div>
-                            <span className="text-slate-400 block font-semibold">CEP DE DESTINO:</span>
-                            <span className="font-mono font-bold text-slate-700">{order.cep || '01000-000'}</span>
+                            <span className="text-slate-600 block font-bold">CEP DE DESTINO:</span>
+                            <span className="font-mono font-black text-slate-950">{order.cep || '01000-000'}</span>
                           </div>
                           <div className="col-span-2">
-                            <span className="text-slate-400 block font-semibold">ENDEREÇO DE ENTREGA:</span>
-                            <span className="font-bold text-slate-700">{order.address}</span>
+                            <span className="text-slate-600 block font-bold">ENDEREÇO DE ENTREGA:</span>
+                            <span className="font-black text-slate-950 leading-snug">{order.address}</span>
                           </div>
                           <div>
-                            <span className="text-slate-400 block font-semibold">CONTATO CLIENTE:</span>
-                            <span className="font-bold text-slate-700 font-mono">{order.phone || '(11) 99999-9999'}</span>
+                            <span className="text-slate-600 block font-bold">CONTATO CLIENTE:</span>
+                            <span className="font-black text-slate-950 font-mono">{order.phone || '(11) 99999-9999'}</span>
                           </div>
                           <div>
-                            <span className="text-slate-400 block font-semibold">QUANTIDADE ITENS:</span>
-                            <span className="font-bold text-slate-700">{order.itemsCount || 1} {order.itemsCount === 1 ? 'item' : 'itens'}</span>
+                            <span className="text-slate-600 block font-bold">QUANTIDADE ITENS:</span>
+                            <span className="font-black text-slate-950">{order.itemsCount || 1} {order.itemsCount === 1 ? 'item' : 'itens'}</span>
                           </div>
                         </div>
 
@@ -3736,65 +3736,65 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             onClick={(e) => e.stopPropagation()} 
                             className="bg-white rounded-2xl p-4 space-y-3.5 shadow-xl border border-slate-200 flex-1 overflow-y-auto"
                           >
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                              <span className="text-xs font-mono font-bold text-slate-500">#{fullScreenOrder.id}</span>
-                              <span className="px-3 py-1 text-xs font-black uppercase rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                              <span className="text-xs font-mono font-black text-slate-800">#{fullScreenOrder.id}</span>
+                              <span className="px-3 py-1 text-xs font-black uppercase rounded-full bg-blue-100 text-blue-900 border border-blue-300">
                                 {fullScreenOrder.status}
                               </span>
                             </div>
 
                             <div>
-                              <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Cliente / Solicitante</span>
-                              <h2 className="text-base font-black text-slate-900 leading-tight mt-0.5">{fullScreenOrder.clientName}</h2>
+                              <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-wider block">Cliente / Solicitante</span>
+                              <h2 className="text-lg font-black text-slate-950 leading-tight mt-0.5">{fullScreenOrder.clientName}</h2>
                             </div>
 
-                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5">
+                            <div className="bg-slate-50 border border-slate-300 rounded-xl p-3 space-y-1.5">
                               <div className="flex items-start gap-2">
-                                <MapPin size={18} className="text-blue-600 shrink-0 mt-0.5" />
+                                <MapPin size={18} className="text-blue-700 shrink-0 mt-0.5" />
                                 <div className="space-y-0.5">
-                                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Endereço Completo de Entrega</span>
-                                  <p className="text-xs font-bold text-slate-800 leading-relaxed">{fullScreenOrder.address}</p>
+                                  <span className="text-[9.5px] font-extrabold text-slate-700 uppercase block">Endereço Completo de Entrega</span>
+                                  <p className="text-sm font-black text-slate-950 leading-relaxed">{fullScreenOrder.address}</p>
                                   {fullScreenOrder.cep && (
-                                    <span className="text-[10px] font-mono font-bold text-slate-500 block">CEP: {fullScreenOrder.cep}</span>
+                                    <span className="text-[11px] font-mono font-extrabold text-slate-800 block">CEP: {fullScreenOrder.cep}</span>
                                   )}
                                 </div>
                               </div>
                             </div>
 
                             {fullScreenOrder.phone && (
-                              <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200/80 rounded-xl p-3 text-emerald-950">
-                                <Phone size={18} className="text-emerald-600 shrink-0" />
+                              <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-300 rounded-xl p-3 text-emerald-950">
+                                <Phone size={18} className="text-emerald-700 shrink-0" />
                                 <div>
-                                  <span className="text-[9px] font-bold text-emerald-700 uppercase block">Telefone de Contato</span>
-                                  <span className="text-xs font-black font-mono">{fullScreenOrder.phone}</span>
+                                  <span className="text-[9.5px] font-extrabold text-emerald-800 uppercase block">Telefone de Contato</span>
+                                  <span className="text-xs font-black font-mono text-slate-950">{fullScreenOrder.phone}</span>
                                 </div>
                               </div>
                             )}
 
                             <div className="grid grid-cols-2 gap-2.5">
-                              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
-                                <span className="text-[8.5px] text-slate-400 font-bold uppercase block">Região</span>
-                                <span className="text-xs font-black text-slate-800 uppercase">{fullScreenOrder.region}</span>
+                              <div className="bg-slate-50 border border-slate-300 rounded-xl p-2.5">
+                                <span className="text-[9px] text-slate-700 font-extrabold uppercase block">Região</span>
+                                <span className="text-xs font-black text-slate-950 uppercase">{fullScreenOrder.region}</span>
                               </div>
-                              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
-                                <span className="text-[8.5px] text-slate-400 font-bold uppercase block">Prioridade</span>
-                                <span className={`text-xs font-black uppercase ${fullScreenOrder.priority === 'Alta' ? 'text-rose-600' : 'text-slate-800'}`}>
+                              <div className="bg-slate-50 border border-slate-300 rounded-xl p-2.5">
+                                <span className="text-[9px] text-slate-700 font-extrabold uppercase block">Prioridade</span>
+                                <span className={`text-xs font-black uppercase ${fullScreenOrder.priority === 'Alta' ? 'text-rose-700' : 'text-slate-950'}`}>
                                   {fullScreenOrder.priority}
                                 </span>
                               </div>
                             </div>
 
                             {!selectedRider?.ocultarValoresProtocolos && (
-                              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex justify-between items-center">
-                                <span className="text-[10px] font-bold text-slate-500">Valor Declarado:</span>
-                                <span className="text-xs font-black text-slate-900 font-mono">R$ {fullScreenOrder.value.toFixed(2)}</span>
+                              <div className="bg-slate-50 border border-slate-300 rounded-xl p-2.5 flex justify-between items-center">
+                                <span className="text-[10.5px] font-extrabold text-slate-700">Valor Declarado:</span>
+                                <span className="text-xs font-black text-slate-950 font-mono">R$ {fullScreenOrder.value.toFixed(2)}</span>
                               </div>
                             )}
 
                             {fullScreenOrder.protocolNumber && (
-                              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 space-y-0.5">
-                                <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Número do Protocolo</span>
-                                <span className="text-xs font-mono font-bold text-blue-600">{fullScreenOrder.protocolNumber}</span>
+                              <div className="bg-slate-50 border border-slate-300 rounded-xl p-2.5 space-y-0.5">
+                                <span className="text-[9px] font-extrabold text-slate-700 uppercase block">Número do Protocolo</span>
+                                <span className="text-xs font-mono font-black text-blue-800">{fullScreenOrder.protocolNumber}</span>
                               </div>
                             )}
 
@@ -4161,14 +4161,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                         {/* Next Navigation floating strip */}
                         {currentNextOrder && (
-                          <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-2xl p-3 shadow-lg flex items-center justify-between gap-3 z-10">
+                          <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md border border-slate-300 rounded-2xl p-3 shadow-lg flex items-center justify-between gap-3 z-10">
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-                                <span className="text-[9px] font-bold text-slate-400 uppercase">GPS Ativo: Próxima Entrega</span>
+                                <span className="text-[9.5px] font-black text-slate-700 uppercase">GPS Ativo: Próxima Entrega</span>
                               </div>
-                              <h5 className="font-extrabold text-[11px] truncate mt-0.5 text-slate-800">{currentNextOrder.clientName}</h5>
-                              <p className="text-[9px] text-slate-500 truncate">{currentNextOrder.address}</p>
+                              <h5 className="font-black text-xs truncate mt-0.5 text-slate-950">{currentNextOrder.clientName}</h5>
+                              <p className="text-[10.5px] font-bold text-slate-900 truncate">{currentNextOrder.address}</p>
                             </div>
 
                             <a
@@ -4223,32 +4223,32 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         </button>
 
                         {/* Order Header info */}
-                        <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-xs space-y-3">
+                        <div className="bg-white border border-slate-300 rounded-2xl p-4 shadow-sm space-y-3">
                           <div className="flex items-center justify-between">
-                            <span className="text-[8px] px-1.5 py-0.5 bg-blue-50 text-blue-600 font-bold rounded uppercase">
+                            <span className="text-[9px] px-2 py-0.5 bg-blue-100 text-blue-900 border border-blue-200 font-extrabold rounded uppercase">
                               Pedido {selectedOrder.status}
                             </span>
-                            <span className="text-[10px] font-mono font-medium text-slate-400">{selectedOrder.id}</span>
+                            <span className="text-[11px] font-mono font-black text-slate-800">#{selectedOrder.id}</span>
                           </div>
 
                           <div className="space-y-1">
-                            <h4 className="font-extrabold text-sm text-slate-800">{selectedOrder.clientName}</h4>
-                            <p className="text-[10px] text-slate-500 leading-relaxed">{selectedOrder.address}</p>
-                            <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded inline-block uppercase">
+                            <h4 className="font-black text-base text-slate-950">{selectedOrder.clientName}</h4>
+                            <p className="text-[11px] font-bold text-slate-900 leading-relaxed">{selectedOrder.address}</p>
+                            <span className="text-[9.5px] bg-slate-200 text-slate-900 font-extrabold px-2 py-0.5 rounded inline-block uppercase border border-slate-300">
                               Região: {selectedOrder.region}
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                          <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-slate-200">
                             <div>
-                              <span className="text-[8px] text-slate-400 font-bold uppercase block">Faturamento</span>
-                              <span className="text-xs font-black text-slate-800">
+                              <span className="text-[9px] text-slate-700 font-extrabold uppercase block">Faturamento</span>
+                              <span className="text-sm font-black text-slate-950">
                                 {selectedRider?.ocultarValoresProtocolos ? '---' : `R$ ${selectedOrder.value.toFixed(2)}`}
                               </span>
                             </div>
                             <div>
-                              <span className="text-[8px] text-slate-400 font-bold uppercase block">Prioridade</span>
-                              <span className={`text-xs font-black uppercase ${selectedOrder.priority === 'Alta' ? 'text-rose-600' : 'text-amber-500'}`}>
+                              <span className="text-[9px] text-slate-700 font-extrabold uppercase block">Prioridade</span>
+                              <span className={`text-sm font-black uppercase ${selectedOrder.priority === 'Alta' ? 'text-rose-700' : 'text-amber-800'}`}>
                                 {selectedOrder.priority}
                               </span>
                             </div>
@@ -4390,11 +4390,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               >
                                 <div className="min-w-0 space-y-0.5">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="font-mono text-[9px] font-black text-blue-600">{p.id}</span>
-                                    <span className="text-[8px] px-1 py-0.2 bg-emerald-50 text-emerald-600 rounded font-bold uppercase">Sincronizado</span>
+                                    <span className="font-mono text-[10px] font-black text-blue-700">{p.id}</span>
+                                    <span className="text-[8.5px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-extrabold uppercase border border-emerald-200">Sincronizado</span>
                                   </div>
-                                  <h5 className="font-bold text-xs text-slate-800 truncate">{p.clientName}</h5>
-                                  <span className="text-[8px] text-slate-400 block">{p.timestamp}</span>
+                                  <h5 className="font-black text-xs text-slate-950 truncate">{p.clientName}</h5>
+                                  <span className="text-[9px] text-slate-700 font-bold block">{p.timestamp}</span>
                                 </div>
 
                                 <div className="shrink-0 flex flex-col items-end gap-1">
