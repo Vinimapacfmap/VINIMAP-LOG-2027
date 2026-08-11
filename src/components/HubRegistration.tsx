@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import CepInput, { ViaCepData } from './CepInput';
 import { 
   Plus, 
   Trash2, 
@@ -763,49 +764,21 @@ export default function HubRegistration({
 
                 {/* Phone & CEP */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1 md:col-span-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold text-slate-700">CEP *</label>
-                      {isSearchingCep && (
-                        <span className="text-[10px] text-blue-600 font-bold animate-pulse">Buscando...</span>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Ex: 01310-100"
-                        maxLength={9}
-                        value={cep}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const cleaned = val.replace(/\D/g, '');
-                          if (cleaned.length === 8) {
-                            setCep(`${cleaned.substring(0, 5)}-${cleaned.substring(5)}`);
-                          } else {
-                            setCep(val);
-                          }
-                        }}
-                        required
-                        className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 font-mono font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cleaned = cep.replace(/\D/g, '');
-                          if (cleaned.length === 8) {
-                            handleSearchCep(cleaned);
-                          } else {
-                            setErrorMsg('Por favor, informe um CEP válido com 8 dígitos para verificação.');
-                          }
-                        }}
-                        disabled={isSearchingCep}
-                        id="verify-cep-btn"
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold text-[11px] rounded-xl transition-colors cursor-pointer flex items-center gap-1 shadow-sm whitespace-nowrap uppercase tracking-wider"
-                      >
-                        <CheckCircle2 size={12} className="shrink-0" />
-                        Verificar CEP
-                      </button>
-                    </div>
+                  <div className="md:col-span-2">
+                    <CepInput
+                      label="CEP"
+                      required
+                      value={cep}
+                      onChange={(formatted) => setCep(formatted)}
+                      onAddressFound={(data) => {
+                        const clean = (data.cep || '').replace(/\D/g, '');
+                        if (clean.length === 8) {
+                          handleSearchCep(clean);
+                        }
+                      }}
+                      showAddressPreview={true}
+                      size="md"
+                    />
                   </div>
 
                   <div className="space-y-1">

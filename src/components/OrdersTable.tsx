@@ -11,6 +11,7 @@ import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils
 import { getPartnerDisplayName as getPartnerDisplayNameUtil } from '../utils/partnerUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
 import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult } from '../utils/locationUtils';
+import CepInput, { ViaCepData } from './CepInput';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -2651,24 +2652,19 @@ function OrdersTable({
 
             {/* Input Form Controls */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="flex-1 relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" />
-                <input
-                  type="text"
-                  placeholder="Digite o CEP (ex: 01310-100 ou 05061-050)..."
+              <div className="flex-1">
+                <CepInput
+                  label=""
+                  placeholder="Digite o CEP (ex: 01310-100)..."
                   value={cepSearchInput}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    setCepSearchInput(raw);
-                    const clean = raw.replace(/\D/g, '');
-                    if (clean.length === 8) {
-                      handleExecuteCepGeocode(clean);
+                  onChange={(formatted, raw) => {
+                    setCepSearchInput(formatted);
+                    if (raw.length === 8) {
+                      handleExecuteCepGeocode(raw);
                     }
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleExecuteCepGeocode();
-                  }}
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-3xs font-mono"
+                  showAddressPreview={false}
+                  size="sm"
                 />
               </div>
 

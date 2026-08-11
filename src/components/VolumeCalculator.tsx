@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClientPartner, Order, OrderPriority, OrderStatus } from '../types';
 import { getSaoPauloTime, getSaoPauloISODate } from '../utils/dateUtils';
+import CepInput, { ViaCepData } from './CepInput';
 import { 
   Calculator, 
   HelpCircle, 
@@ -639,16 +640,15 @@ export default function VolumeCalculator({ clientPartners, onCreateOrder }: Volu
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Origin */}
               <div>
-                <span className="text-[10px] text-slate-400 font-semibold mb-1 block">CEP Origem (Sede Vinimap)</span>
-                <div className="relative">
-                  <MapPin size={13} className="absolute left-3 top-3 text-slate-400" />
-                  <input
-                    type="text"
-                    value={cepOrigem}
-                    disabled
-                    className="w-full pl-8 pr-3 py-2 text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 rounded-xl"
-                  />
-                </div>
+                <CepInput
+                  label="CEP Origem (Sede Vinimap)"
+                  value={cepOrigem}
+                  onChange={(formatted) => setCepOrigem(formatted)}
+                  disabled={true}
+                  autoLookup={false}
+                  showAddressPreview={false}
+                  size="sm"
+                />
                 <p className="text-[10px] text-slate-400 mt-1 font-semibold truncate" title={addressOrigem}>
                   {addressOrigem}
                 </p>
@@ -656,38 +656,25 @@ export default function VolumeCalculator({ clientPartners, onCreateOrder }: Volu
 
               {/* Destination */}
               <div>
-                <span className="text-[10px] text-slate-400 font-semibold mb-1 block">CEP Destino</span>
-                <div className="relative">
-                  <MapPin size={13} className="absolute left-3 top-3 text-blue-500" />
-                  <input
-                    type="text"
-                    placeholder="01000-000"
-                    maxLength={9}
-                    value={cepDestino}
-                    onChange={(e) => {
-                      let raw = e.target.value.replace(/\D/g, '');
-                      if (raw.length > 5) {
-                        raw = `${raw.substring(0, 5)}-${raw.substring(5, 8)}`;
-                      }
-                      setCepDestino(raw);
-                    }}
-                    className={`w-full pl-8 pr-3 py-2 text-xs font-bold bg-white text-slate-700 border rounded-xl focus:outline-none focus:ring-1 ${
-                      cepError ? 'border-red-400 focus:ring-red-300' : 'border-slate-200 focus:ring-blue-300 focus:border-blue-400'
-                    }`}
-                  />
-                  {isLoadingCep && (
-                    <div className="absolute right-3 top-2.5 w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  )}
-                </div>
-                {cepError ? (
-                  <p className="text-[10px] text-red-500 font-semibold mt-1 flex items-center gap-1">
-                    <AlertTriangle size={10} /> {cepError}
-                  </p>
-                ) : (
-                  <p className="text-[10px] text-slate-500 font-semibold mt-1 truncate" title={addressDestino}>
-                    {addressDestino || 'Digite o CEP para consultar...'}
-                  </p>
-                )}
+                <CepInput
+                  label="CEP Destino"
+                  value={cepDestino}
+                  onChange={(formatted) => setCepDestino(formatted)}
+                  onAddressFound={(data) => {
+                    const logradouro = data.logradouro || '';
+                    const bairro = data.bairro || '';
+                    const localidade = data.localidade || '';
+                    const uf = data.uf || '';
+                    const fullAddr = [logradouro, bairro, localidade, uf].filter(Boolean).join(', ');
+                    setAddressDestino(fullAddr);
+                    setCepError('');
+                  }}
+                  onError={(err) => setCepError(err || '')}
+                  customError={cepError || undefined}
+                  showAddressPreview={true}
+                  placeholder="00000-000"
+                  size="sm"
+                />
               </div>
             </div>
           </div>

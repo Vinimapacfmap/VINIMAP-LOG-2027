@@ -38,6 +38,8 @@ import FreightTableImportManager from './components/FreightTableImportManager';
 import DailyNotebook from './components/DailyNotebook';
 import OtimizadorRotasInteligente from './components/OtimizadorRotasInteligente';
 import HubRegistration from './components/HubRegistration';
+import CepInput from './components/CepInput';
+import LocalStorageSyncStatus from './components/LocalStorageSyncStatus';
 import LogoHubManager from './components/LogoHubManager';
 import { applyDynamicPwaManifestAndIcons, getDriverAppInstallUrl } from './utils/pwaUtils';
 import { calculateRiderCommissionForOrder } from './utils/billingUtils';
@@ -4482,48 +4484,21 @@ export default function App() {
 
                               <div className="grid grid-cols-3 gap-3">
                                 <div className="col-span-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">CEP de Cadastro *</label>
-                                  <div className="flex gap-2">
-                                    <input
-                                      type="text"
-                                      maxLength={9}
-                                      value={newClientCep}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        const cleaned = val.replace(/\D/g, '');
-                                        if (cleaned.length === 8) {
-                                          setNewClientCep(`${cleaned.substring(0, 5)}-${cleaned.substring(5)}`);
-                                          handleSearchCep(cleaned);
-                                        } else {
-                                          setNewClientCep(val);
-                                        }
-                                      }}
-                                      onBlur={(e) => {
-                                        const cleaned = e.target.value.replace(/\D/g, '');
-                                        if (cleaned.length === 8) {
-                                          handleSearchCep(cleaned);
-                                        }
-                                      }}
-                                      placeholder="Ex: 01311-200"
-                                      className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono font-bold"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSearchCep(newClientCep)}
-                                      disabled={isCepSearching}
-                                      className="px-2.5 py-2 bg-blue-50 hover:bg-blue-100 disabled:bg-slate-100 disabled:text-slate-400 text-blue-600 border border-blue-100 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 shrink-0"
-                                    >
-                                      {isCepSearching ? (
-                                        <RefreshCw size={12} className="animate-spin" />
-                                      ) : (
-                                        <Search size={12} />
-                                      )}
-                                      <span>Buscar</span>
-                                    </button>
-                                  </div>
-                                  {cepSearchError && (
-                                    <span className="text-[9px] font-bold text-rose-500 mt-0.5 block">{cepSearchError}</span>
-                                  )}
+                                  <CepInput
+                                    label="CEP de Cadastro"
+                                    required
+                                    value={newClientCep}
+                                    onChange={(formatted) => setNewClientCep(formatted)}
+                                    onAddressFound={(data) => {
+                                      const clean = (data.cep || '').replace(/\D/g, '');
+                                      if (clean.length === 8) {
+                                        handleSearchCep(clean);
+                                      }
+                                    }}
+                                    customError={cepSearchError || undefined}
+                                    showAddressPreview={true}
+                                    size="sm"
+                                  />
                                 </div>
                                 <div>
                                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">UF / Estado</label>
@@ -5965,6 +5940,12 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Floating LocalStorage Auto-Sync Status Indicator Badge */}
+      <LocalStorageSyncStatus 
+        lastSyncTime={lastContingencyBackupTime} 
+        onManualSync={() => exportDatabaseContingency(true)} 
+      />
     </div>
   );
 }

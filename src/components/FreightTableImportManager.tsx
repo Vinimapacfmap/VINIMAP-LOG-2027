@@ -18,6 +18,7 @@ import autoTable from 'jspdf-autotable';
 import { CepRange, ClientPartner, CepTableHistoryItem, Order } from '../types';
 import { getSaoPauloDateTimeShort } from '../utils/dateUtils';
 import { isMatchingClientCode } from '../types';
+import CepInput from './CepInput';
 
 export interface FreightTableImportManagerProps {
   clientPartners: ClientPartner[];
@@ -1782,22 +1783,27 @@ export default function FreightTableImportManager({
                 Digite um CEP para verificar a regra de preço e o repasse ao condutor de acordo com a tabela do cliente <strong>{activeClient.name}</strong>.
               </p>
 
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Digite o CEP (ex: 01310-100)"
-                  value={queryCep}
-                  onChange={(e) => {
-                    setQueryCep(e.target.value);
-                    if (cleanCep(e.target.value).length === 8) {
-                      handleRunSimulator(e.target.value);
-                    }
-                  }}
-                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="flex flex-col sm:flex-row items-end gap-2">
+                <div className="flex-1 w-full">
+                  <CepInput
+                    label=""
+                    placeholder="Digite o CEP (ex: 01310-100)"
+                    value={queryCep}
+                    onChange={(formatted, raw) => {
+                      setQueryCep(formatted);
+                      if (raw.length === 8) {
+                        handleRunSimulator(formatted);
+                      }
+                    }}
+                    showAddressPreview={false}
+                    size="md"
+                    inputClassName="bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-blue-500"
+                  />
+                </div>
                 <button
+                  type="button"
                   onClick={() => handleRunSimulator(queryCep)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shrink-0"
                 >
                   Consultar CEP
                 </button>

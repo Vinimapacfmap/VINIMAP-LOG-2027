@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Order, OrderPriority, ClientPartner } from '../types';
 import { getSaoPauloISODate } from '../utils/dateUtils';
 import { getCoordinatesFromCep, geocodeAddressBackend } from '../utils/locationUtils';
+import CepInput, { ViaCepData } from './CepInput';
 import { 
   X, 
   ShoppingBag, 
@@ -369,40 +370,42 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
 
                   {/* CEP & Cliente Parceiro */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">CEP *</label>
-                        {isSearchingCep && (
-                          <span className="text-[10px] text-blue-600 font-bold animate-pulse">Buscando...</span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ex: 01310-100"
-                        maxLength={9}
+                    <div>
+                      <CepInput
                         value={cep}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const cleaned = val.replace(/\D/g, '');
-                          if (cleaned.length === 8) {
-                            setCep(`${cleaned.substring(0, 5)}-${cleaned.substring(5)}`);
-                            handleSearchCep(cleaned);
+                        onChange={(formatted, raw) => setCep(formatted)}
+                        onAddressFound={(data) => {
+                          const logradouro = data.logradouro || '';
+                          const bairro = data.bairro || '';
+                          const localidade = data.localidade || 'São Paulo';
+                          const uf = data.uf || 'SP';
+
+                          let streetAddress = '';
+                          if (logradouro) {
+                            streetAddress = logradouro;
+                            if (bairro) streetAddress += ` - ${bairro}`;
+                            streetAddress += `, ${localidade} - ${uf}`;
                           } else {
-                            setCep(val);
+                            streetAddress = `${localidade} - ${uf}`;
+                          }
+
+                          setAddress(streetAddress);
+
+                          const cleanCep = (data.cep || '').replace(/\D/g, '');
+                          if (localidade.toLowerCase() === 'são paulo') {
+                            const prefix = parseInt(cleanCep.substring(0, 5)) || 0;
+                            if (prefix >= 4000 && prefix <= 4999) setRegion('Zona Sul');
+                            else if (prefix >= 5000 && prefix <= 5999) setRegion('Zona Oeste');
+                            else if (prefix >= 2000 && prefix <= 2999) setRegion('Zona Norte');
+                            else if (prefix >= 3000 && prefix <= 3999) setRegion('Zona Leste');
+                            else setRegion('Centro');
                           }
                         }}
-                        onBlur={(e) => {
-                          const cleaned = e.target.value.replace(/\D/g, '');
-                          if (cleaned.length === 8) {
-                            handleSearchCep(cleaned);
-                          }
-                        }}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all font-mono font-bold"
+                        label="CEP"
+                        required
+                        showAddressPreview={true}
+                        size="md"
                       />
-                      {cepError && (
-                        <span className="text-[9px] font-bold text-rose-500 block mt-0.5">{cepError}</span>
-                      )}
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Cliente Parceiro</label>

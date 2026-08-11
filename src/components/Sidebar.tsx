@@ -72,6 +72,7 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pedidos', label: 'Pedidos', icon: ShoppingBag, badge: '4' },
+    { id: 'tabela_frete', label: 'Faixas de CEP & Frete', icon: DollarSign, badge: 'CEP' },
     { id: 'importar', label: 'Importar Pedidos', icon: FileSpreadsheet },
     { id: 'alocar', label: 'Alocar Pedidos', icon: Workflow },
     { id: 'caderno', label: 'Caderno Diário', icon: Notebook },
