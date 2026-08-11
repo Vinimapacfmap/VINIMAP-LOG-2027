@@ -510,23 +510,29 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
   // Filtering orders according to the requirements:
   // "deve exibir somente pedidos nao concluidos do dia atual, pedidos atrasados somente se a selecao de periodo for pesquisada"
   const filteredOrders = orders.filter(order => {
-    // Show only incomplete orders (not completed, not canceled)
-    const isIncomplete = order.status !== 'Concluído' && order.status !== 'Cancelado';
-    if (!isIncomplete) return false;
-
-    // Search query filter
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    // If user typed a search query, show the matching order REGARDLESS of status or rider or tab
+    if (searchQuery && searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase().trim();
       const matchesSearch = 
         order.id.toLowerCase().includes(q) ||
         order.clientName.toLowerCase().includes(q) ||
         order.address.toLowerCase().includes(q) ||
         matchesAddressQuery(order.address, searchQuery) ||
         order.region.toLowerCase().includes(q) ||
-        (order.partnerName && (order.partnerName.toLowerCase().includes(q) || (clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente))?.name || '').toLowerCase().includes(q)));
+        (order.partnerName && (order.partnerName.toLowerCase().includes(q) || (clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente))?.name || '').toLowerCase().includes(q))) ||
+        (order.protocolNumber && order.protocolNumber.toLowerCase().includes(q)) ||
+        (order.recipientName && order.recipientName.toLowerCase().includes(q)) ||
+        (order.recipientDoc && order.recipientDoc.toLowerCase().includes(q)) ||
+        (order.cep && order.cep.replace(/\D/g, '').includes(q)) ||
+        (order.status && order.status.toLowerCase().includes(q));
       
-      if (!matchesSearch) return false;
+      return matchesSearch;
     }
+
+    // Default filters when not searching:
+    // Show only incomplete orders (not completed, not canceled)
+    const isIncomplete = order.status !== 'Concluído' && order.status !== 'Cancelado';
+    if (!isIncomplete) return false;
 
     // Partner filter
     if (selectedPartnerId) {

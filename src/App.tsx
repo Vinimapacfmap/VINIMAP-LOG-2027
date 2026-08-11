@@ -1505,17 +1505,16 @@ export default function App() {
     setFilterShowDelayed(false);
   };
 
-  // Real-time order status progression simulation
+  // Real-time order status progression simulation (disabled to preserve real user input data)
+  /*
   useEffect(() => {
     const interval = setInterval(() => {
       setOrders((prevOrders) => {
-        // Find orders of today that are progressable (only already active routes)
         const progressable = prevOrders.filter(
           (o) => o.date === todayStr && (o.status === 'Em rota' || o.status === 'Entregando')
         );
         if (progressable.length === 0) return prevOrders;
 
-        // Pick one at random
         const randomIndex = Math.floor(Math.random() * progressable.length);
         const randomOrder = progressable[randomIndex];
         
@@ -1526,17 +1525,17 @@ export default function App() {
           nextStatus = 'Concluído';
         }
 
-        // Schedule status update in background to reuse state log and update logic safely
         setTimeout(() => {
           handleUpdateStatus(randomOrder.id, nextStatus);
         }, 50);
 
         return prevOrders;
       });
-    }, 12000); // 12-second rhythm for visual real-time dynamic feel
+    }, 12000);
 
     return () => clearInterval(interval);
   }, [todayStr]);
+  */
 
   // Redirect old individual sections to unified administrative panel tabs
   useEffect(() => {
@@ -1569,38 +1568,56 @@ export default function App() {
 
   // Filtered orders to be used across the entire system
   const filteredOrders = orders.filter((order) => {
-    // If show delayed filter is active
+    const isSearching = searchQuery.trim() !== '';
+
+    if (isSearching) {
+      const q = searchQuery.toLowerCase().trim();
+      const riderName = riders.find(r => r.id === order.riderId)?.name.toLowerCase() || '';
+      const matchesQuery = 
+        order.id.toLowerCase().includes(q) ||
+        order.clientName.toLowerCase().includes(q) ||
+        order.region.toLowerCase().includes(q) ||
+        order.address.toLowerCase().includes(q) ||
+        matchesAddressQuery(order.address, searchQuery) ||
+        (order.partnerName && order.partnerName.toLowerCase().includes(q)) ||
+        (order.cep && order.cep.replace(/\D/g, '').includes(q)) ||
+        (order.protocolNumber && order.protocolNumber.toLowerCase().includes(q)) ||
+        (order.recipientName && order.recipientName.toLowerCase().includes(q)) ||
+        (order.recipientDoc && order.recipientDoc.toLowerCase().includes(q)) ||
+        (order.status && order.status.toLowerCase().includes(q)) ||
+        (order.riderId && (order.riderId.toLowerCase().includes(q) || riderName.includes(q)));
+
+      // When actively searching, return true if matching search query, ignoring status/rider/date/partner/cep filters
+      if (matchesQuery) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+
+    // Default filters when not searching
     if (filterShowDelayed) {
       const isDelayed = order.date < todayStr && order.status !== 'Concluído' && order.status !== 'Cancelado';
       const isToday = order.date === todayStr;
       if (!isDelayed && !isToday) return false;
     } else {
-      // If NOT searching, respect the date filters.
-      // If searching, we bypass date filters so historic/all matching orders are found
-      const isSearching = searchQuery.trim() !== '';
-      if (!isSearching) {
-        if (filterDateFrom || filterDateTo) {
-          const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo, filterStatus);
-          if (!matchesDatePeriod) {
-            return false;
-          }
+      if (filterDateFrom || filterDateTo) {
+        const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo, filterStatus);
+        if (!matchesDatePeriod) {
+          return false;
         }
       }
     }
 
-    // 3. Partner client filter
     if (filterPartner && order.partnerName !== filterPartner) {
       return false;
     }
-    // 4. Rider/Driver filter
     if (filterRiderId && order.riderId !== filterRiderId) {
       return false;
     }
-    // 5. Status filter
     if (filterStatus && order.status !== filterStatus) {
       return false;
     }
-    // 6. CEP filter (removes dashes for partial comparison)
     if (filterCep) {
       const cleanCep = filterCep.replace('-', '').trim();
       const cleanOrderCep = order.cep.replace('-', '').trim();
@@ -2292,13 +2309,17 @@ export default function App() {
           timestamp: getSaoPauloDateTimeShort(),
           action: 'Entregador Desalocado',
           user: 'Operador',
-          details: 'Condutor desalocado do pedido. Status redefinido para Não iniciado.'
+          details: `Condutor desalocado do pedido.${currentOrder.status === 'Concluído' ? ' (Status mantido como Concluído)' : ' Status redefinido para Não iniciado.'}`
         };
+
+        const preservedUnassignStatus: OrderStatus = (currentOrder.status === 'Concluído' || currentOrder.status === 'Ocorrência' || currentOrder.status === 'Cancelado')
+          ? currentOrder.status
+          : ('Não iniciado' as OrderStatus);
 
         const initialUpdatedOrder: Order = {
           ...currentOrder,
           riderId: undefined,
-          status: 'Não iniciado' as OrderStatus,
+          status: preservedUnassignStatus,
           history: [...(currentOrder.history || []), historyEntry]
         };
 
@@ -2329,17 +2350,21 @@ export default function App() {
 
       const riderName = riders.find(r => r.id === riderId)?.name || 'Entregador';
 
+      const preservedAssignStatus: OrderStatus = (currentOrder.status === 'Concluído' || currentOrder.status === 'Ocorrência' || currentOrder.status === 'Cancelado' || currentOrder.status === 'Em rota' || currentOrder.status === 'Entregando')
+        ? currentOrder.status
+        : ('Não iniciado' as OrderStatus);
+
       const historyEntry = {
         timestamp: getSaoPauloDateTimeShort(),
         action: 'Entregador Alocado',
         user: 'Operador',
-        details: `Entregador ${riderName} vinculado ao pedido. Status definido como Não iniciado.`
+        details: `Entregador ${riderName} vinculado ao pedido. Status: ${preservedAssignStatus}.`
       };
 
       const initialUpdatedOrder: Order = { 
         ...currentOrder, 
         riderId, 
-        status: 'Não iniciado' as OrderStatus,
+        status: preservedAssignStatus,
         history: [...(currentOrder.history || []), historyEntry]
       };
 
@@ -2621,10 +2646,13 @@ export default function App() {
             user: 'Sistema (Painel)',
             details: isUnassign ? 'Condutor desalocado dos pedidos selecionados.' : `Entregador ${riderName} vinculado em massa.`
           };
+          const preservedBulkStatus = isUnassign 
+            ? ((order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado') ? order.status : ('Não iniciado' as OrderStatus))
+            : order.status;
           const initialUpdatedOrder: Order = {
             ...order,
             riderId: isUnassign ? undefined : riderId,
-            status: isUnassign ? ('Não iniciado' as OrderStatus) : order.status,
+            status: preservedBulkStatus,
             history: [...(order.history || []), historyEntry]
           };
           updatedOrders.push(validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners));

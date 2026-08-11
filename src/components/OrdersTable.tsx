@@ -875,36 +875,39 @@ function OrdersTable({
 
   // Filter orders by active tab AND search query AND local dropdown filters
   const filteredOrders = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const isSearching = query !== '';
+
     return orders.filter((order) => {
-      // 1. Tab filter
+      if (isSearching) {
+        const riderName = riders.find(r => r.id === order.riderId)?.name.toLowerCase() || '';
+        const matchesSearch = 
+          order.id.toLowerCase().includes(query) ||
+          order.clientName.toLowerCase().includes(query) ||
+          order.region.toLowerCase().includes(query) ||
+          order.address.toLowerCase().includes(query) ||
+          matchesAddressQuery(order.address, searchQuery) ||
+          (order.partnerName && order.partnerName.toLowerCase().includes(query)) ||
+          (order.cep && order.cep.replace(/\D/g, '').includes(query)) ||
+          (order.protocolNumber && order.protocolNumber.toLowerCase().includes(query)) ||
+          (order.recipientName && order.recipientName.toLowerCase().includes(query)) ||
+          (order.recipientDoc && order.recipientDoc.toLowerCase().includes(query)) ||
+          (order.status && order.status.toLowerCase().includes(query)) ||
+          (order.riderId && (order.riderId.toLowerCase().includes(query) || riderName.includes(query)));
+
+        // When actively searching, return true if matching search query, ignoring status tab or condutor/partner/region filters
+        return matchesSearch;
+      }
+
+      // Default filters when not searching
       const matchesTab = activeTab === 'Todos' || order.status === activeTab;
-      
-      // 2. Search query filter (client, code, region, address, partner, CEP)
-      const query = searchQuery.toLowerCase();
-      const matchesSearch = 
-        order.id.toLowerCase().includes(query) ||
-        order.clientName.toLowerCase().includes(query) ||
-        order.region.toLowerCase().includes(query) ||
-        order.address.toLowerCase().includes(query) ||
-        matchesAddressQuery(order.address, searchQuery) ||
-        (order.partnerName && order.partnerName.toLowerCase().includes(query)) ||
-        (order.cep && order.cep.replace(/\D/g, '').includes(query)) ||
-        (order.protocolNumber && order.protocolNumber.toLowerCase().includes(query)) ||
-        (order.recipientName && order.recipientName.toLowerCase().includes(query)) ||
-        (order.recipientDoc && order.recipientDoc.toLowerCase().includes(query));
-
-      // 3. Partner filter
       const matchesPartner = localPartner === 'Todos' || order.partnerName === localPartner;
-
-      // 4. Rider filter
       const matchesRider = localRider === 'Todos' || order.riderId === localRider;
-
-      // 5. Region filter
       const matchesRegion = localRegion === 'Todos' || order.region === localRegion;
 
-      return matchesTab && matchesSearch && matchesPartner && matchesRider && matchesRegion;
+      return matchesTab && matchesPartner && matchesRider && matchesRegion;
     });
-  }, [orders, activeTab, searchQuery, localPartner, localRider, localRegion]);
+  }, [orders, activeTab, searchQuery, localPartner, localRider, localRegion, riders]);
 
   // Sort orders based on sortConfig
   const sortedOrders = useMemo(() => {
@@ -1674,18 +1677,22 @@ function OrdersTable({
     const protocolCoords = getCoordinates(hubOrder);
     const finalPhoto = protocolDeliveryPhoto || hubOrder.deliveryPhotoUrl || generateStaticSvgMap(parseFloat(protocolCoords.lat) || -23.55052, parseFloat(protocolCoords.lng) || -46.633308, hubOrder.address);
 
+    const editTimestamp = getSaoPauloDateTimeShort();
+
     const updatedOrder: Order = {
       ...hubOrder,
       status: 'Concluído',
       protocolNumber: finalProtocolNum,
       recipientName: protocolRecipientName,
       recipientDoc: protocolRecipientDoc,
-      date: protocolOrderDate,
-      createdAt: formatOrderTime(protocolOrderTime),
-      horarioInicial: formatOrderTime(protocolOrderTime),
+      date: protocolOrderDate || hubOrder.date,
+      createdAt: formatOrderTime(protocolOrderTime) || hubOrder.createdAt,
+      horarioInicial: formatOrderTime(protocolOrderTime) || hubOrder.horarioInicial,
       deliveryDate: finalDeliveryDate,
       deliveryTime: finalDeliveryTime,
-      partnerName: protocolPartnerName,
+      dataConclusao: finalDeliveryDate,
+      horarioFinal: finalDeliveryTime,
+      partnerName: protocolPartnerName || hubOrder.partnerName,
       signatureUrl: finalSig,
       deliveryPhotoUrl: finalPhoto,
       rawData: {
@@ -1700,21 +1707,26 @@ function OrdersTable({
         'HorarioFinal': finalDeliveryTime,
         'horariofinal': finalDeliveryTime,
         'DataConclusao': finalDeliveryDate,
+        'DataSolicitacao': protocolOrderDate || hubOrder.date,
+        'CodigoCliente': protocolPartnerName || hubOrder.partnerName,
         'signatureUrl': finalSig,
         'deliveryPhotoUrl': finalPhoto
       },
       history: [
         ...(hubOrder.history || []),
         {
-          timestamp: getSaoPauloDateTimeShort(),
-          action: 'Protocolo de Entrega Emitido',
-          user: 'Entregador (App)',
-          details: `Liquidação formal efetuada para ${protocolRecipientName} (${protocolRecipientDoc}).`
+          timestamp: editTimestamp,
+          action: 'Protocolo de Entrega Alterado/Emitido',
+          user: 'Administrador (Painel)',
+          details: `Liquidação formal/alteração manual do protocolo efetuada pelo Administrador em ${editTimestamp}. Recebedor: "${protocolRecipientName}" (${protocolRecipientDoc}), Data Emissão: "${protocolOrderDate} ${protocolOrderTime}", Data Entrega: "${finalDeliveryDate} ${finalDeliveryTime}".`
         }
       ]
     };
 
-    // Update status and save protocol via handleUpdateStatus
+    // Save full updated order to state and database
+    onUpdateOrder(updatedOrder);
+
+    // Also notify status update handler
     onUpdateStatus(
       hubOrder.id, 
       'Concluído', 
@@ -1722,12 +1734,13 @@ function OrdersTable({
       finalSig, 
       finalPhoto, 
       protocolRecipientName, 
-      protocolRecipientDoc
+      protocolRecipientDoc,
+      protocolObservations
     );
 
     setHubOrder(updatedOrder);
     setIsEditingProtocol(false);
-    alert('Protocolo de Entrega gravado com sucesso! Pedido liquidado como Concluído.');
+    alert('Protocolo de Entrega gravado com sucesso! Alterações salvas no sistema.');
   };
 
   // Helper to convert images (URLs or base64) to format accepted by jsPDF
@@ -2250,7 +2263,7 @@ function OrdersTable({
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs font-black text-blue-900 bg-blue-100/90 px-3 py-1.5 rounded-xl border border-blue-300 flex items-center gap-1.5 shadow-2xs">
                 <Search size={12} className="text-blue-700" />
-                {orders.length} {orders.length === 1 ? 'pedido encontrado' : 'pedidos encontrados'}
+                {filteredOrders.length} {filteredOrders.length === 1 ? 'pedido encontrado' : 'pedidos encontrados'} (busca global)
               </span>
               <button
                 type="button"
