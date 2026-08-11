@@ -12,6 +12,7 @@ import { Order, DeliveryRider, OrderStatus, ClientPartner, BillingModelType } fr
 import { formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { getPartnerDisplayName } from '../utils/partnerUtils';
+import { matchesAddressQuery } from '../utils/addressUtils';
 import { 
   X, 
   Calendar, 
@@ -129,14 +130,15 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
       const inDateRange = effectiveDate >= startDate && effectiveDate <= endDate;
       if (!inDateRange) return false;
 
-      // Filter by search query (Client, Merchant, Region, or ID)
+      // Filter by search query (Client, Merchant, Region, Address, or ID)
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
         const matchesClient = o.clientName?.toLowerCase().includes(query);
         const matchesPartner = o.partnerName?.toLowerCase().includes(query);
         const matchesRegion = o.region?.toLowerCase().includes(query);
+        const matchesAddress = matchesAddressQuery(o.address, searchQuery);
         const matchesId = o.id?.toLowerCase().includes(query) || o.protocolNumber?.toLowerCase().includes(query);
-        return matchesClient || matchesPartner || matchesRegion || matchesId;
+        return matchesClient || matchesPartner || matchesRegion || matchesAddress || matchesId;
       }
 
       return true;

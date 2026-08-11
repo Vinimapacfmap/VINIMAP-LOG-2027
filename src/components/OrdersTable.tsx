@@ -9,6 +9,7 @@ import { Order, OrderStatus, DeliveryRider, OrderHistoryEntry, ClientPartner, is
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, formatOrderTime, extractISODateFromTimestamp } from '../utils/dateUtils';
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { getPartnerDisplayName as getPartnerDisplayNameUtil } from '../utils/partnerUtils';
+import { matchesAddressQuery } from '../utils/addressUtils';
 import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult } from '../utils/locationUtils';
 import { 
   ChevronLeft, 
@@ -879,6 +880,7 @@ function OrdersTable({
         order.clientName.toLowerCase().includes(query) ||
         order.region.toLowerCase().includes(query) ||
         order.address.toLowerCase().includes(query) ||
+        matchesAddressQuery(order.address, searchQuery) ||
         (order.partnerName && order.partnerName.toLowerCase().includes(query)) ||
         (order.cep && order.cep.replace(/\D/g, '').includes(query)) ||
         (order.protocolNumber && order.protocolNumber.toLowerCase().includes(query)) ||

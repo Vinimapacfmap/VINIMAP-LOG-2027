@@ -21,10 +21,13 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
-  XOctagon
+  XOctagon,
+  Search,
+  X
 } from 'lucide-react';
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode, OrderStatus } from '../types';
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
+import { matchesAddressQuery } from '../utils/addressUtils';
 import * as XLSX from 'xlsx';
 import { getSaoPauloDateTimeShort, getSaoPauloISODate, getSaoPauloTime, extractISODateFromTimestamp } from '../utils/dateUtils';
 
@@ -50,6 +53,7 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
   const [headers, setHeaders] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [draggedColIdx, setDraggedColIdx] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [importSummary, setImportSummary] = useState<{
     total: number;
     valid: number;
@@ -609,7 +613,17 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
   };
 
   const getSortedRows = () => {
-    const validRows = parsedRows.filter(r => r.isValid);
+    let validRows = parsedRows.filter(r => r.isValid);
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      validRows = validRows.filter(r => {
+        const addr = getRowValue(r.data, 'Endereco') || r.data['Endereco'] || r.data['endereco'] || '';
+        if (matchesAddressQuery(addr, searchQuery)) return true;
+        return Object.values(r.data).some(val => String(val).toLowerCase().includes(q));
+      });
+    }
+
     if (!sortConfig) return validRows;
     
     const { key, direction } = sortConfig;
@@ -872,12 +886,34 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
                 <h3 className="font-bold text-slate-800 text-sm">Visualização de Pedidos Válidos</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Clique nas colunas para ordenar de forma crescente/decrescente. Arraste-as ou use as setas para reorganizar a visualização.</p>
               </div>
+
+              {/* Table search filter */}
+              <div className="relative w-full md:w-72">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filtrar por endereço, CEP, cliente..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8.5 pr-8 py-1.5 text-[11px] font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-700 placeholder:text-slate-400"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+                    title="Limpar busca"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="overflow-x-auto max-h-[480px] overflow-y-auto border border-slate-100 rounded-xl">
-              <table className="min-w-full text-xs text-slate-600 border-collapse">
+              <table className="min-w-full text-[11px] text-slate-600 border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase sticky top-0 z-10">
+                  <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[11px] uppercase sticky top-0 z-10">
                     <th className="px-4 py-3 w-12 bg-slate-50/90 z-20 sticky left-0 border-r border-slate-100 text-center">
                       <input 
                         type="checkbox"
@@ -894,7 +930,7 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
                         id="select-all-import"
                       />
                     </th>
-                    <th className="px-4 py-3 w-16 bg-slate-50/90 z-20 sticky left-12 border-r border-slate-100">Linha</th>
+                    <th className="px-4 py-3 w-16 bg-slate-50/90 z-20 sticky left-12 border-r border-slate-100 text-[11px] font-extrabold text-slate-500 uppercase">Linha</th>
                     {headers.map((header, idx) => (
                       <th 
                         key={header} 
@@ -917,7 +953,7 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
                       >
                         <div className="flex items-center justify-between gap-2 min-w-[140px] group/th">
                           <span 
-                            className="cursor-grab active:cursor-grabbing font-extrabold text-slate-700 text-[10px] uppercase tracking-wider truncate flex-1" 
+                            className="cursor-grab active:cursor-grabbing font-extrabold text-slate-700 text-[11px] uppercase tracking-wider truncate flex-1" 
                             title="Clique para ordenar ou arraste para reorganizar"
                             onClick={() => handleSort(header)}
                           >
@@ -1071,11 +1107,11 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
                           <td 
                             key={header} 
                             className={`px-4 py-2.5 max-w-[200px] truncate border-r border-slate-50 text-[11px] ${
-                              isSpecial ? 'font-bold text-slate-800' : 'text-slate-500'
+                              isSpecial ? 'font-bold text-slate-800' : 'text-slate-500 font-medium'
                             }`}
                           >
                             {val === '' ? (
-                              <span className="text-slate-300 italic font-normal">vazio</span>
+                              <span className="text-slate-300 italic font-normal text-[11px]">vazio</span>
                             ) : isMonetary ? (
                               isNaN(parseFloat(val)) ? val : `R$ ${parseFloat(val).toFixed(2).replace('.', ',')}`
                             ) : (
@@ -1088,7 +1124,7 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
                   ))}
                   {getSortedRows().length === 0 && (
                     <tr>
-                      <td colSpan={headers.length + 2} className="px-4 py-12 text-center text-slate-400 text-xs font-semibold">
+                      <td colSpan={headers.length + 2} className="px-4 py-12 text-center text-slate-400 text-[11px] font-semibold">
                         Nenhum pedido válido encontrado nesta planilha.
                       </td>
                     </tr>

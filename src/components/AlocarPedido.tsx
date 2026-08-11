@@ -44,14 +44,15 @@ import {
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate } from '../utils/dateUtils';
 import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
+import { matchesAddressQuery } from '../utils/addressUtils';
 
 const getStatusClasses = (status: string) => {
   switch (status) {
     case 'Concluído': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
     case 'Entregando': return 'bg-blue-50 text-blue-700 border-blue-100';
     case 'Em rota': return 'bg-sky-50 text-sky-700 border-sky-100';
-    case 'Não iniciado': return 'bg-amber-50 text-amber-700 border-amber-100';
-    case 'Ocorrência': return 'bg-rose-50 text-rose-700 border-rose-100';
+    case 'Não iniciado': return 'bg-amber-50 text-amber-800 border-amber-200 font-bold';
+    case 'Ocorrência': return 'bg-rose-600 text-white border-rose-700 font-black shadow-2xs animate-pulse';
     case 'Cancelado': return 'bg-slate-50 text-slate-500 border-slate-200';
     default: return 'bg-slate-50 text-slate-500 border-slate-100';
   }
@@ -269,7 +270,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
   const [hasSearchedPeriod, setHasSearchedPeriod] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('');
-  const [statusTab, setStatusTab] = useState<'Todos' | 'Sem Condutor' | 'Com Condutor'>('Todos');
+  const [statusTab, setStatusTab] = useState<'Todos' | 'Não Iniciadas' | 'Ocorrências' | 'Sem Condutor' | 'Com Condutor'>('Todos');
 
   // Selected orders & selected rider
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
@@ -520,6 +521,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
         order.id.toLowerCase().includes(q) ||
         order.clientName.toLowerCase().includes(q) ||
         order.address.toLowerCase().includes(q) ||
+        matchesAddressQuery(order.address, searchQuery) ||
         order.region.toLowerCase().includes(q) ||
         (order.partnerName && (order.partnerName.toLowerCase().includes(q) || (clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente))?.name || '').toLowerCase().includes(q)));
       
@@ -535,12 +537,16 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     // Tab filter
     if (statusTab === 'Sem Condutor' && order.riderId) return false;
     if (statusTab === 'Com Condutor' && !order.riderId) return false;
+    if (statusTab === 'Não Iniciadas' && order.status !== 'Não iniciado') return false;
+    if (statusTab === 'Ocorrências' && order.status !== 'Ocorrência') return false;
 
     if (hasSearchedPeriod) {
-      // If a period is searched, filter strictly by the selected range
-      return order.date >= dateFrom && order.date <= dateTo;
+      // APOS SELECIONAR O PERIODO: exibir entregas do período selecionado que estão no status 'Não iniciado' e/ou 'Ocorrência'
+      const inPeriod = order.date >= dateFrom && order.date <= dateTo;
+      const isTargetStatus = order.status === 'Não iniciado' || order.status === 'Ocorrência';
+      return inPeriod && isTargetStatus;
     } else {
-      // By default: ONLY show incomplete orders of today's date
+      // Por padrão (hoje): exibe pedidos não concluídos do dia atual
       return order.date === todayStr;
     }
   });
@@ -1376,19 +1382,29 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                   {/* Quick Filters Navigation Tabs & Status Flag Legend */}
                   <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center border-b border-slate-100 bg-white px-3 text-[11px] font-bold text-slate-500 gap-2 py-1 md:py-0">
                     <div className="flex gap-1 overflow-x-auto">
-                      {(['Todos', 'Sem Condutor', 'Com Condutor'] as const).map(tab => {
+                      {(['Todos', 'Não Iniciadas', 'Ocorrências', 'Sem Condutor', 'Com Condutor'] as const).map(tab => {
                         const isActive = statusTab === tab;
+                        let countBadge = null;
+                        if (tab === 'Não Iniciadas') {
+                          const cnt = sortedFilteredOrders.filter(o => o.status === 'Não iniciado').length;
+                          countBadge = <span className="ml-1 text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-extrabold">{cnt}</span>;
+                        } else if (tab === 'Ocorrências') {
+                          const cnt = sortedFilteredOrders.filter(o => o.status === 'Ocorrência').length;
+                          countBadge = <span className="ml-1 text-[9px] bg-rose-600 text-white px-1.5 py-0.2 rounded-full font-black animate-pulse">{cnt}</span>;
+                        }
+
                         return (
                           <button
                             key={tab}
                             onClick={() => setStatusTab(tab)}
-                            className={`py-2 px-2.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                            className={`py-2 px-2.5 border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center ${
                               isActive 
                                 ? 'border-blue-600 text-blue-600 font-extrabold' 
                                 : 'border-transparent hover:text-slate-700'
                             }`}
                           >
-                            {tab}
+                            <span>{tab}</span>
+                            {countBadge}
                           </button>
                         );
                       })}
@@ -1398,31 +1414,44 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                     <div className="flex flex-wrap items-center gap-3 py-1.5 md:py-0 text-[10px] text-slate-400">
                       <span className="font-extrabold uppercase tracking-wider text-[9px] text-slate-500">Legenda:</span>
                       <div className="flex items-center gap-1">
-                        <Flag size={10} className="text-slate-400 fill-slate-400 animate-pulse" />
-                        <span>Não iniciado</span>
+                        <Flag size={10} className="text-amber-500 fill-amber-500 animate-pulse" />
+                        <span className="font-bold text-amber-800">Não iniciado</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Flag size={10} className="text-amber-500 fill-amber-500" />
-                        <span>Em rota</span>
+                        <Flag size={10} className="text-rose-600 fill-rose-600 animate-bounce" />
+                        <span className="font-extrabold text-rose-700">Ocorrência</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Flag size={10} className="text-sky-500 fill-sky-500" />
-                        <span>Entregando</span>
+                        <span>Em rota</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Flag size={10} className="text-emerald-500 fill-emerald-500" />
                         <span>Concluído</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Flag size={10} className="text-rose-500 fill-rose-500 animate-bounce" />
-                        <span>Ocorrência</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Flag size={10} className="text-slate-300 fill-slate-300" />
-                        <span>Cancelado</span>
-                      </div>
                     </div>
                   </div>
+
+                  {/* Active Period Status Info Banner */}
+                  {hasSearchedPeriod && (
+                    <div className="px-3.5 py-2 bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-slate-50 border-b border-blue-100 text-xs text-slate-700 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={13} className="text-blue-600 shrink-0" />
+                        <span>
+                          Exibindo entregas de <strong className="text-slate-900">{formatToBrazilianDate(dateFrom)}</strong> a <strong className="text-slate-900">{formatToBrazilianDate(dateTo)}</strong>:
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 font-extrabold text-[11px]">
+                        <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-md">
+                          {sortedFilteredOrders.filter(o => o.status === 'Não iniciado').length} Não Iniciadas
+                        </span>
+                        <span className="px-2.5 py-0.5 bg-rose-600 text-white rounded-md flex items-center gap-1 shadow-2xs">
+                          <AlertTriangle size={11} />
+                          {sortedFilteredOrders.filter(o => o.status === 'Ocorrência').length} Ocorrências
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Standard Orders Spreadsheet/Simplified-style Table */}
                   <div className={`overflow-x-auto overflow-y-auto w-full border-t border-slate-100 ${isFullscreen ? 'flex-1 max-h-[calc(100vh-250px)]' : 'max-h-[580px]'}`}>
@@ -1523,14 +1552,21 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         ) : (
                           paginatedOrders.map((order, idx) => {
                             const isSelected = selectedOrderIds.has(order.id);
+                            const isOccurrence = order.status === 'Ocorrência';
                             const globalIdx = (tablePage - 1) * itemsPerPage + idx + 1;
                             
                             return (
                               <tr 
                                 key={order.id} 
                                 onClick={() => toggleOrderSelection(order.id)}
-                                className={`hover:bg-slate-50/70 cursor-pointer transition-colors divide-x divide-slate-100 ${
-                                  isSelected ? 'bg-blue-50/40' : ''
+                                className={`cursor-pointer transition-all divide-x divide-slate-100 ${
+                                  isOccurrence
+                                    ? isSelected 
+                                      ? 'bg-rose-100/90 border-l-4 border-l-rose-600 text-rose-950 font-bold shadow-2xs' 
+                                      : 'bg-rose-50/90 hover:bg-rose-100/80 border-l-4 border-l-rose-500 text-rose-900 font-medium'
+                                    : isSelected 
+                                      ? 'bg-blue-50/50 border-l-4 border-l-blue-600' 
+                                      : 'hover:bg-slate-50/70 border-l-4 border-l-transparent'
                                 }`}
                               >
                                 <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>

@@ -101,16 +101,16 @@ export function getOrderDriverRepassValue(
   clientPartners: ClientPartner[], 
   fallbackFreightPercent: number = 80
 ): number {
-  // 1. If there's an explicit driver value already set on the order, preserve it for existing orders
-  if (order.driverValue !== undefined && order.driverValue !== null && order.driverValue >= 0) {
-    return order.driverValue;
-  }
-
+  // 1. Prioritize client partner's freight table (cruzando CEP x Repasse ao Condutor)
   if (clientPartners && clientPartners.length > 0) {
     const cp = clientPartners.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente));
 
     if (cp && cp.cepRanges && cp.cepRanges.length > 0) {
-      let orderCepClean = (order.cep || '').replace(/\D/g, '');
+      let rawCep = order.cep || '';
+      if (!rawCep && order.rawData) {
+        rawCep = order.rawData['CEP'] || order.rawData['cep'] || order.rawData['Cep'] || '';
+      }
+      let orderCepClean = String(rawCep).replace(/\D/g, '');
       if (orderCepClean.length > 0 && orderCepClean.length < 8) {
         orderCepClean = orderCepClean.padStart(8, '0');
       }
@@ -151,17 +151,32 @@ export function getOrderDriverRepassValue(
           const match = matches[0];
           const isExpress = !!(order.priority && order.priority.toLowerCase() === 'expresso');
 
+          // If explicit repasse ao condutor is defined on matched CEP range
           if (match.driverRepass !== undefined && match.driverRepass !== null && !isNaN(match.driverRepass) && match.driverRepass >= 0) {
-            if (isExpress && match.expressValue !== undefined && match.expressValue !== null && match.value > 0) {
+            if (isExpress && match.expressValue !== undefined && match.expressValue !== null && match.expressValue > 0 && match.value > 0) {
               return match.driverRepass * (match.expressValue / match.value);
             }
             return match.driverRepass;
+          }
+
+          // If driverRepass was not set on the matched range, calculate from freight value in table
+          if (match.value !== undefined && match.value !== null && !isNaN(match.value)) {
+            if (isExpress && match.expressValue !== undefined && match.expressValue !== null && match.expressValue > 0) {
+              return match.expressValue * (fallbackFreightPercent / 100);
+            }
+            return match.value * (fallbackFreightPercent / 100);
           }
         }
       }
     }
   }
 
+  // 2. Fallback: If there's an explicit driver value manually set on the order
+  if (order.driverValue !== undefined && order.driverValue !== null && order.driverValue > 0) {
+    return order.driverValue;
+  }
+
+  // 3. Fallback: Calculate from general freight value
   const freightVal = getOrderFreightValue(order, clientPartners);
   return freightVal * (fallbackFreightPercent / 100);
 }
