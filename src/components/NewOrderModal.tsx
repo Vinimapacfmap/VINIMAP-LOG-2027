@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Order, OrderPriority, ClientPartner } from '../types';
-import { getSaoPauloISODate } from '../utils/dateUtils';
+import { getSaoPauloISODate, getSaoPauloTime } from '../utils/dateUtils';
 import { getCoordinatesFromCep, geocodeAddressBackend } from '../utils/locationUtils';
 import CepInput, { ViaCepData } from './CepInput';
 import { 

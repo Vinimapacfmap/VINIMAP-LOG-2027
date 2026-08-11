@@ -14,6 +14,7 @@ import {
 import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHistoryEntry, isMatchingClientCode, CepRange, CepTableHistoryItem, CompanyHub, BillingModelType } from './types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime } from './utils/dateUtils';
 import { getPartnerDisplayName } from './utils/partnerUtils';
+import { matchesAddressQuery } from './utils/addressUtils';
 import { generateStaticSvgMap, geocodeAddressBackend, convertToGeoLat, convertToGeoLng } from './utils/locationUtils';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';

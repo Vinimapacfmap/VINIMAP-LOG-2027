@@ -98,7 +98,8 @@ interface OrdersTableProps {
     signatureUrl?: string,
     deliveryPhotoUrl?: string,
     recipientName?: string,
-    recipientDoc?: string
+    recipientDoc?: string,
+    observations?: string
   ) => void;
   onAssignRider: (orderId: string, riderId: string) => void;
   searchQuery: string;
