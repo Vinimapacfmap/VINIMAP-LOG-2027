@@ -32,7 +32,8 @@ import {
   Building2,
   Download,
   Image as ImageIcon,
-  GitBranch
+  GitBranch,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
@@ -60,6 +61,7 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
     { id: 'logo_sede', label: 'Edição de Logo da Sede', icon: ImageIcon },
     { id: 'tabela_frete', label: 'Tabela de Frete por Cliente', icon: DollarSign },
     { id: 'massa_dados', label: 'Massa de Dados (Seed)', icon: Database },
+    { id: 'restaurar_backup', label: 'Restaurar Backup por Período', icon: RotateCcw },
     { id: 'supabase', label: 'Banco de Dados Supabase', icon: Database },
     { id: 'github', label: 'Integração & Sync GitHub', icon: GitBranch },
     { id: 'configuracoes', label: 'Configurações Operacionais', icon: Settings }
@@ -74,6 +76,7 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
     { id: 'pedidos', label: 'Pedidos', icon: ShoppingBag, badge: '4' },
     { id: 'tabela_frete', label: 'Faixas de CEP & Frete', icon: DollarSign, badge: 'CEP' },
     { id: 'importar', label: 'Importar Pedidos', icon: FileSpreadsheet },
+    { id: 'restaurar_backup', label: 'Restaurar Backup por Período', icon: RotateCcw, badge: 'BACKUP' },
     { id: 'alocar', label: 'Alocar Pedidos', icon: Workflow },
     { id: 'caderno', label: 'Caderno Diário', icon: Notebook },
     { id: 'mapa', label: 'Mapa ao Vivo', icon: Map, pulse: true },

@@ -49,6 +49,7 @@ import SupabasePanel from './components/SupabasePanel';
 import { DiagnosticUtility } from './components/DiagnosticUtility';
 import GithubPanel from './components/GithubPanel';
 import DataMassManager from './components/DataMassManager';
+import BackupRestoreByPeriod from './components/BackupRestoreByPeriod';
 import { RevenueByPartnerChart } from './components/RevenueByPartnerChart';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from './data/financialMock';
 import { AdminLogin } from './components/AdminLogin';
@@ -5644,6 +5645,41 @@ export default function App() {
                   dbAddActivityLog(newLog);
                 }}
                 onRestoreDemoState={handleResetDemoState}
+              />
+            )}
+
+            {/* VIEW 10.2: BACKUP RESTORE BY PERIOD */}
+            {activeSection === 'restaurar_backup' && (
+              <BackupRestoreByPeriod
+                orders={orders}
+                clientPartners={clientPartners}
+                riders={riders}
+                financialTransactions={financialTransactions}
+                lastContingencyTime={lastContingencyBackupTime}
+                onRestoreData={(restoredOrders, restoredPartners, restoredRiders, mode, startDate, endDate) => {
+                  setOrders(restoredOrders);
+                  if (restoredOrders.length > 0) {
+                    dbBulkSaveOrders(restoredOrders);
+                  }
+                  if (restoredPartners && restoredPartners.length > 0) {
+                    setClientPartners(restoredPartners);
+                    restoredPartners.forEach(p => dbSaveClientPartner(p));
+                  }
+                  if (restoredRiders && restoredRiders.length > 0) {
+                    setRiders(restoredRiders);
+                    restoredRiders.forEach(r => dbSaveDeliveryRider(r));
+                  }
+                }}
+                onAddActivityLog={(message, type) => {
+                  const newLog: ActivityLog = {
+                    id: `log-restore-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                    time: getSaoPauloTime(),
+                    message,
+                    type: type || 'info'
+                  };
+                  setLogs(prev => [newLog, ...prev]);
+                  dbAddActivityLog(newLog);
+                }}
               />
             )}
 
