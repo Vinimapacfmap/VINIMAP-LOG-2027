@@ -148,6 +148,9 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
       setIsGeocodingLoading(false);
     }
 
+    const realNowTime = getSaoPauloTime();
+    const realNowDate = getSaoPauloISODate();
+
     onSubmit({
       clientName,
       phone: phone || '(11) 99999-9999',
@@ -159,7 +162,8 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
       value: orderValue,
       priority,
       itemsCount: items,
-      date: date || getSaoPauloISODate(),
+      date: date || realNowDate,
+      horarioInicial: realNowTime,
       cep: targetCep,
       partnerName: partnerName || 'Outro',
       lat: coords.lat,
@@ -170,7 +174,11 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
         'email': cleanEmail,
         'Número': cleanNum,
         'Numero': cleanNum,
-        'Complemento': cleanComp
+        'Complemento': cleanComp,
+        'HorarioInicio': realNowTime,
+        'HorarioAbertura': realNowTime,
+        'HoraLancamento': realNowTime,
+        'DataLancamento': realNowDate
       }
     });
 

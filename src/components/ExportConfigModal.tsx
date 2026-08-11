@@ -69,7 +69,7 @@ const EXPORT_COLUMNS: ExportColumnDefinition[] = [
   // LOGISTICS & TIMING
   { key: 'riderId', label: 'Entregador', category: 'logistics', getValue: (o, idx, riders) => riders.find(r => r.id === o.riderId)?.name || 'Não vinculado' },
   { key: 'TipoEntrega', label: 'Tipo de Entrega', category: 'logistics', getValue: (o) => o.rawData?.TipoEntrega || o.rawData?.tipoentrega || '' },
-  { key: 'HorarioInicio', label: 'Horário de Início', category: 'logistics', getValue: (o) => o.rawData?.HorarioInicio || o.rawData?.horarioinicio || '' },
+  { key: 'HorarioInicio', label: 'Horário de Início', category: 'logistics', getValue: (o) => o.horarioInicial || o.createdAt || o.rawData?.HorarioInicio || o.rawData?.horarioinicio || '' },
   { key: 'HorarioFinal', label: 'Horário Final', category: 'logistics', getValue: (o) => o.rawData?.HorarioFinal || o.rawData?.horariofinal || '' },
   { key: 'DataLimite', label: 'Data Limite', category: 'logistics', getValue: (o) => o.date || o.rawData?.DataLimite || o.rawData?.datalimite || '' },
   { key: 'DataSolicitacao', label: 'Data de Solicitação', category: 'logistics', getValue: (o) => o.date || o.rawData?.DataSolicitacao || o.rawData?.datasolicitacao || '' },

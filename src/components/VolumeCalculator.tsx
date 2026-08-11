@@ -432,6 +432,9 @@ export default function VolumeCalculator({ clientPartners, onCreateOrder }: Volu
 
     const calculatedFreight = selectedService === 'SEDEX' ? sedexTotal : pacTotal;
 
+    const nowTime = getSaoPauloTime();
+    const nowDate = getSaoPauloISODate();
+
     // Create the order draft
     onCreateOrder({
       clientName: recipientName,
@@ -441,7 +444,8 @@ export default function VolumeCalculator({ clientPartners, onCreateOrder }: Volu
       priority: 'Alta' as OrderPriority,
       value: parsedValDeclarado || 50,
       itemsCount: 1,
-      date: getSaoPauloISODate(),
+      date: nowDate,
+      horarioInicial: nowTime,
       cep: cepDestino,
       partnerName: partner.name,
       deliveryValue: calculatedFreight,
@@ -449,7 +453,11 @@ export default function VolumeCalculator({ clientPartners, onCreateOrder }: Volu
         'CubagemL': volumeLiters.toFixed(2),
         'PesoKg': weight.toFixed(3),
         'Servico': selectedService,
-        'TipoEmbalagem': PACKAGING_PRESETS.find(p => p.id === selectedPreset)?.name || 'Personalizado'
+        'TipoEmbalagem': PACKAGING_PRESETS.find(p => p.id === selectedPreset)?.name || 'Personalizado',
+        'HorarioInicio': nowTime,
+        'HorarioAbertura': nowTime,
+        'HoraLancamento': nowTime,
+        'DataLancamento': nowDate
       }
     });
 

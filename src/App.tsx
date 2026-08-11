@@ -1683,15 +1683,23 @@ export default function App() {
     }
 
     const orderCreationTime = formatOrderTime(newOrderData.horarioInicial || getSaoPauloTime());
+    const orderCreationDate = newOrderData.date || getSaoPauloISODate();
     const initialOrder: Order = {
       ...newOrderData,
       id: nextId,
       status: 'Não iniciado',
       createdAt: orderCreationTime,
       horarioInicial: orderCreationTime,
-      date: newOrderData.date || getSaoPauloISODate(),
+      date: orderCreationDate,
       lat: finalLat,
-      lng: finalLng
+      lng: finalLng,
+      rawData: {
+        ...(newOrderData.rawData || {}),
+        'HorarioInicio': orderCreationTime,
+        'HorarioAbertura': orderCreationTime,
+        'HoraLancamento': orderCreationTime,
+        'DataLancamento': orderCreationDate,
+      }
     };
 
     const newOrder = validateAndRecalculateOrderFreight(initialOrder, clientPartners);
@@ -2673,12 +2681,23 @@ export default function App() {
   const handleBulkCreate = async (newOrdersData: Omit<Order, 'id' | 'status' | 'createdAt'>[]) => {
     try {
       const startNum = 100 + orders.length + 1;
+      const nowTime = getSaoPauloTime();
+      const nowDate = getSaoPauloISODate();
       const createdOrders: Order[] = newOrdersData.map((data, index) => {
         const tempOrder: Order = {
           ...data,
           id: `ped-${startNum + index}`,
           status: 'Não iniciado',
-          createdAt: getSaoPauloTime(),
+          createdAt: data.horarioInicial || nowTime,
+          horarioInicial: data.horarioInicial || nowTime,
+          date: data.date || nowDate,
+          rawData: {
+            ...(data.rawData || {}),
+            'HorarioInicio': data.horarioInicial || nowTime,
+            'HorarioAbertura': data.horarioInicial || nowTime,
+            'HoraLancamento': nowTime,
+            'DataLancamento': nowDate,
+          },
           history: [
             {
               timestamp: getSaoPauloDateTimeShort(),
@@ -2696,7 +2715,6 @@ export default function App() {
       await dbBulkSaveOrders(createdOrders);
 
       // Add a single activity log for the bulk operation
-      const nowTime = getSaoPauloTime();
       const newLog: ActivityLog = {
         id: generateUniqueLogId('log-bulk'),
         time: nowTime,

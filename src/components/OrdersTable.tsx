@@ -581,6 +581,11 @@ function OrdersTable({
             setProtocolDeliveryDate(freshOrder.status === 'Concluído' ? (freshOrder.deliveryDate || freshOrder.date || getSaoPauloISODate()) : (freshOrder.deliveryDate || freshOrder.date || ''));
             setProtocolDeliveryTime(freshOrder.status === 'Concluído' ? (freshOrder.deliveryTime || getSaoPauloTime()) : (freshOrder.deliveryTime || freshOrder.rawData?.HorarioFinal || freshOrder.rawData?.horariofinal || ''));
             
+            const freshResolvedDate = freshOrder.date || extractISODateFromTimestamp(freshOrder.createdAt) || getSaoPauloISODate();
+            const freshResolvedTime = formatOrderTime(freshOrder.horarioInicial || freshOrder.createdAt || freshOrder.rawData?.HorarioInicio || freshOrder.rawData?.horarioinicio || freshOrder.rawData?.HorarioAbertura || freshOrder.rawData?.horarioabertura || freshOrder.rawData?.HoraLancamento || freshOrder.rawData?.horalancamento || getSaoPauloTime());
+            setProtocolOrderDate(freshResolvedDate);
+            setProtocolOrderTime(freshResolvedTime);
+            
             const freshSig = freshOrder.signatureUrl || freshOrder.rawData?.signatureUrl || freshOrder.rawData?.signatureImage || freshOrder.rawData?.assinatura || (freshOrder.status === 'Concluído' ? `typed:${freshOrder.recipientName || freshOrder.clientName || 'Recebedor Titular'}` : '');
             
             const coords = getCoordinates(freshOrder);
@@ -617,7 +622,7 @@ function OrdersTable({
     };
 
     const dateStr = formatToBrazilianDate(hubOrder.date) || '02/07/2026';
-    const baseTime = hubOrder.createdAt || '12:00';
+    const baseTime = hubOrder.horarioInicial || hubOrder.createdAt || hubOrder.rawData?.HorarioInicio || hubOrder.rawData?.horarioinicio || '12:00';
 
     switch (step) {
       case 1: {
@@ -743,7 +748,7 @@ function OrdersTable({
       return order.dataConclusao || order.deliveryDate || (order.status === 'Concluído' ? (order.date || getSaoPauloISODate()) : '');
     }
     if (lowerCol === 'horarioinicio' || lowerCol === 'horarioinicial') {
-      return order.horarioInicial || order.createdAt || '15:00';
+      return order.horarioInicial || order.createdAt || order.rawData?.HorarioInicio || order.rawData?.horarioinicio || order.rawData?.HorarioAbertura || order.rawData?.horarioabertura || getSaoPauloTime();
     }
     if (lowerCol === 'horariofinal') {
       return order.horarioFinal || order.deliveryTime || (order.status === 'Concluído' ? '17:30' : '');
@@ -805,7 +810,7 @@ function OrdersTable({
           value = 'SP';
           break;
         case 'horarioinicio': 
-          value = order.createdAt || '15:00';
+          value = order.horarioInicial || order.createdAt || order.rawData?.HorarioInicio || order.rawData?.horarioinicio || order.rawData?.HorarioAbertura || getSaoPauloTime();
           break;
         case 'horariofinal': 
           value = '19:00';
@@ -1505,7 +1510,7 @@ function OrdersTable({
     setProtocolDeliveryTime(order.status === 'Concluído' ? (order.deliveryTime || getSaoPauloTime()) : (order.deliveryTime || order.rawData?.HorarioFinal || order.rawData?.horariofinal || ''));
     setProtocolPartnerName(getPartnerDisplayName(order.partnerName) || 'Parceiro');
     const resolvedOrderDate = order.date || extractISODateFromTimestamp(order.createdAt) || getSaoPauloISODate();
-    const resolvedOrderTime = formatOrderTime(order.horarioInicial || order.createdAt || order.rawData?.HorarioInicio || order.rawData?.horarioinicio || getSaoPauloTime());
+    const resolvedOrderTime = formatOrderTime(order.horarioInicial || order.createdAt || order.rawData?.HorarioInicio || order.rawData?.horarioinicio || order.rawData?.HorarioAbertura || order.rawData?.horarioabertura || order.rawData?.HoraLancamento || order.rawData?.horalancamento || getSaoPauloTime());
     setProtocolOrderDate(resolvedOrderDate);
     setProtocolOrderTime(resolvedOrderTime);
     setIsEditingProtocol(false);
