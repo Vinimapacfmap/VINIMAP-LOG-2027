@@ -1837,7 +1837,9 @@ export default function App() {
     deliveryPhotoUrl?: string,
     recipientName?: string,
     recipientDoc?: string,
-    observations?: string
+    observations?: string,
+    deliveryDate?: string,
+    deliveryTime?: string
   ) => {
     try {
       const currentOrder = orders.find(o => o.id === orderId);
@@ -1917,16 +1919,6 @@ export default function App() {
         ? observations
         : (currentOrder.rawData?.Observacoes || currentOrder.rawData?.observacoes || currentOrder.rawData?.Observations || '');
 
-      const updatedHistory: OrderHistoryEntry[] = [
-        ...(currentOrder.history || []),
-        {
-          timestamp: getSaoPauloDateTimeShort(),
-          action: `Status alterado para ${nextStatus}`,
-          user: 'Sistema / Operador',
-          details: `Movimentação no fluxo logístico para o status ${nextStatus}.`
-        }
-      ];
-
       // Sync rawData spreadsheet fields with explicit protocol data
       const updatedRawData = { ...(currentOrder.rawData || {}) };
       updatedRawData['Situacao'] = nextStatus;
@@ -1950,14 +1942,53 @@ export default function App() {
         updatedRawData['Observations'] = finalObservations;
       }
 
-      const calculatedDataConclusao = isConcluido ? (currentOrder.dataConclusao || currentOrder.deliveryDate || getSaoPauloISODate()) : currentOrder.dataConclusao;
+      // Prioritize explicit deliveryDate/deliveryTime arguments over default current date/time
+      let calculatedDeliveryDate: string | undefined = (deliveryDate && deliveryDate.trim() !== '')
+        ? deliveryDate
+        : (isConcluido
+            ? (currentOrder.status !== 'Concluído' ? getSaoPauloISODate() : (currentOrder.deliveryDate || currentOrder.dataConclusao || getSaoPauloISODate()))
+            : currentOrder.deliveryDate);
+
+      let calculatedDeliveryTime: string | undefined = (deliveryTime && deliveryTime.trim() !== '')
+        ? deliveryTime
+        : (isConcluido
+            ? (currentOrder.status !== 'Concluído' ? getSaoPauloTime() : (currentOrder.deliveryTime || currentOrder.horarioFinal || getSaoPauloTime()))
+            : currentOrder.deliveryTime);
+
+      const calculatedDataConclusao = calculatedDeliveryDate;
       const rawOrderStartTime = currentOrder.horarioInicial || currentOrder.createdAt || currentOrder.rawData?.HorarioInicio || currentOrder.rawData?.horarioinicio;
       const calculatedHorarioInicial = formatOrderTime(rawOrderStartTime || getSaoPauloTime());
-      const calculatedHorarioFinal = isConcluido ? (currentOrder.horarioFinal || currentOrder.deliveryTime || getSaoPauloTime()) : currentOrder.horarioFinal;
+      const calculatedHorarioFinal = isConcluido ? (calculatedDeliveryTime || getSaoPauloTime()) : currentOrder.horarioFinal;
 
-      if (calculatedDataConclusao) updatedRawData['DataConclusao'] = calculatedDataConclusao;
+      if (calculatedDataConclusao) {
+        updatedRawData['DataConclusao'] = calculatedDataConclusao;
+        updatedRawData['DataEntrega'] = calculatedDataConclusao;
+        updatedRawData['deliveryDate'] = calculatedDataConclusao;
+        updatedRawData['dataconclusao'] = calculatedDataConclusao;
+      }
       if (calculatedHorarioInicial) updatedRawData['HorarioInicio'] = calculatedHorarioInicial;
-      if (calculatedHorarioFinal) updatedRawData['HorarioFinal'] = calculatedHorarioFinal;
+      if (calculatedHorarioFinal) {
+        updatedRawData['HorarioFinal'] = calculatedHorarioFinal;
+        updatedRawData['HorarioEntrega'] = calculatedHorarioFinal;
+        updatedRawData['deliveryTime'] = calculatedHorarioFinal;
+      }
+
+      const hasManualDateOverride = deliveryDate && deliveryDate.trim() !== '';
+      const hasManualTimeOverride = deliveryTime && deliveryTime.trim() !== '';
+      let historyDetails = `Movimentação no fluxo logístico para o status ${nextStatus}.`;
+      if (hasManualDateOverride || hasManualTimeOverride) {
+        historyDetails += ` (Ajuste manual de entrega: ${calculatedDeliveryDate || ''} ${calculatedDeliveryTime || ''})`.trim();
+      }
+
+      const updatedHistory: OrderHistoryEntry[] = [
+        ...(currentOrder.history || []),
+        {
+          timestamp: getSaoPauloDateTimeShort(),
+          action: `Status alterado para ${nextStatus}`,
+          user: 'Sistema / Operador',
+          details: historyDetails
+        }
+      ];
 
       const updatedOrderObj: Order = { 
         ...currentOrder, 
@@ -1970,8 +2001,8 @@ export default function App() {
         recipientName: finalRecipientName,
         recipientDoc: finalRecipientDoc,
         occurrenceDate: nextStatus === 'Ocorrência' ? (currentOrder.occurrenceDate || getSaoPauloISODate()) : currentOrder.occurrenceDate,
-        deliveryDate: isConcluido ? (currentOrder.deliveryDate || getSaoPauloISODate()) : currentOrder.deliveryDate,
-        deliveryTime: isConcluido ? (currentOrder.deliveryTime || getSaoPauloTime()) : currentOrder.deliveryTime,
+        deliveryDate: calculatedDeliveryDate,
+        deliveryTime: calculatedDeliveryTime,
         dataConclusao: calculatedDataConclusao,
         horarioInicial: calculatedHorarioInicial,
         horarioFinal: calculatedHorarioFinal,
@@ -2579,6 +2610,17 @@ export default function App() {
           if (finalRecipientName) updatedRawData['Recebedor'] = finalRecipientName;
           if (finalRecipientDoc !== undefined) updatedRawData['DocumentoRecebedor'] = finalRecipientDoc;
 
+          const calculatedDeliveryDate = isConcluido 
+            ? (order.status !== 'Concluído' ? getSaoPauloISODate() : (order.deliveryDate || order.dataConclusao || getSaoPauloISODate())) 
+            : order.deliveryDate;
+
+          const calculatedDeliveryTime = isConcluido 
+            ? (order.status !== 'Concluído' ? getSaoPauloTime() : (order.deliveryTime || order.horarioFinal || getSaoPauloTime())) 
+            : order.deliveryTime;
+
+          if (calculatedDeliveryDate) updatedRawData['DataConclusao'] = calculatedDeliveryDate;
+          if (calculatedDeliveryTime) updatedRawData['HorarioFinal'] = calculatedDeliveryTime;
+
           updatedOrders.push({
             ...order,
             status: nextStatus,
@@ -2589,8 +2631,10 @@ export default function App() {
             deliveryPhotoUrl: finalDeliveryPhotoUrl,
             recipientName: finalRecipientName,
             recipientDoc: finalRecipientDoc,
-            deliveryDate: isConcluido ? (order.deliveryDate || getSaoPauloISODate()) : order.deliveryDate,
-            deliveryTime: isConcluido ? (order.deliveryTime || getSaoPauloTime()) : order.deliveryTime,
+            deliveryDate: calculatedDeliveryDate,
+            deliveryTime: calculatedDeliveryTime,
+            dataConclusao: calculatedDeliveryDate,
+            horarioFinal: calculatedDeliveryTime,
             rawData: updatedRawData
           });
         }

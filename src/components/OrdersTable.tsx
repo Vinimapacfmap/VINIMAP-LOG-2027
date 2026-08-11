@@ -99,7 +99,9 @@ interface OrdersTableProps {
     deliveryPhotoUrl?: string,
     recipientName?: string,
     recipientDoc?: string,
-    observations?: string
+    observations?: string,
+    deliveryDate?: string,
+    deliveryTime?: string
   ) => void;
   onAssignRider: (orderId: string, riderId: string) => void;
   searchQuery: string;
@@ -579,7 +581,7 @@ function OrdersTable({
           if (!isEditingProtocol) {
             setProtocolRecipientName(freshOrder.recipientName || freshOrder.clientName);
             setProtocolRecipientDoc(freshOrder.recipientDoc || '');
-            setProtocolDeliveryDate(freshOrder.status === 'Concluído' ? (freshOrder.deliveryDate || freshOrder.date || getSaoPauloISODate()) : (freshOrder.deliveryDate || freshOrder.date || ''));
+            setProtocolDeliveryDate(freshOrder.status === 'Concluído' ? (freshOrder.deliveryDate || freshOrder.dataConclusao || getSaoPauloISODate()) : (freshOrder.deliveryDate && freshOrder.deliveryDate !== freshOrder.date ? freshOrder.deliveryDate : getSaoPauloISODate()));
             setProtocolDeliveryTime(freshOrder.status === 'Concluído' ? (freshOrder.deliveryTime || getSaoPauloTime()) : (freshOrder.deliveryTime || freshOrder.rawData?.HorarioFinal || freshOrder.rawData?.horariofinal || ''));
             
             const freshResolvedDate = freshOrder.date || extractISODateFromTimestamp(freshOrder.createdAt) || getSaoPauloISODate();
@@ -1510,7 +1512,7 @@ function OrdersTable({
     // Protocol info
     setProtocolRecipientName(order.recipientName || order.clientName);
     setProtocolRecipientDoc(order.recipientDoc || '');
-    setProtocolDeliveryDate(order.status === 'Concluído' ? (order.deliveryDate || order.date || getSaoPauloISODate()) : (order.deliveryDate || order.date || ''));
+    setProtocolDeliveryDate(order.status === 'Concluído' ? (order.deliveryDate || order.dataConclusao || getSaoPauloISODate()) : (order.deliveryDate && order.deliveryDate !== order.date ? order.deliveryDate : getSaoPauloISODate()));
     setProtocolDeliveryTime(order.status === 'Concluído' ? (order.deliveryTime || getSaoPauloTime()) : (order.deliveryTime || order.rawData?.HorarioFinal || order.rawData?.horariofinal || ''));
     setProtocolPartnerName(getPartnerDisplayName(order.partnerName) || 'Parceiro');
     const resolvedOrderDate = order.date || extractISODateFromTimestamp(order.createdAt) || getSaoPauloISODate();
@@ -1736,7 +1738,9 @@ function OrdersTable({
       finalPhoto, 
       protocolRecipientName, 
       protocolRecipientDoc,
-      protocolObservations
+      protocolObservations,
+      finalDeliveryDate,
+      finalDeliveryTime
     );
 
     setHubOrder(updatedOrder);
