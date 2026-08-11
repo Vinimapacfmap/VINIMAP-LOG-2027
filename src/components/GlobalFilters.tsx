@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { DeliveryRider, OrderStatus, ClientPartner } from '../types';
-import { formatToBrazilianDate } from '../utils/dateUtils';
+import { formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { 
   Filter, 
   Calendar, 
@@ -197,7 +197,7 @@ export default function GlobalFilters({
               onChange={(e) => {
                 const val = e.target.value;
                 setFilterDateFrom(val);
-                if (val) setFilterDateTo(val);
+                if (val) setFilterDateTo(getSaoPauloISODate());
               }}
               className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
             />

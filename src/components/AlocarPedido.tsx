@@ -42,7 +42,7 @@ import {
   Minimize2
 } from 'lucide-react';
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode } from '../types';
-import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate } from '../utils/dateUtils';
+import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
 
@@ -1108,7 +1108,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                           onChange={(e) => {
                             const val = e.target.value;
                             setDateFrom(val);
-                            if (val) setDateTo(val);
+                            if (val) setDateTo(getSaoPauloISODate());
                           }}
                           className="p-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700 block"
                         />
@@ -1330,7 +1330,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                           onChange={(e) => {
                             const val = e.target.value;
                             setDateFrom(val);
-                            if (val) setDateTo(val);
+                            if (val) setDateTo(getSaoPauloISODate());
                           }}
                           className="bg-transparent border-0 p-0 text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-0 w-[100px]"
                         />
