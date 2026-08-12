@@ -677,7 +677,14 @@ export default function BackupRestoreByPeriod({
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              max={endDate || undefined}
+              onChange={(e) => {
+                const val = e.target.value;
+                setStartDate(val);
+                if (val && endDate && val > endDate) {
+                  setEndDate(val);
+                }
+              }}
               className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
@@ -689,7 +696,14 @@ export default function BackupRestoreByPeriod({
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              min={startDate || undefined}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val && startDate && val < startDate) {
+                  setStartDate(val);
+                }
+                setEndDate(val);
+              }}
               className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>

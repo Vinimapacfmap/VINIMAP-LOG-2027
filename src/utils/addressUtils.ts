@@ -85,3 +85,69 @@ export function matchesAddressQuery(address: string | undefined | null, searchQu
 
   return queryTokens.every(token => normAddress.includes(token));
 }
+
+/**
+ * Compares two orders by CEP (Zip Code) in ascending numerical order as the default sequence for drivers.
+ * Cleans non-digit characters so "01310-100" and "01310100" are compared consistently.
+ * Independent of system creation date, launch time, or reallocation date/status.
+ */
+export function compareOrdersByCep(
+  a: { cep?: string; address?: string; id?: string },
+  b: { cep?: string; address?: string; id?: string }
+): number {
+  const cepA = (a.cep || '').replace(/\D/g, '');
+  const cepB = (b.cep || '').replace(/\D/g, '');
+
+  if (cepA && cepB) {
+    if (cepA !== cepB) {
+      return cepA.localeCompare(cepB, undefined, { numeric: true });
+    }
+  } else if (cepA) {
+    return -1; // Order with CEP comes before order without CEP
+  } else if (cepB) {
+    return 1;
+  }
+
+  // Fallback if CEPs are identical or both missing
+  const addrA = String(a.address || '');
+  const addrB = String(b.address || '');
+  if (addrA !== addrB) {
+    return addrA.localeCompare(addrB, undefined, { numeric: true });
+  }
+
+  return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
+/**
+ * Resequences orders belonging to a rider according to CEP order.
+ * Updates the `sequence` property (1, 2, 3...) for all orders of the specified rider.
+ */
+export function resequenceRiderOrdersByCep<T extends { riderId?: string; sequence?: number; cep?: string; address?: string; id?: string }>(
+  allOrders: T[],
+  riderId: string
+): T[] {
+  if (!riderId || riderId === 'unassign' || riderId === 'desalocar') return allOrders;
+
+  // Filter all orders assigned to this rider
+  const riderOrders = allOrders.filter(o => o.riderId === riderId);
+  if (riderOrders.length === 0) return allOrders;
+
+  // Sort them strictly by CEP
+  const sortedRiderOrders = [...riderOrders].sort(compareOrdersByCep);
+
+  // Map of order ID -> new sequence number (1-based index)
+  const sequenceMap = new Map<string, number>();
+  sortedRiderOrders.forEach((o, index) => {
+    if (o.id) sequenceMap.set(o.id, index + 1);
+  });
+
+  return allOrders.map(o => {
+    if (o.riderId === riderId && o.id && sequenceMap.has(o.id)) {
+      return {
+        ...o,
+        sequence: sequenceMap.get(o.id)
+      };
+    }
+    return o;
+  });
+}

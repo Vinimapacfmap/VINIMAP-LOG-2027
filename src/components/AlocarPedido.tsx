@@ -44,7 +44,7 @@ import {
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
-import { matchesAddressQuery } from '../utils/addressUtils';
+import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from '../utils/addressUtils';
 
 const getStatusClasses = (status: string) => {
   switch (status) {
@@ -611,17 +611,13 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     }
   }, [riders, selectedRiderId]);
 
-  // Handle setting active device rider view to display their active roteiro
+  // Handle setting active device rider view to display their active roteiro (sorted by CEP)
   useEffect(() => {
-    if (activeDeviceRiderId) {
+    const targetRiderId = activeDeviceRiderId || selectedRiderId;
+    if (targetRiderId) {
       const riderOrders = orders.filter(
-        o => o.riderId === activeDeviceRiderId && o.status !== 'Concluído' && o.status !== 'Cancelado'
-      );
-      setItinerarySequence(riderOrders);
-    } else if (selectedRiderId) {
-      const riderOrders = orders.filter(
-        o => o.riderId === selectedRiderId && o.status !== 'Concluído' && o.status !== 'Cancelado'
-      );
+        o => o.riderId === targetRiderId && o.status !== 'Concluído' && o.status !== 'Cancelado'
+      ).sort(compareOrdersByCep);
       setItinerarySequence(riderOrders);
     }
   }, [orders, activeDeviceRiderId, selectedRiderId]);
@@ -1105,10 +1101,15 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         <input
                           type="date"
                           value={dateFrom}
+                          max={dateTo || undefined}
                           onChange={(e) => {
                             const val = e.target.value;
                             setDateFrom(val);
-                            if (val) setDateTo(getSaoPauloISODate());
+                            if (val && dateTo && val > dateTo) {
+                              setDateTo(val);
+                            } else if (val && !dateTo) {
+                              setDateTo(val);
+                            }
                           }}
                           className="p-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700 block"
                         />
@@ -1119,7 +1120,14 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         <input
                           type="date"
                           value={dateTo}
-                          onChange={(e) => setDateTo(e.target.value)}
+                          min={dateFrom || undefined}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val && dateFrom && val < dateFrom) {
+                              setDateFrom(val);
+                            }
+                            setDateTo(val);
+                          }}
                           className="p-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700 block"
                         />
                       </div>
@@ -1327,10 +1335,15 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         <input
                           type="date"
                           value={dateFrom}
+                          max={dateTo || undefined}
                           onChange={(e) => {
                             const val = e.target.value;
                             setDateFrom(val);
-                            if (val) setDateTo(getSaoPauloISODate());
+                            if (val && dateTo && val > dateTo) {
+                              setDateTo(val);
+                            } else if (val && !dateTo) {
+                              setDateTo(val);
+                            }
                           }}
                           className="bg-transparent border-0 p-0 text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-0 w-[100px]"
                         />
@@ -1338,7 +1351,14 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         <input
                           type="date"
                           value={dateTo}
-                          onChange={(e) => setDateTo(e.target.value)}
+                          min={dateFrom || undefined}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val && dateFrom && val < dateFrom) {
+                              setDateFrom(val);
+                            }
+                            setDateTo(val);
+                          }}
                           className="bg-transparent border-0 p-0 text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-0 w-[100px]"
                         />
                         <button

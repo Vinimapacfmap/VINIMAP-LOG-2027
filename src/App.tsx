@@ -14,7 +14,8 @@ import {
 import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHistoryEntry, isMatchingClientCode, CepRange, CepTableHistoryItem, CompanyHub, BillingModelType } from './types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime } from './utils/dateUtils';
 import { getPartnerDisplayName } from './utils/partnerUtils';
-import { matchesAddressQuery } from './utils/addressUtils';
+import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from './utils/addressUtils';
+import { playNotificationAudioAlert } from './utils/notificationUtils';
 import { generateStaticSvgMap, geocodeAddressBackend, convertToGeoLat, convertToGeoLng } from './utils/locationUtils';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -5178,14 +5179,30 @@ export default function App() {
                                 <input type="checkbox" id="enableSoundAlert" checked={newRiderEnableSoundAlert} onChange={(e) => setNewRiderEnableSoundAlert(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer shrink-0" />
                               </div>
                               {newRiderEnableSoundAlert && (
-                                <div className="pt-1.5 border-t border-blue-200/60">
+                                <div className="pt-1.5 border-t border-blue-200/60 space-y-2">
                                   <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1">Som de Notificação</label>
-                                  <select value={newRiderSoundType} onChange={(e) => setNewRiderSoundType(e.target.value)} className="w-full px-2.5 py-1 text-xs bg-white border border-slate-200 rounded-lg font-bold text-slate-700">
+                                  <select 
+                                    value={newRiderSoundType} 
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setNewRiderSoundType(val);
+                                      playNotificationAudioAlert(val);
+                                    }} 
+                                    className="w-full px-2.5 py-1 text-xs bg-white border border-slate-200 rounded-lg font-bold text-slate-700 cursor-pointer"
+                                  >
                                     <option value="alerta_padrao">🔔 Sinal Clássico (Padrão)</option>
                                     <option value="sinal_suave">🎵 Chime Melódico (Suave)</option>
                                     <option value="sinal_urgente">🚨 Sirene Dupla (Urgente)</option>
                                     <option value="pop_moderno">✨ Pop Digital (Moderno)</option>
                                   </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => playNotificationAudioAlert(newRiderSoundType || 'alerta_padrao')}
+                                    className="w-full py-1.5 px-3 bg-blue-100/90 hover:bg-blue-200 text-blue-800 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-blue-200 shadow-2xs"
+                                  >
+                                    <Volume2 size={13} />
+                                    <span>🔊 Ouvir (Áudio, Som) - Testar Notificação</span>
+                                  </button>
                                 </div>
                               )}
                             </div>

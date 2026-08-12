@@ -194,10 +194,15 @@ export default function GlobalFilters({
             <input
               type="date"
               value={filterDateFrom}
+              max={filterDateTo || undefined}
               onChange={(e) => {
                 const val = e.target.value;
                 setFilterDateFrom(val);
-                if (val) setFilterDateTo(getSaoPauloISODate());
+                if (val && filterDateTo && val > filterDateTo) {
+                  setFilterDateTo(val);
+                } else if (val && !filterDateTo) {
+                  setFilterDateTo(val);
+                }
               }}
               className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
             />
@@ -219,7 +224,14 @@ export default function GlobalFilters({
             <input
               type="date"
               value={filterDateTo}
-              onChange={(e) => setFilterDateTo(e.target.value)}
+              min={filterDateFrom || undefined}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val && filterDateFrom && val < filterDateFrom) {
+                  setFilterDateFrom(val);
+                }
+                setFilterDateTo(val);
+              }}
               className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
             />
           </div>

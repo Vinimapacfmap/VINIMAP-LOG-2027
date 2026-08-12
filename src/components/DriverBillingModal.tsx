@@ -785,10 +785,15 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                     <input
                       type="date"
                       value={startDate}
+                      max={endDate || undefined}
                       onChange={(e) => {
                         const val = e.target.value;
                         setStartDate(val);
-                        if (val) setEndDate(val);
+                        if (val && endDate && val > endDate) {
+                          setEndDate(val);
+                        } else if (val && !endDate) {
+                          setEndDate(val);
+                        }
                       }}
                       className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     />
@@ -800,7 +805,14 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                     <input
                       type="date"
                       value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
+                      min={startDate || undefined}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val && startDate && val < startDate) {
+                          setStartDate(val);
+                        }
+                        setEndDate(val);
+                      }}
                       className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     />
                   </div>

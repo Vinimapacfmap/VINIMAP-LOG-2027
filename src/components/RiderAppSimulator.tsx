@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DeliveryRider, Order, OrderStatus, ActivityLog, ClientPartner, isMatchingClientCode, CompanyHub } from '../types';
 import { getSaoPauloISODate, getSaoPauloDate } from '../utils/dateUtils';
+import { compareOrdersByCep } from '../utils/addressUtils';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
 
@@ -1335,10 +1336,12 @@ export default function RiderAppSimulator({
   };
 
   const driverActiveOrders = orders.filter(isOrderActiveForDriver).sort((a, b) => {
-    const seqA = a.sequence !== undefined ? a.sequence : 999999;
-    const seqB = b.sequence !== undefined ? b.sequence : 999999;
-    if (seqA !== seqB) return seqA - seqB;
-    return String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.id || '').localeCompare(String(b.id || ''));
+    const seqA = a.sequence !== undefined ? a.sequence : undefined;
+    const seqB = b.sequence !== undefined ? b.sequence : undefined;
+    if (seqA !== undefined && seqB !== undefined && seqA !== seqB) {
+      return seqA - seqB;
+    }
+    return compareOrdersByCep(a, b);
   });
 
   // Dynamic KPIs synchronized with dashboard

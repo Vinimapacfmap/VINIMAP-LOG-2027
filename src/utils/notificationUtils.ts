@@ -222,6 +222,52 @@ export function generateWhatsappUrl(phoneDigits: string, text: string): string {
   return `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(text)}`;
 }
 
+export function playBeep(frequency = 880, duration = 0.15): void {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = frequency;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch (e) {
+    console.warn("AudioContext failed to play:", e);
+  }
+}
+
+export function playNotificationAudioAlert(soundType = 'alerta_padrao'): void {
+  try {
+    if (soundType === 'sinal_suave') {
+      playBeep(523.25, 0.15);
+      setTimeout(() => playBeep(659.25, 0.15), 120);
+      setTimeout(() => playBeep(783.99, 0.2), 240);
+    } else if (soundType === 'sinal_urgente') {
+      playBeep(1200, 0.08);
+      setTimeout(() => playBeep(1500, 0.08), 90);
+      setTimeout(() => playBeep(1200, 0.08), 180);
+      setTimeout(() => playBeep(1500, 0.12), 270);
+    } else if (soundType === 'pop_moderno') {
+      playBeep(1046.5, 0.06);
+      setTimeout(() => playBeep(1318.5, 0.08), 70);
+      setTimeout(() => playBeep(1567.98, 0.1), 140);
+    } else {
+      // 'alerta_padrao'
+      playBeep(880, 0.1);
+      setTimeout(() => playBeep(1174, 0.15), 100);
+    }
+  } catch (e) {
+    console.warn("AudioContext notification failed:", e);
+  }
+}
+
 export function generateMailtoUrl(email: string, subject: string, body: string): string {
   return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
