@@ -448,8 +448,81 @@ export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force
   }
 }
 
+// Helper function to record audit logs when rider allocation changes
+export async function recordRiderAllocationAuditLog(
+  orderId: string,
+  prevRiderId: string | undefined,
+  newRiderId: string | undefined
+) {
+  const normPrev = prevRiderId || undefined;
+  const normNew = newRiderId || undefined;
+
+  if (normPrev !== normNew) {
+    const timestamp = new Date().toISOString();
+    const prevText = normPrev ? `riderId: ${normPrev}` : 'Nenhum (Desalocado)';
+    const newText = normNew ? `riderId: ${normNew}` : 'Nenhum (Desalocado)';
+    const message = `[AUDIT - ALOCAÇÃO DE CONDUTOR] Pedido #${orderId} alterou de "${prevText}" para "${newText}" às ${timestamp}`;
+
+    console.log(`[dbSaveOrder AUDIT LOG] ${message}`, {
+      orderId,
+      prevRiderId: normPrev || null,
+      newRiderId: normNew || null,
+      timestamp
+    });
+
+    // Save to Firestore auditLogs collection
+    if (!getIsFirestoreQuotaExceeded()) {
+      try {
+        const auditRef = doc(collection(db, 'auditLogs'));
+        await setDoc(auditRef, {
+          id: auditRef.id,
+          orderId,
+          prevRiderId: normPrev || null,
+          newRiderId: normNew || null,
+          action: 'RIDER_ALLOCATION_CHANGE',
+          details: message,
+          timestamp,
+          createdAt: timestamp
+        });
+      } catch (err) {
+        console.warn('[dbSaveOrder AUDIT LOG] Erro ao gravar log no Firestore:', err);
+      }
+    }
+
+    // Save to activity log
+    try {
+      await dbAddActivityLog({
+        id: `audit-${orderId}-${Date.now()}`,
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        type: 'warning',
+        message: `Alteração de condutor no Pedido #${orderId}: de "${normPrev || 'Desalocado'}" para "${normNew || 'Desalocado'}"`,
+        orderId
+      });
+    } catch (err) {
+      console.warn('[dbSaveOrder AUDIT LOG] Erro ao gravar activity log:', err);
+    }
+  }
+}
+
 // Order CRUD operations
 export async function dbSaveOrder(order: Order) {
+  // Check previous riderId before saving
+  let prevRiderId: string | undefined = undefined;
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      const existingSnap = await getDoc(doc(db, 'orders', order.id));
+      if (existingSnap.exists()) {
+        const data = existingSnap.data();
+        prevRiderId = data?.riderId || data?.driverId || undefined;
+      }
+    } catch (e) {
+      console.warn(`[dbSaveOrder Audit] Não foi possível obter estado prévio do pedido #${order.id}:`, e);
+    }
+  }
+
+  // Record audit log if rider allocation changed
+  await recordRiderAllocationAuditLog(order.id, prevRiderId, order.riderId);
+
   // 1. Always save to Supabase independently
   try {
     await sbSaveOrder(order);
@@ -486,6 +559,23 @@ export async function dbDeleteOrder(orderId: string) {
 }
 
 export async function dbBulkSaveOrders(orders: Order[]) {
+  // Audit rider allocation changes in bulk save
+  if (!getIsFirestoreQuotaExceeded()) {
+    for (const order of orders) {
+      try {
+        const existingSnap = await getDoc(doc(db, 'orders', order.id));
+        let prevRiderId: string | undefined = undefined;
+        if (existingSnap.exists()) {
+          const data = existingSnap.data();
+          prevRiderId = data?.riderId || data?.driverId || undefined;
+        }
+        await recordRiderAllocationAuditLog(order.id, prevRiderId, order.riderId);
+      } catch (e) {
+        console.warn(`[dbBulkSaveOrders Audit] Não foi possível auditar pedido #${order.id}:`, e);
+      }
+    }
+  }
+
   for (const order of orders) {
     await sbSaveOrder(order).catch(err => console.warn('Supabase bulk save order error:', err));
   }
@@ -544,13 +634,13 @@ export async function dbQueryOrdersByRider(riderId: string, status?: string): Pr
     if (status) {
       q = query(
         collection(db, 'orders'),
-        where('driverId', '==', riderId),
+        where('riderId', '==', riderId),
         where('status', '==', status)
       );
     } else {
       q = query(
         collection(db, 'orders'),
-        where('driverId', '==', riderId),
+        where('riderId', '==', riderId),
         orderBy('createdAt', 'desc')
       );
     }

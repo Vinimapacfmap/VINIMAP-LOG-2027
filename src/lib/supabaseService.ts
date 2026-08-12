@@ -7,6 +7,7 @@ import {
   FinancialTransaction,
   CompanyHub 
 } from '../types';
+import { sanitizeOrdersListConsistency } from '../utils/orderConsistency';
 
 // ============================================================================
 // MAPPING HELPER FUNCTIONS (camelCase <-> snake_case)
@@ -674,11 +675,14 @@ export async function fetchAllStateFromSupabase(): Promise<SupabaseLoadedState> 
     if (logsErr) console.warn('Supabase logs query warning:', logsErr);
     if (txsErr) console.warn('Supabase txs query warning:', txsErr);
 
+    const mappedOrders = (orders || []).map(mapOrderFromDb);
+    const { orders: sanitizedOrders } = sanitizeOrdersListConsistency(mappedOrders);
+
     return {
       hubs: (hubs || []).map(mapCompanyHubFromDb),
       clients: (clients || []).map(mapClientPartnerFromDb),
       riders: (riders || []).map(mapDeliveryRiderFromDb),
-      orders: (orders || []).map(mapOrderFromDb),
+      orders: sanitizedOrders,
       logs: (logs || []).map(mapActivityLogFromDb),
       txs: (txs || []).map(mapFinancialTransactionFromDb)
     };

@@ -439,11 +439,17 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
 
       // Find matching rider ID if DispositivoCondutor contains a registered rider name or ID
       let matchedRiderId = undefined;
-      const condutorVal = getRowValue(data, 'DispositivoCondutor').toLowerCase();
-      if (condutorVal) {
+      const rawCondutorVal = getRowValue(data, 'DispositivoCondutor').trim();
+      const condutorVal = rawCondutorVal.toLowerCase();
+      const genericKeywords = ['condutor', 'entregador', 'dispositivo', 'moto', 'sem condutor', 'não alocado', 'nao alocado', 'não vinculado', 'nao vinculado', 'nenhum', 'unassign', 'desalocar'];
+      
+      if (condutorVal && !genericKeywords.includes(condutorVal)) {
         const foundRider = riders.find(r => 
           r.id.toLowerCase() === condutorVal || 
-          r.name.toLowerCase().includes(condutorVal)
+          r.name.toLowerCase() === condutorVal ||
+          (r.deviceNumber && r.deviceNumber.trim().toLowerCase() === condutorVal) ||
+          (r.phone && r.phone.replace(/\D/g, '') === condutorVal.replace(/\D/g, '') && condutorVal.replace(/\D/g, '').length >= 8) ||
+          (!genericKeywords.some(gk => gk.includes(condutorVal)) && r.name.toLowerCase().includes(condutorVal) && condutorVal.length >= 4)
         );
         if (foundRider) {
           matchedRiderId = foundRider.id;

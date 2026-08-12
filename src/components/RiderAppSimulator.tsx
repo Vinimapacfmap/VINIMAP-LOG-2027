@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DeliveryRider, Order, OrderStatus, ActivityLog, ClientPartner, isMatchingClientCode, CompanyHub } from '../types';
-import { getSaoPauloISODate, getSaoPauloDate } from '../utils/dateUtils';
+import { getSaoPauloISODate, getSaoPauloDate, getSaoPauloTime } from '../utils/dateUtils';
 import { compareOrdersByCep } from '../utils/addressUtils';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
@@ -692,14 +692,25 @@ export default function RiderAppSimulator({
 
       // Optimistic update for parent orders if onUpdateOrders provided
       if (onUpdateOrders && orders) {
+        const todayIso = getSaoPauloISODate();
+        const timeNow = getSaoPauloTime();
         const updatedOrders = orders.map(o => {
           if (o.id === orderId) {
             return {
               ...o,
               status,
               ...(protocolNumber ? { protocolNumber } : {}),
+              ...(signatureUrl ? { signatureUrl } : {}),
+              ...(deliveryPhotoUrl ? { deliveryPhotoUrl } : {}),
               ...(recipientName ? { recipientName } : {}),
-              ...(observations ? { notes: observations } : {})
+              ...(recipientDoc ? { recipientDoc } : {}),
+              ...(observations ? { notes: observations, observations } : {}),
+              ...(status === 'Concluído' ? {
+                deliveryDate: o.deliveryDate || todayIso,
+                dataConclusao: o.dataConclusao || todayIso,
+                deliveryTime: o.deliveryTime || timeNow,
+                horarioFinal: o.horarioFinal || timeNow
+              } : {})
             };
           }
           return o;

@@ -59,6 +59,7 @@ import { supabase, isSupabaseConfigured } from './supabase';
 import { fetchAllStateFromSupabase, syncAllStateToSupabase } from './lib/supabaseService';
 import { FinancialTransaction } from './types';
 import { useAppInitialization } from './hooks/useAppInitialization';
+import { sanitizeOrdersListConsistency, sanitizeOrderConsistency } from './utils/orderConsistency';
 
 import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from './firebase';
@@ -555,7 +556,13 @@ export default function App() {
         try {
           const sbState = await fetchAllStateFromSupabase();
           if (isCancelled) return;
-          if (sbState.orders && sbState.orders.length > 0) setOrders(sbState.orders);
+          if (sbState.orders && sbState.orders.length > 0) {
+            const { orders: sanitized, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(sbState.orders);
+            setOrders(sanitized);
+            if (hasModified && modifiedOrders.length > 0) {
+              dbBulkSaveOrders(modifiedOrders).catch(() => {});
+            }
+          }
           if (sbState.clients && sbState.clients.length > 0) {
             setClientPartners(sbState.clients.filter((c: ClientPartner) => !MOCK_CLIENT_IDS.includes(c.id)));
           }
@@ -576,7 +583,13 @@ export default function App() {
         if (storedBackup) {
           const parsed = JSON.parse(storedBackup);
           if (isCancelled) return;
-          if (parsed.orders && parsed.orders.length > 0) setOrders(parsed.orders);
+          if (parsed.orders && parsed.orders.length > 0) {
+            const { orders: sanitized, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(parsed.orders);
+            setOrders(sanitized);
+            if (hasModified && modifiedOrders.length > 0) {
+              dbBulkSaveOrders(modifiedOrders).catch(() => {});
+            }
+          }
           if (parsed.clientPartners && parsed.clientPartners.length > 0) {
             setClientPartners(parsed.clientPartners.filter((c: ClientPartner) => !MOCK_CLIENT_IDS.includes(c.id)));
           }
@@ -592,7 +605,11 @@ export default function App() {
 
       // 3. Fallback to initial mock data if React state is empty
       if (isCancelled) return;
-      setOrders(prev => prev.filter(o => !MOCK_ORDER_IDS.includes(o.id)));
+      setOrders(prev => {
+        const remaining = prev.filter(o => !MOCK_ORDER_IDS.includes(o.id));
+        const { orders: sanitized } = sanitizeOrdersListConsistency(remaining);
+        return sanitized;
+      });
       setClientPartners(prev => prev.filter(c => !MOCK_CLIENT_IDS.includes(c.id)));
       setRiders(prev => prev.filter(r => !MOCK_RIDER_IDS.includes(r.id)));
       setLogs(prev => prev.length === 0 ? INITIAL_LOGS : prev);
@@ -644,7 +661,12 @@ export default function App() {
         snapshot.forEach(doc => {
           docs.push(doc.data() as Order);
         });
-        setOrders(docs);
+        const { orders: sanitizedDocs, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(docs);
+        setOrders(sanitizedDocs);
+        if (hasModified && modifiedOrders.length > 0) {
+          console.log(`[Order Consistency] Persistindo correção de status para ${modifiedOrders.length} pedido(s) concluído(s) no Firestore.`);
+          dbBulkSaveOrders(modifiedOrders).catch(() => {});
+        }
       }, (error) => handleListenerError(error, 'orders'))
     );
 
@@ -1793,11 +1815,39 @@ export default function App() {
     }
 
     if (importedOrders.length > 0) {
-      dbBulkSaveOrders(importedOrders);
+      // Merge imported orders with existing state: preserve existing riderId and active status/completion data if not explicitly overridden
+      const mergedOrders = importedOrders.map(imported => {
+        const existing = orders.find(o => o.id === imported.id);
+        if (existing) {
+          const isImportedConcluido = imported.status === 'Concluído';
+          const isExistingActiveOrCompleted = existing.status === 'Concluído' || existing.status === 'Ocorrência' || existing.status === 'Em rota' || existing.status === 'Entregando';
+          
+          return {
+            ...imported,
+            status: (!isImportedConcluido && isExistingActiveOrCompleted) ? existing.status : imported.status,
+            deliveryDate: existing.deliveryDate || imported.deliveryDate,
+            dataConclusao: existing.dataConclusao || imported.dataConclusao,
+            deliveryTime: existing.deliveryTime || imported.deliveryTime,
+            horarioFinal: existing.horarioFinal || imported.horarioFinal,
+            signatureUrl: existing.signatureUrl || imported.signatureUrl,
+            deliveryPhotoUrl: existing.deliveryPhotoUrl || imported.deliveryPhotoUrl,
+            recipientName: existing.recipientName || imported.recipientName,
+            recipientDoc: existing.recipientDoc || imported.recipientDoc,
+            protocolNumber: existing.protocolNumber || imported.protocolNumber,
+            riderId: imported.riderId || existing.riderId,
+            history: [...(existing.history || []), ...(imported.history || [])]
+          };
+        }
+        return imported;
+      });
+
+      const { orders: sanitizedMerged } = sanitizeOrdersListConsistency(mergedOrders);
+      dbBulkSaveOrders(sanitizedMerged);
       setOrders(prev => {
-        const importedIds = new Set(importedOrders.map(i => i.id));
+        const importedIds = new Set(sanitizedMerged.map(i => i.id));
         const remainingPrev = prev.filter(p => !importedIds.has(p.id));
-        return [...importedOrders, ...remainingPrev];
+        const combined = [...sanitizedMerged, ...remainingPrev];
+        return sanitizeOrdersListConsistency(combined).orders;
       });
 
       // Expand date filters if needed so user sees imported orders immediately
@@ -1845,6 +1895,12 @@ export default function App() {
     try {
       const currentOrder = orders.find(o => o.id === orderId);
       if (!currentOrder) return;
+
+      // Restriction: Altering status of an already completed order is strictly restricted to Administrator
+      if (currentOrder.status === 'Concluído' && nextStatus !== 'Concluído' && !isAdminAuthenticated) {
+        alert('A alteração do status Concluído só pode ser efetuada pelo Administrador.');
+        return;
+      }
 
       let updatedRiderObj: DeliveryRider | null = null;
 
@@ -2442,6 +2498,11 @@ export default function App() {
       // Dynamic recalculation of freight whenever CEP or partnerName is modified
       const existingOrder = orders.find(o => o.id === finalOrder.id);
 
+      if (existingOrder && existingOrder.status === 'Concluído' && finalOrder.status !== 'Concluído' && !isAdminAuthenticated) {
+        alert('A alteração do status Concluído só pode ser efetuada pelo Administrador.');
+        return;
+      }
+
       // Verify if caller already appended a new history entry; if not, calculate diff and append entry with timestamp
       if (existingOrder) {
         const existingHistLen = (existingOrder.history || []).length;
@@ -2542,6 +2603,14 @@ export default function App() {
 
   const handleBulkUpdateStatus = async (orderIds: string[], nextStatus: OrderStatus) => {
     try {
+      if (!isAdminAuthenticated && nextStatus !== 'Concluído') {
+        const containsCompleted = orders.some(o => orderIds.includes(o.id) && o.status === 'Concluído');
+        if (containsCompleted) {
+          alert('A alteração do status Concluído só pode ser efetuada pelo Administrador.');
+          return;
+        }
+      }
+
       const updatedOrders: Order[] = [];
       const updatedRidersMap: { [riderId: string]: DeliveryRider } = {};
 
@@ -2805,6 +2874,14 @@ export default function App() {
 
   const handleBulkEdit = async (orderIds: string[], updates: Partial<Order>) => {
     try {
+      if (updates.status && updates.status !== 'Concluído' && !isAdminAuthenticated) {
+        const containsCompleted = orders.some(o => orderIds.includes(o.id) && o.status === 'Concluído');
+        if (containsCompleted) {
+          alert('A alteração do status Concluído só pode ser efetuada pelo Administrador.');
+          return;
+        }
+      }
+
       const updatedOrders: Order[] = [];
       const updatedRidersMap: { [riderId: string]: DeliveryRider } = {};
 
