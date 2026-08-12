@@ -2012,16 +2012,20 @@ export default function App() {
             ? (currentOrder.status !== 'Concluído' ? getSaoPauloTime() : (currentOrder.deliveryTime || currentOrder.horarioFinal || getSaoPauloTime()))
             : currentOrder.deliveryTime);
 
-      const calculatedDataConclusao = calculatedDeliveryDate;
+      const calculatedDataConclusao = isConcluido ? calculatedDeliveryDate : undefined;
       const rawOrderStartTime = currentOrder.horarioInicial || currentOrder.createdAt || currentOrder.rawData?.HorarioInicio || currentOrder.rawData?.horarioinicio;
       const calculatedHorarioInicial = formatOrderTime(rawOrderStartTime || getSaoPauloTime());
       const calculatedHorarioFinal = isConcluido ? (calculatedDeliveryTime || getSaoPauloTime()) : currentOrder.horarioFinal;
 
-      if (calculatedDataConclusao) {
+      if (isConcluido && calculatedDataConclusao) {
         updatedRawData['DataConclusao'] = calculatedDataConclusao;
         updatedRawData['DataEntrega'] = calculatedDataConclusao;
         updatedRawData['deliveryDate'] = calculatedDataConclusao;
         updatedRawData['dataconclusao'] = calculatedDataConclusao;
+      } else if (!isConcluido) {
+        delete updatedRawData['DataConclusao'];
+        delete updatedRawData['DataEntrega'];
+        delete updatedRawData['dataconclusao'];
       }
       if (calculatedHorarioInicial) updatedRawData['HorarioInicio'] = calculatedHorarioInicial;
       if (calculatedHorarioFinal) {
@@ -2688,7 +2692,12 @@ export default function App() {
             ? (order.status !== 'Concluído' ? getSaoPauloTime() : (order.deliveryTime || order.horarioFinal || getSaoPauloTime())) 
             : order.deliveryTime;
 
-          if (calculatedDeliveryDate) updatedRawData['DataConclusao'] = calculatedDeliveryDate;
+          if (isConcluido && calculatedDeliveryDate) {
+            updatedRawData['DataConclusao'] = calculatedDeliveryDate;
+          } else if (!isConcluido) {
+            delete updatedRawData['DataConclusao'];
+            delete updatedRawData['dataconclusao'];
+          }
           if (calculatedDeliveryTime) updatedRawData['HorarioFinal'] = calculatedDeliveryTime;
 
           updatedOrders.push({
@@ -2703,7 +2712,7 @@ export default function App() {
             recipientDoc: finalRecipientDoc,
             deliveryDate: calculatedDeliveryDate,
             deliveryTime: calculatedDeliveryTime,
-            dataConclusao: calculatedDeliveryDate,
+            dataConclusao: isConcluido ? calculatedDeliveryDate : undefined,
             horarioFinal: calculatedDeliveryTime,
             rawData: updatedRawData
           });

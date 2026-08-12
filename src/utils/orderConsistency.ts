@@ -99,16 +99,10 @@ export function sanitizeOrderConsistency(
   const updated = { ...order };
 
   const orderIsoDate = normalizeToISODate(updated.date || updated.deliveryDate || updated.dataConclusao);
-  const hasEvidence = hasOrderCompletionEvidence(updated);
-  const isPastDate = orderIsoDate !== '' && orderIsoDate < todayIso;
 
-  // Rule 1: If order has evidence of completion, force status to 'Concluído'
-  if (hasEvidence && updated.status !== 'Concluído') {
-    updated.status = 'Concluído';
-    isModified = true;
-  }
-
-  // Rule 2: Populate completion dates/times if status is 'Concluído' but dates are missing
+  // Rule 1: Populate completion dates/times ONLY if status is 'Concluído' but dates are missing.
+  // Note: We do NOT force status to 'Concluído' if the status was explicitly changed (e.g. by Administrator)
+  // to another status like 'Em rota', 'Não iniciado', 'Ocorrência', 'Cancelado', or 'Pendente'.
   if (updated.status === 'Concluído') {
     if (!updated.deliveryDate) {
       updated.deliveryDate = updated.dataConclusao || orderIsoDate || todayIso;
@@ -126,13 +120,6 @@ export function sanitizeOrderConsistency(
       updated.horarioFinal = updated.deliveryTime;
       isModified = true;
     }
-  }
-
-  // Rule 3: Past date invariant - If an order is from a past date and has completion evidence or was completed,
-  // ensure it never reverts to 'Não iniciado'.
-  if (isPastDate && updated.status === 'Não iniciado' && hasEvidence) {
-    updated.status = 'Concluído';
-    isModified = true;
   }
 
   return { order: updated, modified: isModified };
