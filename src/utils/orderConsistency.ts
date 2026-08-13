@@ -100,9 +100,7 @@ export function sanitizeOrderConsistency(
 
   const orderIsoDate = normalizeToISODate(updated.date || updated.deliveryDate || updated.dataConclusao);
 
-  // Rule 1: Populate completion dates/times ONLY if status is 'Concluído' but dates are missing.
-  // Note: We do NOT force status to 'Concluído' if the status was explicitly changed (e.g. by Administrator)
-  // to another status like 'Em rota', 'Não iniciado', 'Ocorrência', 'Cancelado', or 'Pendente'.
+  // Rule 1: Populate completion or occurrence dates/times ONLY if status is 'Concluído' or 'Ocorrência'.
   if (updated.status === 'Concluído') {
     if (!updated.deliveryDate) {
       updated.deliveryDate = updated.dataConclusao || orderIsoDate || todayIso;
@@ -118,6 +116,17 @@ export function sanitizeOrderConsistency(
     }
     if (!updated.horarioFinal && updated.deliveryTime) {
       updated.horarioFinal = updated.deliveryTime;
+      isModified = true;
+    }
+  }
+
+  if (updated.status === 'Ocorrência') {
+    if (!updated.occurrenceDate) {
+      updated.occurrenceDate = updated.deliveryDate || updated.dataConclusao || orderIsoDate || todayIso;
+      isModified = true;
+    }
+    if (!updated.deliveryDate) {
+      updated.deliveryDate = updated.occurrenceDate || orderIsoDate || todayIso;
       isModified = true;
     }
   }

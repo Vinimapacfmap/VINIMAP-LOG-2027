@@ -2022,10 +2022,16 @@ export default function App() {
         updatedRawData['DataEntrega'] = calculatedDataConclusao;
         updatedRawData['deliveryDate'] = calculatedDataConclusao;
         updatedRawData['dataconclusao'] = calculatedDataConclusao;
-      } else if (!isConcluido) {
+      } else if (nextStatus === 'Ocorrência') {
+        const occDate = currentOrder.occurrenceDate || currentOrder.deliveryDate || getSaoPauloISODate();
+        updatedRawData['DataOcorrencia'] = occDate;
+        updatedRawData['occurrenceDate'] = occDate;
+        if (!updatedRawData['DataEntrega']) updatedRawData['DataEntrega'] = occDate;
+      } else if (nextStatus === 'Não iniciado') {
         delete updatedRawData['DataConclusao'];
         delete updatedRawData['DataEntrega'];
         delete updatedRawData['dataconclusao'];
+        delete updatedRawData['DataOcorrencia'];
       }
       if (calculatedHorarioInicial) updatedRawData['HorarioInicio'] = calculatedHorarioInicial;
       if (calculatedHorarioFinal) {
@@ -4322,16 +4328,67 @@ export default function App() {
                             
                             const totalVolume = partnerOrdersInMonth.length;
                             const nonCancelledOrders = partnerOrdersInMonth.filter(order => order.status !== 'Cancelado');
+                            const completedCount = partnerOrdersInMonth.filter(order => order.status === 'Concluído').length;
+                            const incidentCount = partnerOrdersInMonth.filter(order => order.status === 'Ocorrência').length;
                             const totalFreight = nonCancelledOrders.reduce((sum, o) => sum + (o.value || 0), 0);
                             const avgFreight = nonCancelledOrders.length > 0 ? totalFreight / nonCancelledOrders.length : 0;
                             
                             return (
-                              <div key={cp.id} className="p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-xl transition-all duration-200 flex flex-col justify-between space-y-3 shadow-xs">
+                              <div key={cp.id} className="relative group/billingCard p-4 bg-slate-50/50 hover:bg-white border border-slate-100 hover:border-blue-200 hover:shadow-md rounded-xl transition-all duration-200 flex flex-col justify-between space-y-3">
+                                {/* Hover Popover showing full financial breakdown */}
+                                <div className="absolute left-0 bottom-full mb-2 w-72 bg-slate-900 text-white p-3.5 rounded-2xl shadow-2xl border border-slate-700 opacity-0 group-hover/billingCard:opacity-100 pointer-events-none group-hover/billingCard:pointer-events-auto transition-all duration-200 z-50 transform group-hover/billingCard:translate-y-0 translate-y-1">
+                                  <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+                                    <div className="min-w-0">
+                                      <h5 className="font-extrabold text-xs text-blue-300 truncate">{cp.name}</h5>
+                                      <span className="text-[9px] text-slate-400 font-mono block">Faturamento do Mês ({getPortugueseMonthName()})</span>
+                                    </div>
+                                    <span className="text-[8.5px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full uppercase shrink-0">
+                                      Faturamento
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-1.5 text-[10px]">
+                                    <div className="flex justify-between items-center bg-slate-800/80 p-2 rounded-lg border border-slate-700/50">
+                                      <span className="text-slate-300 font-semibold">💰 Total Faturado:</span>
+                                      <strong className="text-emerald-400 font-mono font-black text-xs">
+                                        {totalFreight.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                      </strong>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-1.5 pt-1 text-[9px]">
+                                      <div className="bg-slate-800/50 p-1.5 rounded-md border border-slate-800">
+                                        <span className="text-slate-400 block">Concluídos:</span>
+                                        <span className="font-bold text-emerald-300 text-xs">{completedCount}</span>
+                                      </div>
+                                      <div className="bg-slate-800/50 p-1.5 rounded-md border border-slate-800">
+                                        <span className="text-slate-400 block">Ocorrências:</span>
+                                        <span className="font-bold text-rose-300 text-xs">{incidentCount}</span>
+                                      </div>
+                                      <div className="bg-slate-800/50 p-1.5 rounded-md border border-slate-800">
+                                        <span className="text-slate-400 block">Repasse (85%):</span>
+                                        <span className="font-bold text-blue-300">
+                                          {(totalFreight * 0.85).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </span>
+                                      </div>
+                                      <div className="bg-slate-800/50 p-1.5 rounded-md border border-slate-800">
+                                        <span className="text-slate-400 block">ViniMap (15%):</span>
+                                        <span className="font-bold text-amber-300">
+                                          {(totalFreight * 0.15).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <p className="text-[8.5px] text-slate-400 text-center pt-1 border-t border-slate-800 font-medium">
+                                      💡 Clique para abrir o relatório de faturamento detalhado
+                                    </p>
+                                  </div>
+                                </div>
+
                                 <div className="flex justify-between items-start gap-2">
                                   <div className="min-w-0">
                                     <h4 
                                       onClick={() => setBillingModalClientId(cp.id)}
-                                      title="Clique para ver o relatório de faturamento do parceiro"
+                                      title="Passe o mouse para ver o faturamento ou clique para abrir o relatório completo"
                                       className="font-bold text-slate-800 text-xs truncate hover:text-blue-600 hover:underline cursor-pointer flex items-center gap-1 group/name"
                                     >
                                       {cp.name}
@@ -4352,9 +4409,9 @@ export default function App() {
                                 
                                 <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-slate-100">
                                   <div className="min-w-0">
-                                    <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider mb-0.5">Taxa Média</span>
-                                    <span className="text-xs font-extrabold text-slate-700 block truncate">
-                                      {avgFreight.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider mb-0.5">Faturamento</span>
+                                    <span className="text-xs font-black text-emerald-600 block truncate">
+                                      {totalFreight.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                     </span>
                                   </div>
                                   <div className="min-w-0">

@@ -1346,8 +1346,13 @@ function OrdersTable({
   };
 
   const handleBulkRiderAssign = (riderId: string) => {
-    onBulkAssignRider(Array.from(selectedIds), riderId);
-    setSelectedIds(new Set());
+    if (selectedIds.size === 0) return;
+    const targetRider = riders.find(r => r.id === riderId);
+    const riderName = targetRider ? targetRider.name : 'Desalocar';
+    if (window.confirm(`Deseja confirmar a alocação de ${selectedIds.size} pedido(s) selecionado(s) para o condutor "${riderName}"?`)) {
+      onBulkAssignRider(Array.from(selectedIds), riderId);
+      setSelectedIds(new Set());
+    }
   };
 
   const handleBulkDeleteAction = () => {
@@ -1365,10 +1370,13 @@ function OrdersTable({
   };
 
   const handleBulkEditSave = (updates: Partial<Order>) => {
-    if (onBulkEdit) {
-      onBulkEdit(Array.from(selectedIds), updates);
+    if (selectedIds.size === 0) return;
+    if (window.confirm(`Deseja aplicar as alterações em lote para os ${selectedIds.size} pedido(s) selecionado(s) de acordo com os filtros aplicados?`)) {
+      if (onBulkEdit) {
+        onBulkEdit(Array.from(selectedIds), updates);
+      }
+      setSelectedIds(new Set());
     }
-    setSelectedIds(new Set());
   };
 
   const handleBulkCreateSubmit = (newOrders: Omit<Order, 'id' | 'status' | 'createdAt'>[]) => {
@@ -5237,7 +5245,7 @@ function OrdersTable({
         {riderMenuState && (
           <>
             <div
-              className="fixed inset-0 z-[9998] bg-transparent"
+              className="fixed inset-0 z-[99998] bg-transparent"
               onClick={(e) => {
                 e.stopPropagation();
                 setRiderMenuState(null);
@@ -5254,7 +5262,7 @@ function OrdersTable({
                 top: riderMenuState.top !== undefined ? `${riderMenuState.top}px` : 'auto',
                 bottom: riderMenuState.bottom !== undefined ? `${riderMenuState.bottom}px` : 'auto',
               }}
-              className="z-[9999] w-52 bg-white border border-slate-200 rounded-2xl shadow-2xl py-1 text-left divide-y divide-slate-100 max-h-56 overflow-y-auto custom-scrollbar"
+              className="z-[99999] w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl py-1 text-left divide-y divide-slate-100 max-h-72 overflow-y-auto custom-scrollbar"
             >
               <button
                 onClick={(e) => {
@@ -5269,28 +5277,35 @@ function OrdersTable({
                 <span>Desalocar Condutor</span>
               </button>
               <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/80">
-                Selecione um Condutor
+                Selecione um Condutor ({riders.length})
               </div>
-              {riders
-                .filter(r => r.status === 'Disponível' || r.status === 'Em rota')
-                .map(availRider => (
-                  <button
-                    key={availRider.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const ordId = riderMenuState.order.id;
-                      setRiderMenuState(null);
-                      onAssignRider(ordId, availRider.id);
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50/50 text-[11px] flex items-center gap-2 cursor-pointer font-semibold text-slate-700"
-                  >
-                    <img src={availRider.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+              {riders.map(availRider => (
+                <button
+                  key={availRider.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const ordId = riderMenuState.order.id;
+                    setRiderMenuState(null);
+                    onAssignRider(ordId, availRider.id);
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-blue-50/70 text-[11px] flex items-center justify-between gap-2 cursor-pointer font-semibold text-slate-700 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <img src={availRider.avatar} className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200" />
                     <div className="truncate">
-                      <p className="font-bold leading-none">{availRider.name}</p>
-                      <p className="text-[9px] text-slate-400 mt-0.5">{availRider.vehicle} • {availRider.status}</p>
+                      <p className="font-extrabold text-slate-800 leading-tight">{availRider.name}</p>
+                      <p className="text-[9.5px] text-slate-400 font-medium">{availRider.vehicle}</p>
                     </div>
-                  </button>
-                ))}
+                  </div>
+                  <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase shrink-0 ${
+                    availRider.status === 'Disponível' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                    availRider.status === 'Em rota' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                    'bg-slate-100 text-slate-500 border border-slate-200'
+                  }`}>
+                    {availRider.status}
+                  </span>
+                </button>
+              ))}
             </motion.div>
           </>
         )}

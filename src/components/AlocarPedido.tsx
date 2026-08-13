@@ -554,8 +554,8 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       const inPeriod = orderOperationalDate >= dateFrom && orderOperationalDate <= dateTo;
       return inPeriod;
     } else {
-      // Por padrão (hoje): exibe pedidos do dia atual e também pedidos pendentes/em andamento acumulados de dias anteriores
-      return order.date === todayStr || (Boolean(order.riderId) && order.status !== 'Concluído' && order.status !== 'Cancelado');
+      // Por padrão (hoje): exibe pedidos do dia atual e também todos os pedidos abertos/pendentes acumulados de qualquer data
+      return order.date === todayStr || (order.status !== 'Concluído' && order.status !== 'Cancelado');
     }
   });
 

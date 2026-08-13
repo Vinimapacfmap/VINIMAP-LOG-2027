@@ -34,6 +34,7 @@ import SafeMapWrapper from './SafeMapWrapper';
 
 import { getCoordinatesFromCep, getRegionGeoCoords, convertToGeoLat, convertToGeoLng, getRiderGeoCoords } from '../utils/locationUtils';
 import { saveMapCache, getMapCache, MapCachePayload } from '../utils/mapCacheService';
+import { fetchOsrmRoute, OsrmRouteResult } from '../utils/osrmService';
 
 interface MapContainerProps {
   riders: DeliveryRider[];
@@ -56,6 +57,49 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
   const [activeLegendFilter, setActiveLegendFilter] = useState<string | null>(null);
   const [mapStyle, setMapStyle] = useState<'standard' | 'mapbox-streets' | 'mapbox-satellite' | 'mapbox-dark' | 'dark-vinimap' | 'satellite' | 'openstreetmap'>('mapbox-streets');
   const [showOptimizedRoute, setShowOptimizedRoute] = useState<boolean>(true);
+  const [osrmEtas, setOsrmEtas] = useState<Record<string, OsrmRouteResult>>({});
+
+  // Calculate real OSRM routes and ETAs for all riders with active pending deliveries
+  useEffect(() => {
+    let isMounted = true;
+
+    async function calculateOsrmEtas() {
+      const hubLat = activeHub?.lat || -23.5385556;
+      const hubLng = activeHub?.lng || -46.70118;
+
+      const newEtas: Record<string, OsrmRouteResult> = {};
+
+      for (const rider of riders) {
+        const riderOrders = orders.filter(
+          o => o.riderId === rider.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+        );
+        if (riderOrders.length === 0) continue;
+
+        const nextOrder = riderOrders[0];
+        const riderCoords = getRiderGeoCoords(rider, { lat: hubLat, lng: hubLng });
+        const destCoords = getCoordinatesFromCep(nextOrder.cep, nextOrder.region, nextOrder.address, nextOrder.lat, nextOrder.lng);
+
+        const routeResult = await fetchOsrmRoute(
+          { lat: riderCoords[0], lng: riderCoords[1] },
+          { lat: destCoords.lat, lng: destCoords.lng }
+        );
+
+        if (isMounted) {
+          newEtas[rider.id] = routeResult;
+        }
+      }
+
+      if (isMounted) {
+        setOsrmEtas(newEtas);
+      }
+    }
+
+    calculateOsrmEtas();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [riders, orders, activeHub]);
 
   // Offline Map Cache State
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -774,6 +818,57 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
                         📍 Simulador de Deslocamento Ativo
                       </div>
                     )}
+
+                    {/* Real-time OSRM ETA Card */}
+                    {(() => {
+                      const osrm = osrmEtas[rider.id];
+                      const riderOrders = orders.filter(o => o.riderId === rider.id && o.status !== 'Concluído' && o.status !== 'Cancelado');
+                      const nextOrder = riderOrders[0];
+
+                      if (!nextOrder) {
+                        return (
+                          <div className="bg-slate-100 text-slate-600 p-2 rounded-xl text-[9.5px] font-bold text-center border border-slate-200 mt-1">
+                            ✅ Sem entregas pendentes na fila.
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-900 text-white p-2.5 rounded-xl text-[10px] space-y-1.5 shadow-md border border-blue-600/80 mt-1">
+                          <div className="flex items-center justify-between font-extrabold text-blue-200">
+                            <span className="flex items-center gap-1 uppercase tracking-wider text-[8.5px]">
+                              🚀 OSRM / OpenStreetMap ETA
+                            </span>
+                            <span className="bg-blue-600 text-white px-1.5 py-0.2 rounded text-[7.5px] font-black uppercase">
+                              Ao Vivo
+                            </span>
+                          </div>
+                          
+                          {osrm ? (
+                            <>
+                              <div className="text-xs font-black text-amber-300 flex items-center justify-between">
+                                <span>⏱️ CHEGADA PREVISTA:</span>
+                                <span className="bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded-md font-mono text-xs shadow-sm font-black">
+                                  {osrm.etaClockTime}
+                                </span>
+                              </div>
+                              <div className="text-[9.5px] text-blue-100 flex items-center justify-between pt-0.5 border-t border-blue-800/80">
+                                <span>Tempo de Percurso: <strong>~{osrm.durationMinutes} min</strong></span>
+                                <span>Distância: <strong>{osrm.distanceKm} km</strong></span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-[9px] text-blue-200 animate-pulse py-1">
+                              Calculando rota real OSRM...
+                            </div>
+                          )}
+
+                          <div className="text-[8.5px] text-blue-200/90 truncate border-t border-blue-800/80 pt-1 font-medium">
+                            <strong>Próxima Parada:</strong> #{nextOrder.id.replace('ped-', '').toUpperCase()} • {nextOrder.clientName}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </Popup>
               </Marker>
@@ -793,6 +888,22 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
                 color={rider.status === 'Alerta' ? '#f43f5e' : '#3b82f6'}
                 weight={1.5}
                 opacity={0.3}
+              />
+            );
+          })}
+
+          {/* Real OSRM Street Polylines for Active Riders */}
+          {filteredRiders.map(rider => {
+            const osrm = osrmEtas[rider.id];
+            if (!osrm || !osrm.geometry || osrm.geometry.length < 2) return null;
+            const isSelected = selectedRiderId === rider.id;
+            return (
+              <Polyline
+                key={`osrm-line-${rider.id}`}
+                positions={osrm.geometry}
+                color={isSelected ? '#2563eb' : '#0284c7'}
+                weight={isSelected ? 5 : 3.5}
+                opacity={isSelected ? 0.9 : 0.65}
               />
             );
           })}

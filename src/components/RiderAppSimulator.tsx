@@ -1327,20 +1327,31 @@ export default function RiderAppSimulator({
   };
 
   // Filter orders for the active driver based on the start-the-day-clean rule.
-  // Previous orders are only displayed or counted if they were allocated/re-allocated today.
+  // Filter orders for the active driver:
+  // Any open order allocated to the driver (regardless of original date) is displayed on the driver's screen today to follow the route.
+  // Completed/canceled orders remain allocated to the driver for historical and reporting purposes.
   const todayIso = getSaoPauloISODate();
   const todayFormatted = getSaoPauloDate();
 
   const isOrderActiveForDriver = (order: Order) => {
-    if (order.riderId !== selectedRiderId) return false;
+    const isAssignedToRider = (
+      order.riderId === selectedRiderId ||
+      (selectedRider && (order.riderId === selectedRider.id || order.riderId === selectedRider.name))
+    );
+    if (!isAssignedToRider) return false;
     
-    // Today's orders are always active
-    if (order.date === todayIso) return true;
-    
-    // Past orders are only active if allocated today
+    // Open orders allocated to this driver MUST be displayed on driver screen today to follow route, even if from another date
+    if (order.status !== 'Concluído' && order.status !== 'Cancelado') {
+      return true;
+    }
+
+    // For completed / canceled orders, show if completed today or has today activity
+    if (order.date === todayIso || order.deliveryDate === todayIso || order.dataConclusao === todayIso || order.occurrenceDate === todayIso) {
+      return true;
+    }
+
     const hasTodayAllocation = order.history?.some(h => 
-      h.timestamp.startsWith(todayFormatted) && 
-      (h.action.includes('Alocado') || h.action.includes('Roteiro') || h.action.includes('vinculado') || h.action.includes('Vinculado'))
+      h.timestamp && h.timestamp.startsWith(todayFormatted)
     );
     
     return !!hasTodayAllocation;
@@ -1830,8 +1841,8 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                     return;
                                   }
 
-                                  // Update order status to Ocorrência
-                                  handleUpdateOrderStatus(order.id, 'Ocorrência');
+                                  // Update order status to Ocorrência with reason
+                                  handleUpdateOrderStatus(order.id, 'Ocorrência', undefined, undefined, undefined, undefined, undefined, reason);
                                   
                                   setShowIncidentInputId(null);
                                   setExpandedOrderId(null);
@@ -2395,7 +2406,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       return;
     }
 
-    handleUpdateOrderStatus(selectedOrder.id, 'Ocorrência'); // Reverts with incident status
+    handleUpdateOrderStatus(selectedOrder.id, 'Ocorrência', undefined, undefined, undefined, undefined, undefined, failureReason); // Reverts with incident status
 
     onSaveLogs([{
       id: `log-sim-fail-${Date.now()}`,
