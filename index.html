@@ -56,10 +56,11 @@
                 if (installingWorker) {
                   installingWorker.onstatechange = function() {
                     if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                      console.log('[Vinimap SW] Nova versão instalada. Notificando cliente...');
+                      console.log('[Vinimap SW] Nova versão instalada. Recarregando página automaticamente...');
                       if (installingWorker.postMessage) {
                         installingWorker.postMessage({ type: 'SKIP_WAITING' });
                       }
+                      window.location.reload();
                     }
                   };
                 }
