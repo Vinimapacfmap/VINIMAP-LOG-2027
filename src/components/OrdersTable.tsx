@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useState, useEffect, useMemo, memo, useRef } from 'react';
 import { compressImage } from '../utils/imageCompressor';
 import { Order, OrderStatus, DeliveryRider, OrderHistoryEntry, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, formatOrderTime, extractISODateFromTimestamp } from '../utils/dateUtils';
@@ -508,6 +508,25 @@ function OrdersTable({
   const [protocolObservations, setProtocolObservations] = useState('');
   const [isPhotoCorrupted, setIsPhotoCorrupted] = useState(false);
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
+
+  // Bulk Action Bar Dropdowns state & refs
+  const [isBulkStatusOpen, setIsBulkStatusOpen] = useState(false);
+  const [isBulkRiderOpen, setIsBulkRiderOpen] = useState(false);
+  const bulkStatusRef = useRef<HTMLDivElement>(null);
+  const bulkRiderRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bulkStatusRef.current && !bulkStatusRef.current.contains(e.target as Node)) {
+        setIsBulkStatusOpen(false);
+      }
+      if (bulkRiderRef.current && !bulkRiderRef.current.contains(e.target as Node)) {
+        setIsBulkRiderOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Signature Canvas Modal State
   const [signatureCanvasModalOpen, setSignatureCanvasModalOpen] = useState(false);
@@ -2863,58 +2882,95 @@ function OrdersTable({
 
           <div className="flex flex-wrap items-center gap-3">
             {/* Bulk Status Dropdown */}
-            <div className="relative group">
-              <button className="px-2.5 py-1.5 bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition-colors">
+            <div className="relative" ref={bulkStatusRef}>
+              <button
+                onClick={() => {
+                  setIsBulkStatusOpen(!isBulkStatusOpen);
+                  setIsBulkRiderOpen(false);
+                }}
+                className="px-2.5 py-1.5 bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+              >
                 <span>Alterar Status</span>
-                <ChevronDown size={11} />
+                <ChevronDown size={11} className={`transition-transform duration-150 ${isBulkStatusOpen ? 'rotate-180' : ''}`} />
               </button>
-              <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 hidden group-hover:block">
-                {(['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((status) => (
+              {isBulkStatusOpen && (
+                <div className="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl py-1 z-[9999]">
+                  {(['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => {
+                        handleBulkStatusChange(status);
+                        setIsBulkStatusOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-[11px] font-bold text-slate-700 cursor-pointer"
+                    >
+                      {status}
+                    </button>
+                  ))}
+                  <div className="border-t border-slate-100 my-1" />
                   <button
-                    key={status}
-                    onClick={() => handleBulkStatusChange(status)}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-[11px] font-bold text-slate-700"
+                    onClick={() => {
+                      handleBulkRiderAssign('unassign');
+                      setIsBulkStatusOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-1.5 cursor-pointer"
                   >
-                    {status}
+                    <UserX size={12} className="text-amber-600" />
+                    <span>Desalocar Condutor</span>
                   </button>
-                ))}
-                <div className="border-t border-slate-100 my-1" />
-                <button
-                  onClick={() => handleBulkRiderAssign('unassign')}
-                  className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <UserX size={12} className="text-amber-600" />
-                  <span>Desalocar Condutor</span>
-                </button>
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Bulk Rider Allocation Dropdown */}
-            <div className="relative group">
-              <button className="px-2.5 py-1.5 bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition-colors">
+            <div className="relative" ref={bulkRiderRef}>
+              <button
+                onClick={() => {
+                  setIsBulkRiderOpen(!isBulkRiderOpen);
+                  setIsBulkStatusOpen(false);
+                }}
+                className="px-2.5 py-1.5 bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+              >
                 <UserCheck size={12} />
                 <span>Alocar Condutor</span>
-                <ChevronDown size={11} />
+                <ChevronDown size={11} className={`transition-transform duration-150 ${isBulkRiderOpen ? 'rotate-180' : ''}`} />
               </button>
-              <div className="absolute right-0 mt-1 w-52 bg-white border border-slate-100 rounded-xl shadow-xl py-1 z-50 hidden group-hover:block max-h-48 overflow-y-auto">
-                <button
-                  onClick={() => handleBulkRiderAssign('unassign')}
-                  className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-1.5 cursor-pointer border-b border-slate-100"
-                >
-                  <UserX size={12} className="text-amber-600" />
-                  <span>🚫 Desalocar Condutor</span>
-                </button>
-                {riders.map((r) => (
+              {isBulkRiderOpen && (
+                <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-xl shadow-2xl py-1 z-[9999] max-h-60 overflow-y-auto custom-scrollbar">
                   <button
-                    key={r.id}
-                    onClick={() => handleBulkRiderAssign(r.id)}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50/50 text-[11px] flex items-center gap-2 cursor-pointer font-semibold text-slate-700"
+                    onClick={() => {
+                      handleBulkRiderAssign('unassign');
+                      setIsBulkRiderOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-[11px] font-extrabold text-amber-700 flex items-center gap-1.5 cursor-pointer border-b border-slate-100"
                   >
-                    <img src={r.avatar} className="w-4 h-4 rounded-full object-cover" />
-                    <span>{r.name} ({r.vehicle})</span>
+                    <UserX size={12} className="text-amber-600" />
+                    <span>🚫 Desalocar Condutor</span>
                   </button>
-                ))}
-              </div>
+                  {riders.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => {
+                        handleBulkRiderAssign(r.id);
+                        setIsBulkRiderOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50/70 text-[11px] flex items-center justify-between gap-2 cursor-pointer font-semibold text-slate-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <img src={r.avatar} className="w-5 h-5 rounded-full object-cover shrink-0 border border-slate-200" />
+                        <span className="truncate">{r.name} <span className="text-slate-400 font-normal text-[10px]">({r.vehicle})</span></span>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                        r.status === 'Em rota' ? 'bg-blue-100 text-blue-700' :
+                        r.status === 'Disponível' ? 'bg-emerald-100 text-emerald-700' :
+                        'bg-slate-100 text-slate-500'
+                      }`}>
+                        {r.status || 'Offline'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Bulk Edit Button */}

@@ -124,7 +124,8 @@ export default function BulkEditModal({
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+            className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-visible modal-content-visible flex flex-col max-h-[90vh] relative z-[100]"
+            style={{ overflow: 'visible', zIndex: 100 }}
           >
             {/* Header */}
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -316,7 +317,7 @@ export default function BulkEditModal({
               </div>
 
               {/* FIELD 8: Rider */}
-              <div className={`p-3 rounded-2xl border transition-colors ${updateRider ? 'border-indigo-100 bg-indigo-50/10' : 'border-slate-100'}`}>
+              <div className={`p-3 rounded-2xl border transition-colors modal-dropdown relative z-[9999] ${updateRider ? 'border-indigo-100 bg-indigo-50/10' : 'border-slate-100'}`} style={{ overflow: 'visible', zIndex: 9999 }}>
                 <label className="flex items-center gap-2 cursor-pointer mb-2">
                   <input
                     type="checkbox"
@@ -330,7 +331,8 @@ export default function BulkEditModal({
                   <select
                     value={riderId}
                     onChange={(e) => setRiderId(e.target.value)}
-                    className="w-full text-xs rounded-xl border-slate-200 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                    className="w-full text-xs rounded-xl border-slate-200 focus:ring-indigo-500 focus:border-indigo-500 bg-white modal-rider-select relative z-[9999]"
+                    style={{ overflow: 'visible', zIndex: 9999 }}
                   >
                     <option value="">Desalocar entregador (Vazio)</option>
                     {riders.map(r => (

@@ -74,10 +74,10 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pedidos', label: 'Pedidos', icon: ShoppingBag, badge: '4' },
+    { id: 'alocar', label: 'Alocar Pedidos', icon: Workflow },
     { id: 'tabela_frete', label: 'Faixas de CEP & Frete', icon: DollarSign, badge: 'CEP' },
     { id: 'importar', label: 'Importar Pedidos', icon: FileSpreadsheet },
     { id: 'restaurar_backup', label: 'Restaurar Backup por Período', icon: RotateCcw, badge: 'BACKUP' },
-    { id: 'alocar', label: 'Alocar Pedidos', icon: Workflow },
     { id: 'caderno', label: 'Caderno Diário', icon: Notebook },
     { id: 'mapa', label: 'Mapa ao Vivo', icon: Map, pulse: true },
     { id: 'localizacao', label: 'Localizar Condutor', icon: MapPin, pulse: true },

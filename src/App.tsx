@@ -2473,6 +2473,24 @@ export default function App() {
 
       const promises: Promise<any>[] = [];
 
+      // Update previous rider status if reallocating
+      if (currentOrder.riderId && currentOrder.riderId !== riderId) {
+        const prevRider = riders.find(r => r.id === currentOrder.riderId);
+        if (prevRider) {
+          const remainingActiveOrders = orders.filter(
+            o => o.id !== currentOrder.id && o.riderId === currentOrder.riderId && o.status !== 'Concluído' && o.status !== 'Cancelado'
+          );
+          const hasRemaining = remainingActiveOrders.length > 0;
+          const updatedPrevRider: DeliveryRider = {
+            ...prevRider,
+            status: hasRemaining ? prevRider.status : 'Disponível',
+            currentOrderId: hasRemaining ? remainingActiveOrders[0].id : undefined
+          };
+          setRiders(prev => prev.map(r => r.id === updatedPrevRider.id ? updatedPrevRider : r));
+          promises.push(dbSaveDeliveryRider(updatedPrevRider));
+        }
+      }
+
       // Mark rider busy if order is already in route/delivering
       if (currentOrder.status === 'Entregando' || currentOrder.status === 'Em rota') {
         const rider = riders.find(r => r.id === riderId);
@@ -2622,28 +2640,19 @@ export default function App() {
       }
 
       const updatedOrders: Order[] = [];
-      const updatedRidersMap: { [riderId: string]: DeliveryRider } = {};
+      const affectedRiderIds = new Set<string>();
 
       orders.forEach(order => {
         if (orderIds.includes(order.id)) {
+          if (order.riderId) {
+            affectedRiderIds.add(order.riderId);
+          }
           const historyEntry = {
             timestamp: getSaoPauloDateTimeShort(),
             action: 'Status Alterado (Em Massa)',
             user: 'Sistema (Painel)',
             details: `Status alterado para ${nextStatus} em massa.`
           };
-
-          if ((nextStatus === 'Concluído' || nextStatus === 'Cancelado') && order.riderId) {
-            const rider = riders.find(r => r.id === order.riderId);
-            if (rider) {
-              updatedRidersMap[rider.id] = {
-                ...rider,
-                status: 'Disponível',
-                currentOrderId: undefined,
-                completedDeliveries: nextStatus === 'Concluído' ? rider.completedDeliveries + 1 : rider.completedDeliveries
-              };
-            }
-          }
 
           const isConcluido = nextStatus === 'Concluído';
 
@@ -2725,11 +2734,34 @@ export default function App() {
         }
       });
 
-      setOrders(prev => {
-        const map = new Map(updatedOrders.map(o => [o.id, o]));
-        return prev.map(o => map.get(o.id) || o);
-      });
-      const ridersToSave = Object.values(updatedRidersMap);
+      const updatedOrdersMap = new Map(updatedOrders.map(o => [o.id, o]));
+      const allNewOrders = orders.map(o => updatedOrdersMap.get(o.id) || o);
+
+      setOrders(allNewOrders);
+
+      // Re-evaluate affected riders
+      const ridersToSave: DeliveryRider[] = [];
+      if (affectedRiderIds.size > 0) {
+        riders.forEach(r => {
+          if (affectedRiderIds.has(r.id)) {
+            const remainingActive = allNewOrders.filter(
+              o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+            );
+            const completedCount = allNewOrders.filter(
+              o => o.riderId === r.id && o.status === 'Concluído'
+            ).length;
+            const hasRemaining = remainingActive.length > 0;
+            const updatedRider: DeliveryRider = {
+              ...r,
+              status: hasRemaining ? r.status : 'Disponível',
+              currentOrderId: hasRemaining ? remainingActive[0].id : undefined,
+              completedDeliveries: completedCount
+            };
+            ridersToSave.push(updatedRider);
+          }
+        });
+      }
+
       if (ridersToSave.length > 0) {
         setRiders(prev => {
           const map = new Map(ridersToSave.map(r => [r.id, r]));
@@ -2767,9 +2799,13 @@ export default function App() {
       const isUnassign = !riderId || riderId === '' || riderId === 'unassign' || riderId === 'desalocar';
       const riderName = isUnassign ? 'Nenhum' : (riders.find(r => r.id === riderId)?.name || 'Entregador');
       const updatedOrders: Order[] = [];
+      const affectedPrevRiderIds = new Set<string>();
 
       orders.forEach(order => {
         if (orderIds.includes(order.id)) {
+          if (order.riderId && order.riderId !== riderId) {
+            affectedPrevRiderIds.add(order.riderId);
+          }
           const historyEntry = {
             timestamp: getSaoPauloDateTimeShort(),
             action: isUnassign ? 'Entregadores Desalocados (Em Massa)' : 'Entregador Alocado (Em Massa)',
@@ -2789,12 +2825,51 @@ export default function App() {
         }
       });
 
-      setOrders(prev => {
-        const map = new Map(updatedOrders.map(o => [o.id, o]));
-        return prev.map(o => map.get(o.id) || o);
-      });
+      // Compute new state of all orders
+      const updatedOrdersMap = new Map(updatedOrders.map(o => [o.id, o]));
+      const allNewOrders = orders.map(o => updatedOrdersMap.get(o.id) || o);
+
+      setOrders(allNewOrders);
 
       const promises: Promise<any>[] = [];
+
+      // Update riders status
+      const updatedRidersToSave: DeliveryRider[] = [];
+      const targetRider = !isUnassign ? riders.find(r => r.id === riderId) : null;
+
+      riders.forEach(r => {
+        if (affectedPrevRiderIds.has(r.id)) {
+          const remainingActive = allNewOrders.filter(
+            o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+          );
+          const hasRemaining = remainingActive.length > 0;
+          const updatedPrev: DeliveryRider = {
+            ...r,
+            status: hasRemaining ? r.status : 'Disponível',
+            currentOrderId: hasRemaining ? remainingActive[0].id : undefined
+          };
+          updatedRidersToSave.push(updatedPrev);
+        } else if (targetRider && r.id === targetRider.id) {
+          const assignedPending = allNewOrders.filter(
+            o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+          );
+          if (assignedPending.length > 0) {
+            const updatedTarget: DeliveryRider = {
+              ...r,
+              currentOrderId: assignedPending[0].id
+            };
+            updatedRidersToSave.push(updatedTarget);
+          }
+        }
+      });
+
+      if (updatedRidersToSave.length > 0) {
+        setRiders(prev => {
+          const rMap = new Map(updatedRidersToSave.map(r => [r.id, r]));
+          return prev.map(r => rMap.get(r.id) || r);
+        });
+        updatedRidersToSave.forEach(r => promises.push(dbSaveDeliveryRider(r)));
+      }
 
       if (updatedOrders.length > 0) {
         promises.push(dbBulkSaveOrders(updatedOrders));
@@ -2820,8 +2895,47 @@ export default function App() {
 
   const handleBulkDelete = async (orderIds: string[]) => {
     try {
-      setOrders(prev => prev.filter(o => !orderIds.includes(o.id)));
-      await dbBulkDeleteOrders(orderIds);
+      const affectedRiderIds = new Set<string>();
+      orders.forEach(o => {
+        if (orderIds.includes(o.id) && o.riderId) {
+          affectedRiderIds.add(o.riderId);
+        }
+      });
+
+      const remainingOrders = orders.filter(o => !orderIds.includes(o.id));
+      setOrders(remainingOrders);
+
+      const promises: Promise<any>[] = [dbBulkDeleteOrders(orderIds)];
+
+      if (affectedRiderIds.size > 0) {
+        const ridersToSave: DeliveryRider[] = [];
+        riders.forEach(r => {
+          if (affectedRiderIds.has(r.id)) {
+            const remainingActive = remainingOrders.filter(
+              o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+            );
+            const completedCount = remainingOrders.filter(
+              o => o.riderId === r.id && o.status === 'Concluído'
+            ).length;
+            const hasRemaining = remainingActive.length > 0;
+            const updatedRider: DeliveryRider = {
+              ...r,
+              status: hasRemaining ? r.status : 'Disponível',
+              currentOrderId: hasRemaining ? remainingActive[0].id : undefined,
+              completedDeliveries: completedCount
+            };
+            ridersToSave.push(updatedRider);
+          }
+        });
+
+        if (ridersToSave.length > 0) {
+          setRiders(prev => {
+            const map = new Map(ridersToSave.map(r => [r.id, r]));
+            return prev.map(r => map.get(r.id) || r);
+          });
+          ridersToSave.forEach(r => promises.push(dbSaveDeliveryRider(r)));
+        }
+      }
 
       const nowTime = getSaoPauloTime();
       const newLog: ActivityLog = {
@@ -2830,7 +2944,9 @@ export default function App() {
         message: `${orderIds.length} pedidos foram removidos em massa via seleção de linhas.`,
         type: 'danger'
       };
-      await dbAddActivityLog(newLog);
+      promises.push(dbAddActivityLog(newLog));
+
+      await Promise.all(promises);
     } catch (err: any) {
       console.error(err);
       alert(`Erro ao excluir pedidos em lote: ${err.message || err}`);
@@ -2898,14 +3014,33 @@ export default function App() {
       }
 
       const updatedOrders: Order[] = [];
-      const updatedRidersMap: { [riderId: string]: DeliveryRider } = {};
+      const affectedRiderIds = new Set<string>();
+
+      const isUnassignRider = updates.riderId === '' || updates.riderId === 'unassign' || updates.riderId === 'desalocar';
 
       orders.forEach(order => {
         if (orderIds.includes(order.id)) {
+          if (order.riderId) {
+            affectedRiderIds.add(order.riderId);
+          }
+
+          let newRiderId = order.riderId;
+          if (isUnassignRider) {
+            newRiderId = undefined;
+          } else if (updates.riderId !== undefined) {
+            newRiderId = updates.riderId;
+            affectedRiderIds.add(updates.riderId);
+          }
+
           const merged: Order = {
             ...order,
-            ...updates
+            ...updates,
+            riderId: newRiderId
           };
+
+          if (updates.status === 'Cancelado') {
+            merged.riderId = undefined;
+          }
 
           // If updates includes status, append a timeline history entry
           const fieldsModified = Object.keys(updates).join(', ');
@@ -2917,30 +3052,14 @@ export default function App() {
           };
           merged.history = [...(order.history || []), historyEntry];
 
-          // Handle special cases like changing status to Cancelado or Concluído, releasing riders
-          if (updates.status && (updates.status === 'Concluído' || updates.status === 'Cancelado') && order.riderId) {
-            const rider = riders.find(r => r.id === order.riderId);
-            if (rider) {
-              updatedRidersMap[rider.id] = {
-                ...rider,
-                status: 'Disponível',
-                currentOrderId: undefined,
-                completedDeliveries: updates.status === 'Concluído' ? rider.completedDeliveries + 1 : rider.completedDeliveries
-              };
-            }
-            if (updates.status === 'Cancelado') {
-              merged.riderId = undefined;
-            }
-          }
-
           // Handle allocating a rider in bulk edit
           if (updates.riderId && updates.riderId !== order.riderId) {
-            const riderName = riders.find(r => r.id === updates.riderId)?.name || 'Entregador';
+            const riderName = isUnassignRider ? 'Nenhum' : (riders.find(r => r.id === updates.riderId)?.name || 'Entregador');
             merged.history.push({
               timestamp: getSaoPauloDateTimeShort(),
-              action: 'Entregador Alocado (Em Lote)',
+              action: isUnassignRider ? 'Entregador Desalocado (Em Lote)' : 'Entregador Alocado (Em Lote)',
               user: 'Operador',
-              details: `Entregador ${riderName} vinculado em massa.`
+              details: `Entregador ${riderName} alterado em massa.`
             });
           }
 
@@ -2963,11 +3082,34 @@ export default function App() {
         }
       });
 
-      setOrders(prev => {
-        const map = new Map(updatedOrders.map(o => [o.id, o]));
-        return prev.map(o => map.get(o.id) || o);
-      });
-      const ridersToSave = Object.values(updatedRidersMap);
+      const updatedOrdersMap = new Map(updatedOrders.map(o => [o.id, o]));
+      const allNewOrders = orders.map(o => updatedOrdersMap.get(o.id) || o);
+
+      setOrders(allNewOrders);
+
+      // Re-evaluate affected riders
+      const ridersToSave: DeliveryRider[] = [];
+      if (affectedRiderIds.size > 0) {
+        riders.forEach(r => {
+          if (affectedRiderIds.has(r.id)) {
+            const remainingActive = allNewOrders.filter(
+              o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+            );
+            const completedCount = allNewOrders.filter(
+              o => o.riderId === r.id && o.status === 'Concluído'
+            ).length;
+            const hasRemaining = remainingActive.length > 0;
+            const updatedRider: DeliveryRider = {
+              ...r,
+              status: hasRemaining ? r.status : 'Disponível',
+              currentOrderId: hasRemaining ? remainingActive[0].id : undefined,
+              completedDeliveries: completedCount
+            };
+            ridersToSave.push(updatedRider);
+          }
+        });
+      }
+
       if (ridersToSave.length > 0) {
         setRiders(prev => {
           const map = new Map(ridersToSave.map(r => [r.id, r]));
@@ -5925,9 +6067,14 @@ export default function App() {
                 onAllocateSuccess={(updatedOrders, updatedRiders, logsGenerated) => {
                   if (updatedOrders.length > 0) {
                     const syncedOrders = updatedOrders.map(o => validateAndRecalculateOrderFreight(o, clientPartners));
+                    setOrders(syncedOrders);
                     dbBulkSaveOrders(syncedOrders);
                   }
                   if (updatedRiders.length > 0) {
+                    setRiders(prev => {
+                      const riderMap = new Map(updatedRiders.map(r => [r.id, r]));
+                      return prev.map(r => riderMap.get(r.id) || r);
+                    });
                     updatedRiders.forEach(r => dbSaveDeliveryRider(r));
                   }
                   const newLogs: ActivityLog[] = logsGenerated.map((lg, idx) => ({

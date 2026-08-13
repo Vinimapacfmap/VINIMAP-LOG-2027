@@ -122,6 +122,10 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
   // Active Main Tab: partners, riders, or productivity
   const [activeReportTab, setActiveReportTab] = useState<'partners' | 'riders' | 'productivity'>('partners');
 
+  // Partner Evolution Filter & View States
+  const [selectedPartnerFilter, setSelectedPartnerFilter] = useState<string>('all');
+  const [evolutionChartType, setEvolutionChartType] = useState<'mixed' | 'sideBySide' | 'volume' | 'revenue'>('mixed');
+
   // Selected rider for detailed drill down
   const [selectedReportRiderId, setSelectedReportRiderId] = useState<string>('');
 
@@ -357,6 +361,138 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
       topPartnerRevenue
     };
   }, [targetOrders, partnersData]);
+
+  // Memoized month-over-month evolution dataset for partners
+  const monthlyPartnerEvolutionData = useMemo(() => {
+    return availableMonths.map((mYear, idx, arr) => {
+      let monthOrders = targetOrders.filter(o => getFormattedMonthYear(o.date) === mYear);
+
+      if (selectedPartnerFilter !== 'all') {
+        monthOrders = monthOrders.filter(o => getPartnerDisplayName(o.partnerName, clientPartners) === selectedPartnerFilter);
+      }
+
+      const volume = monthOrders.length;
+      const revenue = monthOrders.reduce((sum, o) => sum + o.value, 0);
+      const avgTicket = volume > 0 ? revenue / volume : 0;
+
+      let prevVolume = 0;
+      let prevRevenue = 0;
+      if (idx > 0) {
+        const prevMYear = arr[idx - 1];
+        let prevOrders = targetOrders.filter(o => getFormattedMonthYear(o.date) === prevMYear);
+        if (selectedPartnerFilter !== 'all') {
+          prevOrders = prevOrders.filter(o => getPartnerDisplayName(o.partnerName, clientPartners) === selectedPartnerFilter);
+        }
+        prevVolume = prevOrders.length;
+        prevRevenue = prevOrders.reduce((sum, o) => sum + o.value, 0);
+      }
+
+      const volGrowth = prevVolume > 0 
+        ? ((volume - prevVolume) / prevVolume) * 100 
+        : idx > 0 && volume > 0 ? 100 : 0;
+
+      const revGrowth = prevRevenue > 0 
+        ? ((revenue - prevRevenue) / prevRevenue) * 100 
+        : idx > 0 && revenue > 0 ? 100 : 0;
+
+      return {
+        month: mYear,
+        shortMonth: mYear.replace('/', ' '),
+        volume,
+        revenue,
+        avgTicket,
+        volGrowth: Math.round(volGrowth * 10) / 10,
+        revGrowth: Math.round(revGrowth * 10) / 10,
+        prevVolume,
+        prevRevenue
+      };
+    });
+  }, [availableMonths, targetOrders, selectedPartnerFilter, clientPartners]);
+
+  // Selected Partner MoM KPIs
+  const selectedPartnerEvolutionKPIs = useMemo(() => {
+    const totalVol = monthlyPartnerEvolutionData.reduce((acc, m) => acc + m.volume, 0);
+    const totalRev = monthlyPartnerEvolutionData.reduce((acc, m) => acc + m.revenue, 0);
+    const avgTicketOverall = totalVol > 0 ? totalRev / totalVol : 0;
+
+    let peakMonth = 'N/A';
+    let peakVol = 0;
+    let peakRev = 0;
+
+    monthlyPartnerEvolutionData.forEach(m => {
+      if (m.revenue >= peakRev) {
+        peakRev = m.revenue;
+        peakVol = m.volume;
+        peakMonth = m.month;
+      }
+    });
+
+    return {
+      totalVol,
+      totalRev,
+      avgTicketOverall,
+      peakMonth,
+      peakVol,
+      peakRev
+    };
+  }, [monthlyPartnerEvolutionData]);
+
+  // Custom Tooltip for Evolution Chart
+  const EvolutionCustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const dataPoint = payload[0]?.payload;
+      return (
+        <div className="bg-slate-950/95 text-white p-4 rounded-2xl shadow-2xl border border-slate-800 text-xs backdrop-blur-md min-w-[230px]">
+          <div className="font-extrabold text-slate-100 pb-2 mb-2 border-b border-slate-800 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-blue-400">
+              <Calendar size={13} />
+              <span>{dataPoint?.month || label}</span>
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">Trajetória MoM</span>
+          </div>
+          <div className="space-y-2">
+            <div>
+              <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Volume de Pedidos</div>
+              <div className="flex items-center justify-between mt-0.5">
+                <span className="font-extrabold text-base text-blue-400">{dataPoint?.volume} <span className="text-xs font-semibold text-slate-400">pedidos</span></span>
+                {dataPoint?.volGrowth !== undefined && (
+                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                    dataPoint.volGrowth >= 0 ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/50' : 'bg-rose-950/80 text-rose-400 border border-rose-800/50'
+                  }`}>
+                    {dataPoint.volGrowth >= 0 ? '↑' : '↓'} {Math.abs(dataPoint.volGrowth)}%
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-1.5 border-t border-slate-800/60">
+              <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Faturamento (R$)</div>
+              <div className="flex items-center justify-between mt-0.5">
+                <span className="font-extrabold text-base text-emerald-400">
+                  {dataPoint?.revenue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+                {dataPoint?.revGrowth !== undefined && (
+                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                    dataPoint.revGrowth >= 0 ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/50' : 'bg-rose-950/80 text-rose-400 border border-rose-800/50'
+                  }`}>
+                    {dataPoint.revGrowth >= 0 ? '↑' : '↓'} {Math.abs(dataPoint.revGrowth)}%
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-1.5 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
+              <span className="text-slate-400 font-semibold">Ticket Médio:</span>
+              <span className="font-bold text-amber-300 font-mono">
+                {dataPoint?.avgTicket?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   // Recharts custom Tooltip styled cleanly with Tailwind
   const CustomTooltip = ({ active, payload, label, valSuffix = '' }: any) => {
@@ -640,6 +776,181 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
                 </span>
               </div>
               <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-white/5 rounded-full blur-xl pointer-events-none" />
+            </div>
+          </div>
+
+          {/* COMPONENTE DE EVOLUÇÃO MÊS A MÊS DO VOLUME E FATURAMENTO POR PARCEIRO */}
+          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-5">
+            {/* Header + Controls */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 shrink-0">
+                  <TrendingUp size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-800">
+                    Evolução Mês a Mês: Volume & Faturamento Comparativo
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Análise histórica continuada de crescimento temporal, comparando o volume de entregas e receita gerada mês a mês.
+                  </p>
+                </div>
+              </div>
+
+              {/* Filter Controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Select Partner */}
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 shadow-2xs">
+                  <Building2 size={13} className="text-blue-600 shrink-0" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Parceiro:</span>
+                  <select
+                    value={selectedPartnerFilter}
+                    onChange={(e) => setSelectedPartnerFilter(e.target.value)}
+                    className="bg-transparent text-xs font-extrabold text-slate-700 outline-none cursor-pointer pr-1"
+                  >
+                    <option value="all">Todos os Parceiros (Consolidado)</option>
+                    {partnersData.map(p => (
+                      <option key={p.name} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Select Chart View Mode */}
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 shadow-2xs">
+                  <Layers size={13} className="text-indigo-600 shrink-0" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Visualização:</span>
+                  <select
+                    value={evolutionChartType}
+                    onChange={(e) => setEvolutionChartType(e.target.value as any)}
+                    className="bg-transparent text-xs font-extrabold text-slate-700 outline-none cursor-pointer pr-1"
+                  >
+                    <option value="mixed">Misto (Barras + Linha de Receita)</option>
+                    <option value="sideBySide">Barras Lado a Lado (Volume x Receita)</option>
+                    <option value="volume">Apenas Volume de Pedidos</option>
+                    <option value="revenue">Apenas Faturamento (R$)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary KPI Strip for Selected Partner Filter */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-100/90">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total de Pedidos</span>
+                <span className="text-base font-black text-slate-800">
+                  {selectedPartnerEvolutionKPIs.totalVol} <span className="text-xs font-semibold text-slate-400">pedidos</span>
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Faturamento Acumulado</span>
+                <span className="text-base font-black text-emerald-600 font-mono">
+                  {selectedPartnerEvolutionKPIs.totalRev.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ticket Médio Geral</span>
+                <span className="text-base font-black text-slate-800 font-mono">
+                  {selectedPartnerEvolutionKPIs.avgTicketOverall.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Mês de Pico (Maior Receita)</span>
+                <span className="text-base font-black text-blue-600 truncate">
+                  {selectedPartnerEvolutionKPIs.peakMonth} <span className="text-[10px] text-slate-500 font-semibold font-mono">({selectedPartnerEvolutionKPIs.peakVol} ped.)</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Chart Area */}
+            <div className="h-80 w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                {evolutionChartType === 'mixed' ? (
+                  <ComposedChart data={monthlyPartnerEvolutionData} margin={{ top: 15, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="shortMonth" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                    <YAxis yAxisId="left" orientation="left" tick={{ fill: '#3b82f6', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fill: '#10b981', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+                    <Tooltip content={<EvolutionCustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                    <Legend verticalAlign="top" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 700, color: '#475569' }} />
+                    <Bar yAxisId="left" name="Volume de Pedidos" dataKey="volume" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={28} />
+                    <Line yAxisId="right" name="Faturamento Bruto (R$)" type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} dot={{ r: 5, fill: '#10b981', stroke: '#ffffff', strokeWidth: 2 }} activeDot={{ r: 7 }} />
+                  </ComposedChart>
+                ) : evolutionChartType === 'sideBySide' ? (
+                  <BarChart data={monthlyPartnerEvolutionData} margin={{ top: 15, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="shortMonth" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                    <YAxis yAxisId="vol" orientation="left" tick={{ fill: '#3b82f6', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="rev" orientation="right" tick={{ fill: '#10b981', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+                    <Tooltip content={<EvolutionCustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                    <Legend verticalAlign="top" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 700, color: '#475569' }} />
+                    <Bar yAxisId="vol" name="Volume de Pedidos" dataKey="volume" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Bar yAxisId="rev" name="Faturamento (R$)" dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
+                  </BarChart>
+                ) : evolutionChartType === 'volume' ? (
+                  <BarChart data={monthlyPartnerEvolutionData} margin={{ top: 15, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="shortMonth" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                    <YAxis tick={{ fill: '#3b82f6', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<EvolutionCustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                    <Legend verticalAlign="top" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 700, color: '#475569' }} />
+                    <Bar name="Volume de Pedidos Mês a Mês" dataKey="volume" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={34} />
+                  </BarChart>
+                ) : (
+                  <BarChart data={monthlyPartnerEvolutionData} margin={{ top: 15, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="shortMonth" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                    <YAxis tick={{ fill: '#10b981', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+                    <Tooltip content={<EvolutionCustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                    <Legend verticalAlign="top" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 700, color: '#475569' }} />
+                    <Bar name="Faturamento Mensal (R$)" dataKey="revenue" fill="#10b981" radius={[6, 6, 0, 0]} barSize={34} />
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+
+            {/* MoM Breakdown Cards Row */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Activity size={13} className="text-blue-600" />
+                  <span>Trajetória do Mês a Mês ({selectedPartnerFilter === 'all' ? 'Consolidado' : selectedPartnerFilter})</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-semibold font-mono">
+                  {monthlyPartnerEvolutionData.length} meses registrados
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
+                {monthlyPartnerEvolutionData.map((m, idx) => (
+                  <div key={m.month} className="bg-slate-50/80 border border-slate-200/60 rounded-xl p-3 flex flex-col justify-between hover:bg-white hover:border-blue-200 hover:shadow-xs transition-all">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-700 uppercase">{m.month}</span>
+                      {idx > 0 && (
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                          m.revGrowth > 0 ? 'bg-emerald-100 text-emerald-700' :
+                          m.revGrowth < 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {m.revGrowth > 0 ? `+${m.revGrowth}%` : `${m.revGrowth}%`}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-2 space-y-0.5">
+                      <div className="text-xs font-extrabold text-slate-800">
+                        {m.volume} <span className="text-[10px] font-semibold text-slate-400">pedidos</span>
+                      </div>
+                      <div className="text-[11px] font-extrabold text-emerald-600 font-mono">
+                        {m.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </div>
+                    </div>
+
+                    <div className="mt-2 pt-1.5 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
+                      <span>Ticket Médio:</span>
+                      <span className="text-slate-600 font-bold font-mono">{m.avgTicket.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Truck, 
@@ -36,10 +36,12 @@ import {
   GripVertical,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   ArrowLeft,
   Flag,
   Maximize2,
-  Minimize2
+  Minimize2,
+  X
 } from 'lucide-react';
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
@@ -277,6 +279,35 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [selectedRiderId, setSelectedRiderId] = useState<string>('');
 
+  // Custom Rider Selector Dropdown state & ref
+  const [isRiderDropdownOpen, setIsRiderDropdownOpen] = useState(false);
+  const [riderSearchQuery, setRiderSearchQuery] = useState('');
+  const riderDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close rider dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (riderDropdownRef.current && !riderDropdownRef.current.contains(event.target as Node)) {
+        setIsRiderDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredDropdownRiders = riders.filter(r => {
+    if (!riderSearchQuery.trim()) return true;
+    const q = riderSearchQuery.toLowerCase();
+    return (
+      r.name.toLowerCase().includes(q) ||
+      (r.vehicle && r.vehicle.toLowerCase().includes(q)) ||
+      (r.phone && r.phone.toLowerCase().includes(q)) ||
+      (r.deviceNumber && r.deviceNumber.toLowerCase().includes(q))
+    );
+  });
+
+  const selectedRiderObj = riders.find(r => r.id === selectedRiderId);
+
   // Multi-step Page State (Page 1 = Configuração, Page 2 = Triagem & Despacho)
   const [currentPage, setCurrentPage] = useState<1 | 2>(1);
 
@@ -307,6 +338,327 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
   // Active driver device/itinerary view states
   const [activeDeviceRiderId, setActiveDeviceRiderId] = useState<string>('');
   const [itinerarySequence, setItinerarySequence] = useState<Order[]>([]);
+
+  // Reallocation States (Realocar do Condutor A para o Condutor B no período)
+  const [isReallocateModalOpen, setIsReallocateModalOpen] = useState<boolean>(false);
+  const [reallocateDriverAId, setReallocateDriverAId] = useState<string>('todos');
+  const [reallocateDriverBId, setReallocateDriverBId] = useState<string>('');
+  const [filterDriverAId, setFilterDriverAId] = useState<string>('todos');
+  const [targetRiderBId, setTargetRiderBId] = useState<string>('');
+  const [reallocateDateFrom, setReallocateDateFrom] = useState<string>(todayStr);
+  const [reallocateDateTo, setReallocateDateTo] = useState<string>(todayStr);
+  const [selectedReallocateOrderIds, setSelectedReallocateOrderIds] = useState<Set<string>>(new Set());
+  const [reallocateIncludeCompleted, setReallocateIncludeCompleted] = useState<boolean>(false);
+
+  // Synchronize reallocation dates when main period filter changes
+  useEffect(() => {
+    if (dateFrom) setReallocateDateFrom(dateFrom);
+    if (dateTo) setReallocateDateTo(dateTo);
+  }, [dateFrom, dateTo]);
+
+  // Memoized list of orders assigned to Driver A in the selected reallocation period
+  const ordersForDriverA = React.useMemo(() => {
+    return orders.filter(order => {
+      // Check Driver A filter
+      if (reallocateDriverAId === 'unassigned') {
+        if (order.riderId) return false;
+      } else if (reallocateDriverAId && reallocateDriverAId !== 'todos') {
+        if (order.riderId !== reallocateDriverAId) return false;
+      }
+
+      const orderOperationalDate = (order.status === 'Concluído' ? (order.deliveryDate || order.dataConclusao || order.date) : order.date);
+      const inPeriod = orderOperationalDate >= reallocateDateFrom && orderOperationalDate <= reallocateDateTo;
+      if (!inPeriod) return false;
+
+      if (!reallocateIncludeCompleted && (order.status === 'Concluído' || order.status === 'Cancelado')) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [orders, reallocateDriverAId, reallocateDateFrom, reallocateDateTo, reallocateIncludeCompleted]);
+
+  // Auto-select all matching orders when Driver A or period selection changes
+  useEffect(() => {
+    if (ordersForDriverA.length > 0) {
+      setSelectedReallocateOrderIds(new Set(ordersForDriverA.map(o => o.id)));
+    } else {
+      setSelectedReallocateOrderIds(new Set());
+    }
+  }, [reallocateDriverAId, reallocateDateFrom, reallocateDateTo, reallocateIncludeCompleted, ordersForDriverA]);
+
+  // Memoized list of orders assigned to Filter Driver A in the main allocation view
+  const driverAOrders = React.useMemo(() => {
+    return orders.filter(order => {
+      // Check Driver A filter
+      if (filterDriverAId === 'unassigned') {
+        if (order.riderId) return false;
+      } else if (filterDriverAId && filterDriverAId !== 'todos') {
+        if (order.riderId !== filterDriverAId) return false;
+      }
+
+      if (hasSearchedPeriod) {
+        const orderOperationalDate = (order.status === 'Concluído' ? (order.deliveryDate || order.dataConclusao || order.date) : order.date);
+        return orderOperationalDate >= dateFrom && orderOperationalDate <= dateTo;
+      } else {
+        return order.date === todayStr || (order.status !== 'Concluído' && order.status !== 'Cancelado');
+      }
+    });
+  }, [orders, filterDriverAId, hasSearchedPeriod, dateFrom, dateTo, todayStr]);
+
+  const selectedDriverAOrdersCount = React.useMemo(() => {
+    return driverAOrders.filter(o => selectedOrderIds.has(o.id)).length;
+  }, [driverAOrders, selectedOrderIds]);
+
+  const selectedDriverA = React.useMemo(() => {
+    if (!filterDriverAId || filterDriverAId === 'todos' || filterDriverAId === 'unassigned') return null;
+    return riders.find(r => r.id === filterDriverAId) || null;
+  }, [riders, filterDriverAId]);
+
+  const selectedDriverB = React.useMemo(() => {
+    if (!targetRiderBId) return null;
+    return riders.find(r => r.id === targetRiderBId) || null;
+  }, [riders, targetRiderBId]);
+
+  const targetDriverBCurrentActiveCount = React.useMemo(() => {
+    if (!targetRiderBId) return 0;
+    return orders.filter(o => o.riderId === targetRiderBId && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+  }, [orders, targetRiderBId]);
+
+  const handleToggleSelectAllDriverAOrders = () => {
+    const driverAOrderIds = driverAOrders.map(o => o.id);
+    const allSelected = driverAOrderIds.length > 0 && driverAOrderIds.every(id => selectedOrderIds.has(id));
+
+    const newSet = new Set(selectedOrderIds);
+    if (allSelected) {
+      driverAOrderIds.forEach(id => newSet.delete(id));
+    } else {
+      driverAOrderIds.forEach(id => newSet.add(id));
+    }
+    setSelectedOrderIds(newSet);
+  };
+
+  // Execute reallocation of selected orders from Driver A to Driver B
+  const handleExecuteReallocation = () => {
+    if (!reallocateDriverAId) {
+      alert('Por favor, selecione o Condutor de Origem (A).');
+      return;
+    }
+    if (!reallocateDriverBId) {
+      alert('Por favor, selecione o Condutor de Destino (B).');
+      return;
+    }
+    if (reallocateDriverAId === reallocateDriverBId) {
+      alert('O Condutor de Destino (B) precisa ser diferente do Condutor de Origem (A).');
+      return;
+    }
+    if (selectedReallocateOrderIds.size === 0) {
+      alert('Nenhum pedido selecionado para realocação.');
+      return;
+    }
+
+    const driverA = riders.find(r => r.id === reallocateDriverAId);
+    const driverB = riders.find(r => r.id === reallocateDriverBId);
+
+    const countToMove = selectedReallocateOrderIds.size;
+    const isConfirmed = window.confirm(
+      `Confirma realocar ${countToMove} pedido(s) do condutor ${driverA?.name || 'A'} para o condutor ${driverB?.name || 'B'} no período ${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}?`
+    );
+
+    if (!isConfirmed) return;
+
+    const isMidRouteB = driverB?.status === 'Em rota';
+
+    const updatedOrders = orders.map(order => {
+      if (selectedReallocateOrderIds.has(order.id)) {
+        const isCompleted = order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' || hasOrderCompletionEvidence(order);
+        const assignedStatus = isCompleted ? order.status : ('Não iniciado' as const);
+
+        const tempOrder: Order = {
+          ...order,
+          riderId: driverB?.id,
+          status: assignedStatus
+        };
+
+        const comm = calculateRiderCommissionForOrder(driverB, tempOrder, clientPartners || []);
+        const computedVal = comm.total;
+
+        const updatedRaw = { ...(order.rawData || {}) };
+        if (computedVal !== undefined && computedVal !== null) {
+          const keys = Object.keys(updatedRaw);
+          const driverKey = keys.find(k => k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "") === 'valorcondutor') || 'ValorCondutor';
+          updatedRaw[driverKey] = String(computedVal);
+        }
+
+        return {
+          ...tempOrder,
+          driverValue: computedVal,
+          rawData: updatedRaw,
+          history: [
+            ...(order.history || []),
+            {
+              timestamp: getSaoPauloDateTimeShort(),
+              action: `Realocação entre Condutores (A ➔ B)`,
+              user: 'Operador Central',
+              details: `Pedido realocado do Condutor ${driverA?.name || reallocateDriverAId} para o Condutor ${driverB?.name || reallocateDriverBId} no período ${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}.`
+            }
+          ]
+        };
+      }
+      return order;
+    });
+
+    const updatedRiders = riders.map(rider => {
+      if (rider.id === driverB?.id) {
+        return {
+          ...rider,
+          status: isMidRouteB ? ('Em rota' as const) : rider.status,
+          currentOrderId: Array.from(selectedReallocateOrderIds)[0]
+        };
+      }
+      if (rider.id === driverA?.id) {
+        const remainingForA = updatedOrders.filter(
+          o => o.riderId === driverA.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+        );
+        const hasRemainingA = remainingForA.length > 0;
+        return {
+          ...rider,
+          status: hasRemainingA ? rider.status : ('Disponível' as const),
+          currentOrderId: hasRemainingA ? remainingForA[0].id : undefined
+        };
+      }
+      return rider;
+    });
+
+    const nowTime = getSaoPauloTime();
+    const logsGenerated = [
+      {
+        time: nowTime,
+        message: `Realocação concluída: ${countToMove} pedido(s) do Condutor ${driverA?.name} transferidos para o Condutor ${driverB?.name} (${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}).`,
+        type: 'success' as const
+      },
+      {
+        time: nowTime,
+        message: `Aplicativo do Condutor ${driverB?.name} atualizado com novo roteiro.`,
+        type: 'info' as const
+      }
+    ];
+
+    onAllocateSuccess(updatedOrders, updatedRiders, logsGenerated);
+    setIsReallocateModalOpen(false);
+    alert(`Sucesso! ${countToMove} pedido(s) realocado(s) com sucesso de ${driverA?.name || 'Origem'} para ${driverB?.name}.`);
+  };
+
+  // Batch reallocate selected orders from allocation spreadsheet directly to targetRiderBId
+  const handleBatchReallocateToDriverB = () => {
+    if (!targetRiderBId) {
+      alert('Por favor, selecione o Condutor de Destino (B).');
+      return;
+    }
+    if (selectedOrderIds.size === 0) {
+      alert('Por favor, selecione ao menos um pedido na tabela para vincular.');
+      return;
+    }
+
+    const driverB = riders.find(r => r.id === targetRiderBId);
+    if (!driverB) {
+      alert('Condutor de Destino não encontrado.');
+      return;
+    }
+
+    const countToMove = selectedOrderIds.size;
+    const isConfirmed = window.confirm(
+      `Confirma vincular/realocar ${countToMove} pedido(s) selecionado(s) para o condutor ${driverB.name}?`
+    );
+
+    if (!isConfirmed) return;
+
+    const previousRiderIds = new Set<string>();
+
+    const updatedOrders = orders.map(order => {
+      if (selectedOrderIds.has(order.id)) {
+        if (order.riderId) previousRiderIds.add(order.riderId);
+
+        const isCompleted = order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' || hasOrderCompletionEvidence(order);
+        const assignedStatus = isCompleted ? order.status : ('Não iniciado' as const);
+
+        const tempOrder: Order = {
+          ...order,
+          riderId: driverB.id,
+          status: assignedStatus
+        };
+
+        const comm = calculateRiderCommissionForOrder(driverB, tempOrder, clientPartners || []);
+        const computedVal = comm.total;
+
+        const updatedRaw = { ...(order.rawData || {}) };
+        if (computedVal !== undefined && computedVal !== null) {
+          const keys = Object.keys(updatedRaw);
+          const driverKey = keys.find(k => k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "") === 'valorcondutor') || 'ValorCondutor';
+          updatedRaw[driverKey] = String(computedVal);
+        }
+
+        const currentRiderObj = riders.find(r => r.id === order.riderId);
+        const prevName = currentRiderObj ? currentRiderObj.name : 'Não Vinculado';
+
+        return {
+          ...tempOrder,
+          driverValue: computedVal,
+          rawData: updatedRaw,
+          history: [
+            ...(order.history || []),
+            {
+              timestamp: getSaoPauloDateTimeShort(),
+              action: `Realocação de Condutor (${prevName} ➔ ${driverB.name})`,
+              user: 'Operador Central',
+              details: `Pedido vinculado ao Condutor ${driverB.name} no período ${formatToBrazilianDate(dateFrom)} a ${formatToBrazilianDate(dateTo)}.`
+            }
+          ]
+        };
+      }
+      return order;
+    });
+
+    const isMidRouteB = driverB.status === 'Em rota';
+
+    const updatedRiders = riders.map(rider => {
+      if (rider.id === driverB.id) {
+        const activeForB = updatedOrders.filter(
+          o => o.riderId === driverB.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+        );
+        return {
+          ...rider,
+          status: isMidRouteB ? ('Em rota' as const) : ('Disponível' as const),
+          currentOrderId: activeForB.length > 0 ? activeForB[0].id : undefined
+        };
+      }
+      if (previousRiderIds.has(rider.id)) {
+        const remainingForPrev = updatedOrders.filter(
+          o => o.riderId === rider.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+        );
+        const hasRemaining = remainingForPrev.length > 0;
+        return {
+          ...rider,
+          status: hasRemaining ? rider.status : ('Disponível' as const),
+          currentOrderId: hasRemaining ? remainingForPrev[0].id : undefined
+        };
+      }
+      return rider;
+    });
+
+    const nowTime = getSaoPauloTime();
+    const logsGenerated = [
+      {
+        time: nowTime,
+        message: `Realocação concluída: ${countToMove} pedido(s) vinculados ao Condutor ${driverB.name} (${formatToBrazilianDate(dateFrom)} a ${formatToBrazilianDate(dateTo)}).`,
+        type: 'success' as const
+      }
+    ];
+
+    onAllocateSuccess(updatedOrders, updatedRiders, logsGenerated);
+    setSelectedOrderIds(new Set());
+    alert(`Sucesso! ${countToMove} pedido(s) vinculados ao condutor ${driverB.name}. A tela de alocação foi atualizada.`);
+  };
 
   // Columns Configuration for Allocation Spreadsheet
   const [columnsOrder, setColumnsOrder] = useState<string[]>([
@@ -536,6 +888,15 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       if (cp?.id !== selectedPartnerId) return false;
     }
 
+    // Filter by Condutor (A)
+    if (filterDriverAId && filterDriverAId !== 'todos') {
+      if (filterDriverAId === 'unassigned') {
+        if (order.riderId) return false;
+      } else {
+        if (order.riderId !== filterDriverAId) return false;
+      }
+    }
+
     // Tab filter
     if (statusTab === 'Sem Condutor' && order.riderId) return false;
     if (statusTab === 'Com Condutor' && !order.riderId) return false;
@@ -634,6 +995,43 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     setDateFrom(todayStr);
     setDateTo(todayStr);
     setHasSearchedPeriod(false);
+    setSelectedOrderIds(new Set());
+  };
+
+  // Quick preset selector for Triage Period
+  const handleSelectTriagePreset = (preset: 'hoje' | 'ontem' | '7dias' | 'esteMes' | '30dias') => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    let fromDate = new Date(today);
+    let toDate = new Date(today);
+
+    if (preset === 'hoje') {
+      // Keep today
+    } else if (preset === 'ontem') {
+      fromDate.setDate(today.getDate() - 1);
+      toDate.setDate(today.getDate() - 1);
+    } else if (preset === '7dias') {
+      fromDate.setDate(today.getDate() - 6);
+    } else if (preset === 'esteMes') {
+      fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (preset === '30dias') {
+      fromDate.setDate(today.getDate() - 29);
+    }
+
+    const formatDateStr = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const fStr = formatDateStr(fromDate);
+    const tStr = formatDateStr(toDate);
+
+    setDateFrom(fStr);
+    setDateTo(tStr);
+    setHasSearchedPeriod(true);
     setSelectedOrderIds(new Set());
   };
 
@@ -765,12 +1163,31 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       return order;
     });
 
+    // Gather previous riders of the selected reallocated orders
+    const prevRiderIds = new Set<string>();
+    selectedOrdersList.forEach(o => {
+      if (o.riderId && o.riderId !== targetRider?.id) {
+        prevRiderIds.add(o.riderId);
+      }
+    });
+
     const updatedRiders = riders.map(rider => {
       if (rider.id === targetRider?.id) {
         return {
           ...rider,
           status: isMidRoute ? ('Em rota' as const) : rider.status,
           currentOrderId: selectedOrdersList[0]?.id
+        };
+      }
+      if (prevRiderIds.has(rider.id)) {
+        const remainingActive = updatedOrders.filter(
+          o => o.riderId === rider.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+        );
+        const hasRemaining = remainingActive.length > 0;
+        return {
+          ...rider,
+          status: hasRemaining ? rider.status : ('Disponível' as const),
+          currentOrderId: hasRemaining ? remainingActive[0].id : undefined
         };
       }
       return rider;
@@ -893,6 +1310,225 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     setItinerarySequence(nextSequence);
   };
 
+  // Render Realocar Condutor (A ➔ B) Component Card
+  const renderReallocateSection = () => {
+    const driverAObj = riders.find(r => r.id === reallocateDriverAId);
+    const driverBObj = riders.find(r => r.id === reallocateDriverBId);
+
+    return (
+      <div className="bg-white border border-indigo-100 rounded-2xl shadow-sm p-5 space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+              <Users size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                <span>Realocar do Condutor (A) para o Condutor (B)</span>
+                <span className="text-[9px] bg-indigo-100 text-indigo-700 font-extrabold px-2 py-0.5 rounded-full uppercase">
+                  Período Selecionado
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Transfira a carteira de pedidos do Condutor (A) para o Condutor (B) no período desejado.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Driver Selection Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-slate-50/90 p-3.5 rounded-xl border border-slate-200/80 modal-dropdown-container relative z-[9999]" style={{ overflow: 'visible', zIndex: 9999 }}>
+          {/* Driver A */}
+          <div className="md:col-span-5 space-y-1 modal-dropdown relative z-[9999]" style={{ overflow: 'visible', zIndex: 9999 }}>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+              1. Condutor de Origem (A)
+            </label>
+            <select
+              value={reallocateDriverAId}
+              onChange={(e) => setReallocateDriverAId(e.target.value)}
+              className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs modal-rider-select relative z-[9999]"
+              style={{ overflow: 'visible', zIndex: 9999 }}
+            >
+              <option value="todos">-- Todos os Pedidos do Período --</option>
+              <option value="unassigned">-- Sem Condutor (Não Vinculados) --</option>
+              {riders.map(r => {
+                const countActive = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                return (
+                  <option key={`a-${r.id}`} value={r.id}>
+                    {r.name} ({countActive} pedido(s) ativo(s) - {r.status})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Arrow Icon */}
+          <div className="md:col-span-2 flex justify-center py-1">
+            <div className="p-2 rounded-full bg-indigo-100 text-indigo-600 font-extrabold shadow-2xs">
+              <ArrowRight size={16} className="hidden md:block" />
+              <ChevronDown size={16} className="block md:hidden" />
+            </div>
+          </div>
+
+          {/* Driver B */}
+          <div className="md:col-span-5 space-y-1 modal-dropdown relative z-[9999]" style={{ overflow: 'visible', zIndex: 9999 }}>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+              2. Condutor de Destino (B)
+            </label>
+            <select
+              value={reallocateDriverBId}
+              onChange={(e) => setReallocateDriverBId(e.target.value)}
+              className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs modal-rider-select relative z-[9999]"
+              style={{ overflow: 'visible', zIndex: 9999 }}
+            >
+              <option value="">-- Selecione o Condutor (B) --</option>
+              {riders.map(r => {
+                const countActive = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                return (
+                  <option key={`b-${r.id}`} value={r.id} disabled={r.id === reallocateDriverAId}>
+                    {r.name} ({countActive} pedido(s) ativo(s) - {r.status})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </div>
+
+        {/* Date / Period Controls for Reallocation */}
+        <div className="flex flex-wrap items-end justify-between gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200/80 text-xs">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Data Início</span>
+              <input
+                type="date"
+                value={reallocateDateFrom}
+                onChange={(e) => setReallocateDateFrom(e.target.value)}
+                className="p-1.5 border border-slate-200 rounded-lg text-xs font-semibold bg-white text-slate-700 block"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Data Fim</span>
+              <input
+                type="date"
+                value={reallocateDateTo}
+                onChange={(e) => setReallocateDateTo(e.target.value)}
+                className="p-1.5 border border-slate-200 rounded-lg text-xs font-semibold bg-white text-slate-700 block"
+              />
+            </div>
+
+            <label className="flex items-center gap-1.5 cursor-pointer py-1 text-slate-600 font-semibold text-[11px]">
+              <input
+                type="checkbox"
+                checked={reallocateIncludeCompleted}
+                onChange={(e) => setReallocateIncludeCompleted(e.target.checked)}
+                className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+              <span>Incluir Concluídos/Cancelados</span>
+            </label>
+          </div>
+
+          <div className="text-right">
+            <span className="text-[10px] font-bold text-slate-400 uppercase block">Pedidos Elegíveis do Condutor (A)</span>
+            <span className="text-sm font-black text-indigo-700">
+              {ordersForDriverA.length} pedido(s)
+            </span>
+          </div>
+        </div>
+
+        {/* Orders Preview List */}
+        {reallocateDriverAId && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700">
+                Lista de Pedidos do Condutor A ({driverAObj?.name}) entre {formatToBrazilianDate(reallocateDateFrom)} e {formatToBrazilianDate(reallocateDateTo)}:
+              </span>
+              {ordersForDriverA.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (selectedReallocateOrderIds.size === ordersForDriverA.length) {
+                      setSelectedReallocateOrderIds(new Set());
+                    } else {
+                      setSelectedReallocateOrderIds(new Set(ordersForDriverA.map(o => o.id)));
+                    }
+                  }}
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                >
+                  {selectedReallocateOrderIds.size === ordersForDriverA.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                </button>
+              )}
+            </div>
+
+            {ordersForDriverA.length === 0 ? (
+              <div className="p-5 bg-slate-50/80 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 font-medium">
+                Nenhum pedido vinculado ao Condutor (A) <strong>{driverAObj?.name}</strong> no período selecionado.
+              </div>
+            ) : (
+              <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-white shadow-2xs">
+                {ordersForDriverA.map(o => {
+                  const isChecked = selectedReallocateOrderIds.has(o.id);
+                  const cp = clientPartners?.find(c => isMatchingClientCode(o.partnerName, c.id, c.codigoCliente));
+                  return (
+                    <div
+                      key={o.id}
+                      onClick={() => {
+                        const next = new Set(selectedReallocateOrderIds);
+                        if (next.has(o.id)) next.delete(o.id);
+                        else next.add(o.id);
+                        setSelectedReallocateOrderIds(next);
+                      }}
+                      className={`p-2.5 flex items-center justify-between gap-3 text-xs cursor-pointer transition-colors ${
+                        isChecked ? 'bg-indigo-50/60 font-semibold' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="rounded text-indigo-600 focus:ring-indigo-500 shrink-0 cursor-pointer"
+                        />
+                        <div className="truncate">
+                          <span className="font-extrabold text-slate-800 mr-2">{o.id}</span>
+                          <span className="text-slate-600 font-medium">{o.clientName}</span>
+                          <span className="text-[10px] text-slate-400 ml-2">({cp ? cp.name : o.partnerName})</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0 text-right">
+                        <span className="text-[10px] text-slate-500 font-mono">{formatToBrazilianDate(o.date)}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${getStatusClasses(o.status)}`}>
+                          {o.status}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Execute Button */}
+        <div className="pt-2 flex justify-end">
+          <button
+            onClick={handleExecuteReallocation}
+            disabled={!reallocateDriverAId || !reallocateDriverBId || selectedReallocateOrderIds.size === 0 || reallocateDriverAId === reallocateDriverBId}
+            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+              !reallocateDriverAId || !reallocateDriverBId || selectedReallocateOrderIds.size === 0 || reallocateDriverAId === reallocateDriverBId
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-md shadow-indigo-200'
+            }`}
+          >
+            <Users size={15} />
+            <span>Confirmar Realocação de {selectedReallocateOrderIds.size} Pedido(s) ({driverAObj?.name || 'A'} ➔ {driverBObj?.name || 'B'})</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const currentActiveRider = riders.find(r => r.id === (activeDeviceRiderId || selectedRiderId)) || riders[0];
 
   return (
@@ -910,18 +1546,37 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
           </p>
         </div>
         
-        {showSuccessCard && (
+        <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              setShowSuccessCard(false);
-              setHasSearchedPeriod(false);
+              setIsReallocateModalOpen(true);
+              if (!reallocateDriverAId && riders.length > 0) {
+                setReallocateDriverAId(riders[0].id);
+              }
+              if (!reallocateDriverBId && riders.length > 1) {
+                setReallocateDriverBId(riders[1].id);
+              }
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 hover:text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200"
+            className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm shadow-indigo-200"
+            id="btn-open-realocar-condutor"
           >
-            <RotateCcw size={13} />
-            <span>Nova Alocação / Roteiro</span>
+            <Users size={15} />
+            <span>Realocar Condutor (A ➔ B)</span>
           </button>
-        )}
+
+          {showSuccessCard && (
+            <button
+              onClick={() => {
+                setShowSuccessCard(false);
+                setHasSearchedPeriod(false);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 hover:text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200"
+            >
+              <RotateCcw size={13} />
+              <span>Nova Alocação / Roteiro</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -1087,6 +1742,9 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                 {/* Right Side: Spreadsheet Table and Route Settings (9 columns on large screens) */}
                 <div className="lg:col-span-9 space-y-5">
                   
+                  {/* REALLOCATION SECTION CARD (A ➔ B) */}
+                  {renderReallocateSection()}
+
                   {/* ADVANCED PERIOD / DATE PICKER SEARCH */}
                   <div className="bg-white border border-slate-150 rounded-xl p-3 shadow-sm space-y-2">
                     <div className="flex items-center justify-between">
@@ -1251,35 +1909,130 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
               </div>
             ) : (
               /* THE MAIN ORDERS ALLOCATION SPREADSHEET (TELA CHEIA & SPREADSHEET STYLE) */
-              <div className={isFullscreen ? 'fixed inset-0 z-50 p-3 sm:p-5 bg-slate-900/60 backdrop-blur-md flex flex-col justify-between overflow-hidden' : 'w-full space-y-5'}>
-                <div className={`flex flex-col h-full ${isFullscreen ? 'bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden' : 'space-y-5'}`}>
+              <div className={isFullscreen ? 'fixed inset-0 z-50 p-3 sm:p-5 bg-slate-900/60 backdrop-blur-md flex flex-col justify-between overflow-y-auto' : 'w-full space-y-5'}>
+                <div className={`flex flex-col h-full ${isFullscreen ? 'bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-visible' : 'space-y-5'}`}>
                 {/* TOP ACTION BAR: RIDER SELECTOR DROPDOWN & CONFIRMATION DISPATCH */}
-                <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+                <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 relative z-40 overflow-visible">
                   {/* Left Side: Select Dropdown */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1 relative z-40">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 whitespace-nowrap shrink-0">
                       <User size={13} className="text-blue-600" />
                       <span>Vincular Condutor:</span>
                     </div>
-                    <select
-                      value={selectedRiderId}
-                      onChange={(e) => {
-                        setSelectedRiderId(e.target.value);
-                        setActiveDeviceRiderId(e.target.value);
-                      }}
-                      className="text-xs bg-white border border-slate-200 rounded-lg py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-700 w-full sm:max-w-xs cursor-pointer"
-                    >
-                      <option value="">Selecione um condutor...</option>
-                      {riders.map(rider => (
-                        <option key={rider.id} value={rider.id}>
-                          {rider.name} ({rider.vehicle || 'Veículo Padrão'}) — {
-                            rider.status === 'Em rota' ? 'Em Rota (Ativo - Aceita Inclusões)' :
-                            rider.status === 'Disponível' ? 'Disponível (Livre)' :
-                            `Cadastrado (${rider.status || 'Offline'})`
-                          }
-                        </option>
-                      ))}
-                    </select>
+
+                    {/* CUSTOM RIDER SELECTION DROPDOWN WITH HIGH Z-INDEX & PERSISTENT SCROLL */}
+                    <div className="relative w-full sm:w-80 z-[100]" ref={riderDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsRiderDropdownOpen(!isRiderDropdownOpen)}
+                        className="w-full text-xs bg-white border border-slate-200 hover:border-blue-300 rounded-lg py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-700 flex items-center justify-between gap-2 shadow-2xs cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          {selectedRiderObj ? (
+                            <>
+                              <img src={selectedRiderObj.avatar} alt="" className="w-5 h-5 rounded-full object-cover shrink-0 border border-slate-200" />
+                              <span className="font-extrabold text-slate-800 truncate">{selectedRiderObj.name}</span>
+                              <span className="text-[10px] font-bold text-slate-400 shrink-0">({selectedRiderObj.vehicle || 'Veículo'})</span>
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                                selectedRiderObj.status === 'Em rota' ? 'bg-blue-100 text-blue-700' :
+                                selectedRiderObj.status === 'Disponível' ? 'bg-emerald-100 text-emerald-700' :
+                                'bg-slate-100 text-slate-600'
+                              }`}>
+                                {selectedRiderObj.status || 'Offline'}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-slate-400 italic">Selecione um condutor...</span>
+                          )}
+                        </div>
+                        <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-150 ${isRiderDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {/* DROPDOWN MENU */}
+                      <AnimatePresence>
+                        {isRiderDropdownOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                            transition={{ duration: 0.1 }}
+                            className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl z-[9999] overflow-hidden flex flex-col max-h-72"
+                          >
+                            {/* Search Input inside Dropdown */}
+                            {riders.length > 3 && (
+                              <div className="p-2 border-b border-slate-100 bg-slate-50/80 sticky top-0 z-10">
+                                <div className="relative">
+                                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    type="text"
+                                    value={riderSearchQuery}
+                                    onChange={(e) => setRiderSearchQuery(e.target.value)}
+                                    placeholder="Buscar condutor por nome/veículo..."
+                                    className="w-full pl-7 pr-2.5 py-1 text-[11px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 font-medium"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Scrollable Rider List */}
+                            <div className="overflow-y-auto max-h-56 py-1 divide-y divide-slate-50 custom-scrollbar">
+                              {filteredDropdownRiders.length === 0 ? (
+                                <div className="p-3 text-center text-xs text-slate-400 font-medium">
+                                  Nenhum condutor encontrado.
+                                </div>
+                              ) : (
+                                filteredDropdownRiders.map(rider => {
+                                  const isSelected = rider.id === selectedRiderId;
+                                  const activeCount = orders.filter(o => o.riderId === rider.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                                  return (
+                                    <button
+                                      key={rider.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedRiderId(rider.id);
+                                        setActiveDeviceRiderId(rider.id);
+                                        setIsRiderDropdownOpen(false);
+                                      }}
+                                      className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
+                                        isSelected ? 'bg-blue-50/80 text-blue-900 font-extrabold' : 'hover:bg-slate-50 text-slate-700 font-medium'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2.5 truncate">
+                                        <img src={rider.avatar} alt="" className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200" />
+                                        <div className="truncate">
+                                          <div className="text-xs font-bold text-slate-800 truncate flex items-center gap-1.5">
+                                            <span>{rider.name}</span>
+                                            <span className="text-[10px] text-slate-400 font-normal">({rider.vehicle || 'Veículo Padrão'})</span>
+                                          </div>
+                                          <div className="text-[9px] text-slate-400 flex items-center gap-2">
+                                            <span>{activeCount} entregas ativas</span>
+                                            {rider.deviceNumber && (
+                                              <span>• Disp: {rider.deviceNumber}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                          rider.status === 'Em rota' ? 'bg-blue-100 text-blue-700' :
+                                          rider.status === 'Disponível' ? 'bg-emerald-100 text-emerald-700' :
+                                          'bg-slate-100 text-slate-500'
+                                        }`}>
+                                          {rider.status === 'Em rota' ? 'Em Rota' : rider.status === 'Disponível' ? 'Disponível' : rider.status || 'Offline'}
+                                        </span>
+                                        {isSelected && <Check size={14} className="text-blue-600 shrink-0" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
 
                   {/* Right Side: Back Button, Fullscreen Toggle & Dispatch Action Button */}
@@ -1317,7 +2070,423 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                   </div>
                 </div>
 
-                    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden" id="spreadsheet-container">
+                {/* SELETOR DE PERÍODO TRIAGEM */}
+                <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border border-blue-800/80 text-white rounded-2xl p-3.5 shadow-md space-y-2.5">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-blue-500/20 border border-blue-400/30 text-blue-300 rounded-xl shrink-0">
+                        <Calendar size={18} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                            Seletor de Período Triagem
+                          </h3>
+                          <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase border ${
+                            hasSearchedPeriod
+                              ? 'bg-blue-500/30 text-blue-200 border-blue-400/40'
+                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          }`}>
+                            {hasSearchedPeriod ? `Filtro Ativo: ${formatToBrazilianDate(dateFrom)} a ${formatToBrazilianDate(dateTo)}` : `Período Atual: Hoje (${formatToBrazilianDate(todayStr)})`}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-blue-200/80">
+                          Selecione o intervalo de datas ou utilize os atalhos rápidos para carregar as entregas no período desejado.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quick Presets */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-extrabold text-blue-300 uppercase mr-1">Atalhos:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectTriagePreset('hoje')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer border ${
+                          dateFrom === todayStr && dateTo === todayStr
+                            ? 'bg-blue-600 text-white border-blue-400 shadow-xs'
+                            : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-700'
+                        }`}
+                      >
+                        Hoje
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectTriagePreset('ontem')}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
+                      >
+                        Ontem
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectTriagePreset('7dias')}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
+                      >
+                        7 Dias
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectTriagePreset('esteMes')}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
+                      >
+                        Este Mês
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectTriagePreset('30dias')}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
+                      >
+                        30 Dias
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Custom Date Range Pickers for Triage */}
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-blue-800/60 text-xs">
+                    <div className="flex items-center gap-2 bg-slate-950/80 border border-blue-700/80 rounded-xl p-1.5 px-3">
+                      <span className="text-[10px] font-extrabold text-blue-300 uppercase">De:</span>
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        max={dateTo || undefined}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDateFrom(val);
+                          if (val && dateTo && val > dateTo) setDateTo(val);
+                          else if (val && !dateTo) setDateTo(val);
+                        }}
+                        className="bg-transparent border-0 text-xs font-bold text-white focus:outline-none focus:ring-0 cursor-pointer"
+                      />
+                      <span className="text-[10px] font-extrabold text-blue-300 uppercase">Até:</span>
+                      <input
+                        type="date"
+                        value={dateTo}
+                        min={dateFrom || undefined}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val && dateFrom && val < dateFrom) setDateFrom(val);
+                          setDateTo(val);
+                        }}
+                        className="bg-transparent border-0 text-xs font-bold text-white focus:outline-none focus:ring-0 cursor-pointer"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSearchPeriod}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Search size={13} />
+                      <span>Filtrar Triagem</span>
+                    </button>
+
+                    {hasSearchedPeriod && (
+                      <button
+                        type="button"
+                        onClick={handleClearPeriod}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-extrabold rounded-xl text-xs transition-all cursor-pointer border border-slate-700"
+                      >
+                        Resetar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* DUAL PANELS: 1. SELECIONAR CONDUTOR & EXIBIR PEDIDOS ALOCADOS | 2. REALOCAR PARA CONDUTOR (B) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                  {/* PANEL 1: SELECIONAR CONDUTOR (A) / ORIGEM E CONSULTA DE PEDIDOS ALOCADOS */}
+                  <div className="lg:col-span-7 bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 shadow-lg space-y-3 flex flex-col justify-between">
+                    <div className="space-y-3">
+                      {/* Panel 1 Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 bg-indigo-600/30 text-indigo-300 rounded-xl shrink-0">
+                            <UserCheck size={18} />
+                          </div>
+                          <div>
+                            <h3 className="text-xs font-black uppercase tracking-wider text-indigo-100 flex items-center gap-2">
+                              <span>1. Selecionar Condutor (A) & Consultar Pedidos Alocados</span>
+                              <span className="text-[9px] bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 font-extrabold px-2 py-0.5 rounded-full">
+                                Período: {formatToBrazilianDate(dateFrom)} a {formatToBrazilianDate(dateTo)}
+                              </span>
+                            </h3>
+                            <p className="text-[10px] text-slate-400">
+                              Escolha um condutor para visualizar todos os seus pedidos alocados no período e marcar quais serão realocados.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Driver A Selector Dropdown */}
+                      <div className="space-y-1 modal-dropdown relative z-[9999]" style={{ overflow: 'visible', zIndex: 9999 }}>
+                        <label className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-wider block">
+                          Selecione o Condutor (A) / Origem:
+                        </label>
+                        <select
+                          value={filterDriverAId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFilterDriverAId(val);
+                            const matched = orders.filter(order => {
+                              if (val === 'unassigned') return !order.riderId;
+                              if (val !== 'todos') return order.riderId === val;
+                              return true;
+                            });
+                            setSelectedOrderIds(new Set(matched.map(o => o.id)));
+                          }}
+                          className="w-full p-2 bg-slate-800/90 border border-indigo-700/80 rounded-lg text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shadow-xs modal-rider-select relative z-[9999]"
+                          style={{ overflow: 'visible', zIndex: 9999 }}
+                        >
+                          <option value="todos">-- Todos os Pedidos (Com e Sem Condutor) --</option>
+                          <option value="unassigned">-- Sem Condutor (Não Vinculados) --</option>
+                          {riders.map(r => {
+                            const countActive = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                            return (
+                              <option key={`fa-${r.id}`} value={r.id}>
+                                {r.name} ({countActive} pedido(s) ativo(s) - {r.status})
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {/* Driver Info Card */}
+                      {selectedDriverA && (
+                        <div className="flex items-center justify-between bg-slate-800/80 border border-slate-700/80 p-2.5 rounded-xl text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-400/40 text-indigo-300 flex items-center justify-center font-bold text-xs uppercase">
+                              {selectedDriverA.name.slice(0, 2)}
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-100 flex items-center gap-2">
+                                <span>{selectedDriverA.name}</span>
+                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
+                                  selectedDriverA.status === 'Em rota' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                  selectedDriverA.status === 'Disponível' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                  'bg-slate-700 text-slate-300'
+                                }`}>
+                                  {selectedDriverA.status}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                Veículo: {selectedDriverA.vehicle} • {selectedDriverA.phone || 'Sem telefone'}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] uppercase text-slate-400 block font-bold">Total Alocado</span>
+                            <span className="text-xs font-black text-indigo-300 bg-indigo-950 px-2.5 py-1 rounded-lg border border-indigo-800">
+                              {driverAOrders.length} pedido(s)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Orders List for Driver A */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 px-1">
+                          <button
+                            type="button"
+                            onClick={handleToggleSelectAllDriverAOrders}
+                            disabled={driverAOrders.length === 0}
+                            className="flex items-center gap-1.5 text-indigo-300 hover:text-indigo-200 transition-colors disabled:opacity-40 cursor-pointer"
+                          >
+                            {driverAOrders.length > 0 && selectedDriverAOrdersCount === driverAOrders.length ? (
+                              <CheckSquare size={14} className="text-indigo-400" />
+                            ) : (
+                              <Square size={14} className="text-slate-500" />
+                            )}
+                            <span>
+                              {selectedDriverAOrdersCount === driverAOrders.length && driverAOrders.length > 0
+                                ? 'Desmarcar Todos'
+                                : `Selecionar Todos (${driverAOrders.length})`}
+                            </span>
+                          </button>
+                          <span className="text-[10px] text-slate-400">
+                            <strong className="text-indigo-300">{selectedDriverAOrdersCount}</strong> de {driverAOrders.length} marcado(s) para realocação
+                          </span>
+                        </div>
+
+                        {/* Scrollable Order Cards Box */}
+                        <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                          {driverAOrders.length === 0 ? (
+                            <div className="p-4 text-center bg-slate-800/40 rounded-xl border border-dashed border-slate-700 text-slate-400 text-xs">
+                              Nenhum pedido alocado para este condutor no período selecionado.
+                            </div>
+                          ) : (
+                            driverAOrders.map((order) => {
+                              const isChecked = selectedOrderIds.has(order.id);
+                              const cp = clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente));
+                              return (
+                                <div
+                                  key={`dra-ord-${order.id}`}
+                                  onClick={() => {
+                                    const newSet = new Set(selectedOrderIds);
+                                    if (isChecked) {
+                                      newSet.delete(order.id);
+                                    } else {
+                                      newSet.add(order.id);
+                                    }
+                                    setSelectedOrderIds(newSet);
+                                  }}
+                                  className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 text-xs ${
+                                    isChecked
+                                      ? 'bg-indigo-950/80 border-indigo-500/80 text-white shadow-xs'
+                                      : 'bg-slate-800/50 border-slate-700/60 text-slate-300 hover:bg-slate-800'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="shrink-0 text-indigo-400">
+                                      {isChecked ? <CheckSquare size={16} className="text-indigo-400" /> : <Square size={16} className="text-slate-500" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="font-extrabold text-slate-100 flex items-center gap-2 truncate">
+                                        <span>#{order.id.slice(0, 8)}</span>
+                                        {order.protocolNumber && (
+                                          <span className="text-[9px] bg-slate-700/80 text-slate-300 px-1.5 py-0.2 rounded font-mono">
+                                            Prot: {order.protocolNumber}
+                                          </span>
+                                        )}
+                                        <span className="text-[10px] text-indigo-300 font-normal truncate">
+                                          • {cp?.name || order.partnerName || 'Cliente Direto'}
+                                        </span>
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 truncate">
+                                        {order.address} {order.region ? `(${order.region})` : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="shrink-0 flex items-center gap-2">
+                                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                                      order.status === 'Concluído' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                      order.status === 'Em rota' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+                                      'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                    }`}>
+                                      {order.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PANEL 2: SELECIONAR CONDUTOR (B) / DESTINO E BOTAO DE REALOCACAO */}
+                  <div className="lg:col-span-5 bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-950 border border-indigo-800 text-white rounded-2xl p-4 shadow-lg space-y-3 flex flex-col justify-between">
+                    <div className="space-y-3">
+                      {/* Panel 2 Header */}
+                      <div className="flex items-center gap-2.5 border-b border-indigo-800/80 pb-2.5">
+                        <div className="p-2 bg-indigo-600/30 text-indigo-300 rounded-xl shrink-0">
+                          <Send size={18} />
+                        </div>
+                        <div>
+                          <h3 className="text-xs font-black uppercase tracking-wider text-indigo-100">
+                            2. Realocar para Condutor (B) / Destino
+                          </h3>
+                          <p className="text-[10px] text-indigo-300/80">
+                            Escolha o condutor de destino. Somente os pedidos selecionados ao lado serão transferidos.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Target Driver B Selector */}
+                      <div className="space-y-1 modal-dropdown relative z-[9999]" style={{ overflow: 'visible', zIndex: 9999 }}>
+                        <label className="text-[10px] font-extrabold text-indigo-200 uppercase tracking-wider block">
+                          Selecione o Condutor (B) / Destino:
+                        </label>
+                        <select
+                          value={targetRiderBId}
+                          onChange={(e) => setTargetRiderBId(e.target.value)}
+                          className="w-full p-2 bg-slate-800/90 border border-indigo-700/80 rounded-lg text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shadow-xs modal-rider-select relative z-[9999]"
+                          style={{ overflow: 'visible', zIndex: 9999 }}
+                        >
+                          <option value="">-- Selecione o Condutor (B) --</option>
+                          {riders.map(r => {
+                            const countActive = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                            const isSameAsA = filterDriverAId !== 'todos' && filterDriverAId !== 'unassigned' && r.id === filterDriverAId;
+                            return (
+                              <option key={`fb-${r.id}`} value={r.id} disabled={isSameAsA}>
+                                {r.name} ({countActive} pedido(s) ativo(s) - {r.status}) {isSameAsA ? '(Condutor Origem)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {/* Target Driver Info Card */}
+                      {selectedDriverB && (
+                        <div className="flex items-center justify-between bg-indigo-900/40 border border-indigo-700/60 p-2.5 rounded-xl text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-emerald-600/30 border border-emerald-400/40 text-emerald-300 flex items-center justify-center font-bold text-xs uppercase">
+                              {selectedDriverB.name.slice(0, 2)}
+                            </div>
+                            <div>
+                              <div className="font-bold text-indigo-100 flex items-center gap-2">
+                                <span>{selectedDriverB.name}</span>
+                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
+                                  selectedDriverB.status === 'Em rota' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                  selectedDriverB.status === 'Disponível' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                  'bg-slate-700 text-slate-300'
+                                }`}>
+                                  {selectedDriverB.status}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-indigo-300/70">
+                                Veículo: {selectedDriverB.vehicle}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] uppercase text-indigo-300/70 block font-bold">Projeção Carga</span>
+                            <span className="text-xs font-black text-emerald-300 bg-emerald-950 px-2 py-0.5 rounded-lg border border-emerald-800">
+                              {targetDriverBCurrentActiveCount} ➔ +{selectedOrderIds.size} = {targetDriverBCurrentActiveCount + selectedOrderIds.size} ped.
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Selection Summary Box */}
+                      <div className="bg-slate-900/80 border border-indigo-800/80 rounded-xl p-3 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between font-extrabold text-indigo-200">
+                          <span className="flex items-center gap-1.5">
+                            <Info size={14} className="text-indigo-400" />
+                            <span>Resumo da Realocação:</span>
+                          </span>
+                          <span className="text-xs bg-indigo-600 text-white font-extrabold px-2.5 py-0.5 rounded-full shadow-xs">
+                            {selectedOrderIds.size} pedido(s) selecionado(s)
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-300 leading-relaxed">
+                          Regra aplicada: <strong>Apenas os {selectedOrderIds.size} pedido(s) especificamente marcados</strong> no painel ao lado serão vinculados/transferidos para {selectedDriverB ? <strong>{selectedDriverB.name}</strong> : 'o condutor de destino'}. Os pedidos não marcados permanecerão inalterados.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Reallocate Action Button */}
+                    <div className="pt-2">
+                      <button
+                        onClick={handleBatchReallocateToDriverB}
+                        disabled={!targetRiderBId || selectedOrderIds.size === 0}
+                        className={`w-full py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          !targetRiderBId || selectedOrderIds.size === 0
+                            ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
+                            : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 active:from-indigo-700 active:to-blue-700 text-white shadow-lg shadow-indigo-950/80 border border-indigo-400/30'
+                        }`}
+                      >
+                        <Send size={15} />
+                        <span>
+                          Realocar {selectedOrderIds.size} Pedido(s) Selecionado(s)
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden" id="spreadsheet-container">
                   
                   {/* Table Toolbar Header */}
                   <div className="p-3 border-b border-slate-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 bg-slate-50/50">
@@ -1853,6 +3022,31 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                   Confirmar e Criar Roteiro
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* REALLOCATION OVERLAY MODAL (CONDUTOR A ➔ CONDUTOR B) */}
+      <AnimatePresence>
+        {isReallocateModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl max-w-2xl w-full border border-slate-100 shadow-2xl p-6 relative max-h-[90vh] overflow-visible modal-content-visible z-[100]"
+              style={{ overflow: 'visible', zIndex: 100 }}
+            >
+              <button
+                onClick={() => setIsReallocateModalOpen(false)}
+                className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer z-20"
+                title="Fechar"
+              >
+                <X size={18} />
+              </button>
+
+              {renderReallocateSection()}
             </motion.div>
           </div>
         )}

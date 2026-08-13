@@ -78,3 +78,21 @@
   width: 100% !important;
   box-sizing: border-box;
 }
+
+/* Modal Dropdown Component CSS Override - Ensures rider list is not clipped by modal containers */
+.modal-dropdown-container,
+.modal-dropdown,
+.modal-rider-select {
+  overflow: visible !important;
+  z-index: 9999 !important;
+  position: relative !important;
+}
+
+.modal-content-visible {
+  overflow: visible !important;
+  z-index: 100 !important;
+}
+
+select.modal-rider-select option {
+  z-index: 9999 !important;
+}
