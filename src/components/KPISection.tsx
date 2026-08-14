@@ -15,9 +15,11 @@ interface KPISectionProps {
   orders: Order[];
   onCardClick?: (status: 'Todos' | OrderStatus) => void;
   activeTab?: 'Todos' | OrderStatus;
+  filterDateFrom?: string;
+  filterDateTo?: string;
 }
 
-export default function KPISection({ orders, onCardClick, activeTab = 'Todos' }: KPISectionProps) {
+export default function KPISection({ orders, onCardClick, activeTab = 'Todos', filterDateFrom, filterDateTo }: KPISectionProps) {
   // Dynamic metrics based on current state
   const total = orders.length;
   const notStarted = orders.filter((o) => o.status === 'Não iniciado').length;
@@ -34,6 +36,8 @@ export default function KPISection({ orders, onCardClick, activeTab = 'Todos' }:
     }
     return acc;
   }, 0);
+
+  const isCustomMultiDayPeriod = filterDateFrom && filterDateTo && filterDateFrom !== filterDateTo;
 
   const cards = [
     {
@@ -85,7 +89,7 @@ export default function KPISection({ orders, onCardClick, activeTab = 'Todos' }:
       statusValue: 'Concluído' as const,
       title: 'Concluído',
       value: completed,
-      sub: '98.2% dentro do SLA',
+      sub: isCustomMultiDayPeriod ? 'Período selecionado' : 'Total do dia • 98.2% SLA',
       isTrendUp: true,
       icon: CheckCircle2,
       color: 'emerald',

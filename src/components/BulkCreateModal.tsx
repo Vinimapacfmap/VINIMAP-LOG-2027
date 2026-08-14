@@ -262,8 +262,8 @@ export default function BulkCreateModal({ isOpen, onClose, onSubmit, clientPartn
                     onChange={(e) => setQuickFillValue(e.target.value)}
                     className="rounded-lg border-slate-200 text-xs py-1 px-2 focus:ring-blue-500 bg-white"
                   >
-                    {clientPartners.map(cp => (
-                      <option key={cp.id} value={cp.id}>{cp.name}</option>
+                    {clientPartners.map((cp, idx) => (
+                      <option key={`bulk-create-cp-${cp.id}-${idx}`} value={cp.id}>{cp.name}</option>
                     ))}
                     <option value="Outro">Outro</option>
                   </select>
@@ -410,8 +410,8 @@ export default function BulkCreateModal({ isOpen, onClose, onSubmit, clientPartn
                           onChange={(e) => updateRowField(index, 'partnerName', e.target.value)}
                           className="w-full border-slate-200 rounded-lg text-xs py-1 px-2 focus:ring-blue-500 bg-white"
                         >
-                          {clientPartners.map(cp => (
-                            <option key={cp.id} value={cp.id}>{cp.name}</option>
+                          {clientPartners.map((cp, idx) => (
+                            <option key={`bulk-row-cp-${cp.id}-${idx}`} value={cp.id}>{cp.name}</option>
                           ))}
                           <option value="Outro">Outro</option>
                         </select>

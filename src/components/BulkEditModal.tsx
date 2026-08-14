@@ -166,8 +166,8 @@ export default function BulkEditModal({
                     onChange={(e) => setPartnerName(e.target.value)}
                     className="w-full text-xs rounded-xl border-slate-200 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                   >
-                    {clientPartners.map(cp => (
-                      <option key={cp.id} value={cp.id}>{cp.name} ({cp.codigoCliente})</option>
+                    {clientPartners.map((cp, idx) => (
+                      <option key={`be-cp-${cp.id}-${idx}`} value={cp.id}>{cp.name} ({cp.codigoCliente})</option>
                     ))}
                     <option value="Outro">Outro</option>
                   </select>
@@ -335,8 +335,8 @@ export default function BulkEditModal({
                     style={{ overflow: 'visible', zIndex: 9999 }}
                   >
                     <option value="">Desalocar entregador (Vazio)</option>
-                    {riders.map(r => (
-                      <option key={r.id} value={r.id}>{r.name} ({r.vehicle})</option>
+                    {riders.map((r, idx) => (
+                      <option key={`be-rider-${r.id}-${idx}`} value={r.id}>{r.name} ({r.vehicle})</option>
                     ))}
                   </select>
                 )}

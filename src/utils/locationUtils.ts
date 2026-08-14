@@ -587,3 +587,7 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<Re
   return null;
 }
 
+export { searchCepByAddress, fetchAddressSuggestions, formatCepString, getRegionFromCepOrBairro } from './addressLookupService';
+export type { AddressLookupResult, AddressSuggestionItem } from './addressLookupService';
+
+

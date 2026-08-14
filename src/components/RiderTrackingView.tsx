@@ -9,11 +9,12 @@ import { DeliveryRider, Order, RiderStatus, OrderStatus, CompanyHub } from '../t
 import { getDriverAppInstallUrl } from '../utils/pwaUtils';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 import DateRangePicker from './DateRangePicker';
-import { getSaoPauloDateTimeShort } from '../utils/dateUtils';
+import { getSaoPauloDateTimeShort, getSaoPauloISODate, isOrderInDatePeriod } from '../utils/dateUtils';
 import { getCoordinatesFromCep } from '../utils/locationUtils';
 import { saveMapCache, getMapCache, MapCachePayload } from '../utils/mapCacheService';
 import SafeMapWrapper from './SafeMapWrapper';
 import { initLeafletPosGuard } from '../utils/leafletPatch';
+import { fetchOsrmRoute, fetchOsrmMultiStopRoute, getCachedOsrmRoute, OsrmRouteResult } from '../utils/osrmService';
 import { 
   Search, 
   MapPin, 
@@ -110,6 +111,11 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
   const [mapStyle, setMapStyle] = useState<MapStyle>('openstreetmap');
   const [copiedRiderId, setCopiedRiderId] = useState<string | null>(null);
   const [recalibrateKey, setRecalibrateKey] = useState<number>(0);
+
+  // Real street routing states (OSRM - OpenStreetMap real street geometries)
+  const [realStreetSegments, setRealStreetSegments] = useState<Record<string, [number, number][]>>({});
+  const [realSegmentMetrics, setRealSegmentMetrics] = useState<Record<string, { distanceKm: number; durationMinutes: number; etaClockTime: string }>>({});
+  const [isLoadingRealRoutes, setIsLoadingRealRoutes] = useState<boolean>(false);
 
   // Delivery Period Filter
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
@@ -422,35 +428,144 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
     });
   }, [riders, riderSpeeds]);
 
-  // Generates a beautiful realistic street routing path following blocks
-  const getStreetRoutePoints = (from: [number, number], to: [number, number], seedId: string): [number, number][] => {
-    const [lat1, lng1] = from;
-    const [lat2, lng2] = to;
-    
-    const points: [number, number][] = [from];
-    // Hash seedId to make the routing deterministic for a specific order/rider pair
-    const seed = seedId.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    
-    // We create a zig-zag route to simulate street grid
-    const steps = 4;
-    for (let i = 1; i < steps; i++) {
-      const t = i / steps;
-      let lat, lng;
-      if (i % 2 === 1) {
-        lat = lat1 + (lat2 - lat1) * t;
-        // Jitter creates grid turns that look like streets instead of a single diagonal straight line
-        const jitter = Math.sin(seed + i) * 0.0006;
-        lng = lng1 + (lng2 - lng1) * t + jitter;
-      } else {
-        lng = lng1 + (lng2 - lng1) * t;
-        const jitter = Math.cos(seed + i) * 0.0006;
-        lat = lat1 + (lat2 - lat1) * t + jitter;
+  // Real Street Routing: Calculate and cache exact road paths via OSRM for all active drivers with allocated orders
+  useEffect(() => {
+    let isMounted = true;
+
+    async function calculateAllRealStreetRoutes() {
+      if (!riders || riders.length === 0) return;
+
+      setIsLoadingRealRoutes(true);
+      const newSegments: Record<string, [number, number][]> = {};
+      const newMetrics: Record<string, { distanceKm: number; durationMinutes: number; etaClockTime: string }> = {};
+
+      // Target active or selected riders
+      const targetRiders = selectedRiderId 
+        ? riders.filter(r => r.id === selectedRiderId)
+        : riders.filter(r => r.status !== 'Offline');
+
+      for (const rider of targetRiders) {
+        const rawPending = orders.filter(o => {
+          const matchesRider = o.riderId === rider.id;
+          const matchesStatus = o.status !== 'Concluído' && o.status !== 'Cancelado';
+          let matchesDate = true;
+          if (filterDateFrom && o.date < filterDateFrom) matchesDate = false;
+          if (filterDateTo && o.date > filterDateTo) matchesDate = false;
+          if (matchesRider) matchesDate = true;
+          return matchesRider && matchesStatus && matchesDate;
+        });
+
+        if (rawPending.length === 0) continue;
+
+        // Sequence calculation
+        const seq = customOrderSequences[rider.id];
+        let rPendingOrders: Order[] = [];
+        if (seq && seq.length > 0) {
+          rPendingOrders = [...rawPending].sort((a, b) => {
+            const indexA = seq.indexOf(a.id);
+            const indexB = seq.indexOf(b.id);
+            if (indexA === -1 && indexB === -1) return 0;
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+          });
+        } else {
+          rPendingOrders = calculateHubNearestSequence(rawPending, hubLatLng);
+        }
+
+        let currentLatLng = hubLatLng;
+
+        // Real street route to every delivery destination
+        for (let i = 0; i < rPendingOrders.length; i++) {
+          const order = rPendingOrders[i];
+          const orderLatLng = getOrderGeoCoords(order);
+          const legKey = `${currentLatLng[0].toFixed(5)},${currentLatLng[1].toFixed(5)}->${orderLatLng[0].toFixed(5)},${orderLatLng[1].toFixed(5)}`;
+          const segmentId = `${rider.id}_stop_${order.id}`;
+
+          const osrmResult = await fetchOsrmRoute(
+            { lat: currentLatLng[0], lng: currentLatLng[1] },
+            { lat: orderLatLng[0], lng: orderLatLng[1] }
+          );
+
+          if (isMounted && osrmResult.geometry && osrmResult.geometry.length > 0) {
+            newSegments[legKey] = osrmResult.geometry;
+            newSegments[segmentId] = osrmResult.geometry;
+            newMetrics[legKey] = {
+              distanceKm: osrmResult.distanceKm,
+              durationMinutes: osrmResult.durationMinutes,
+              etaClockTime: osrmResult.etaClockTime
+            };
+            newMetrics[segmentId] = {
+              distanceKm: osrmResult.distanceKm,
+              durationMinutes: osrmResult.durationMinutes,
+              etaClockTime: osrmResult.etaClockTime
+            };
+          }
+
+          currentLatLng = orderLatLng;
+        }
+
+        // Live Tracker route from rider's GPS location to their first stop
+        const riderLatLng = getRiderGeoCoords(rider);
+        const targetLatLng = rPendingOrders.length > 0 ? getOrderGeoCoords(rPendingOrders[0]) : hubLatLng;
+        const trackerKey = `${riderLatLng[0].toFixed(5)},${riderLatLng[1].toFixed(5)}->${targetLatLng[0].toFixed(5)},${targetLatLng[1].toFixed(5)}`;
+        const trackerSegmentId = `${rider.id}_tracker`;
+
+        const trackerOsrm = await fetchOsrmRoute(
+          { lat: riderLatLng[0], lng: riderLatLng[1] },
+          { lat: targetLatLng[0], lng: targetLatLng[1] }
+        );
+
+        if (isMounted && trackerOsrm.geometry && trackerOsrm.geometry.length > 0) {
+          newSegments[trackerKey] = trackerOsrm.geometry;
+          newSegments[trackerSegmentId] = trackerOsrm.geometry;
+          newMetrics[trackerKey] = {
+            distanceKm: trackerOsrm.distanceKm,
+            durationMinutes: trackerOsrm.durationMinutes,
+            etaClockTime: trackerOsrm.etaClockTime
+          };
+          newMetrics[trackerSegmentId] = {
+            distanceKm: trackerOsrm.distanceKm,
+            durationMinutes: trackerOsrm.durationMinutes,
+            etaClockTime: trackerOsrm.etaClockTime
+          };
+        }
       }
-      points.push([lat, lng]);
+
+      if (isMounted) {
+        setRealStreetSegments(prev => ({ ...prev, ...newSegments }));
+        setRealSegmentMetrics(prev => ({ ...prev, ...newMetrics }));
+        setIsLoadingRealRoutes(false);
+      }
+    }
+
+    calculateAllRealStreetRoutes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [riders, orders, selectedRiderId, customOrderSequences, hubLatLng, filterDateFrom, filterDateTo]);
+
+  // Generates real street routing points following actual avenues and streets (OSRM / OpenStreetMap)
+  const getStreetRoutePoints = (from: [number, number], to: [number, number], seedId: string): [number, number][] => {
+    const legKey = `${from[0].toFixed(5)},${from[1].toFixed(5)}->${to[0].toFixed(5)},${to[1].toFixed(5)}`;
+    
+    // Check dynamic state
+    if (realStreetSegments[legKey] && realStreetSegments[legKey].length > 1) {
+      return realStreetSegments[legKey];
+    }
+    if (realStreetSegments[seedId] && realStreetSegments[seedId].length > 1) {
+      return realStreetSegments[seedId];
     }
     
-    points.push(to);
-    return points;
+    // Check synchronous cache
+    const syncCached = getCachedOsrmRoute({ lat: from[0], lng: from[1] }, { lat: to[0], lng: to[1] });
+    if (syncCached && syncCached.geometry && syncCached.geometry.length > 1) {
+      return syncCached.geometry;
+    }
+
+    // Default fallback while loading
+    return [from, to];
   };
 
   // Calculate cumulative distance along a street polyline
@@ -518,11 +633,22 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
 
     pendingOrders.forEach((order, index) => {
       const orderLatLng = getOrderGeoCoords(order);
-      const streetPoints = getStreetRoutePoints(currentLatLng, orderLatLng, order.id);
-      const segmentDistance = getStreetRouteDistance(streetPoints);
+      const legKey = `${currentLatLng[0].toFixed(5)},${currentLatLng[1].toFixed(5)}->${orderLatLng[0].toFixed(5)},${orderLatLng[1].toFixed(5)}`;
+      const segMetric = realSegmentMetrics[legKey] || realSegmentMetrics[`${rider.id}_stop_${order.id}`];
+
+      let segmentDistance: number;
+      let travelTime: number;
+
+      if (segMetric && segMetric.distanceKm > 0) {
+        segmentDistance = segMetric.distanceKm;
+        travelTime = segMetric.durationMinutes;
+      } else {
+        const streetPoints = getStreetRoutePoints(currentLatLng, orderLatLng, order.id);
+        segmentDistance = getStreetRouteDistance(streetPoints);
+        travelTime = Math.max(1, segmentDistance / speed);
+      }
       
       accumulatedDistance += segmentDistance;
-      const travelTime = segmentDistance / speed;
       
       if (index > 0) {
         accumulatedTime += stopHandlingTime;
@@ -531,8 +657,8 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
 
       metrics.push({
         orderId: order.id,
-        distanceFromPrevious: segmentDistance,
-        cumulativeDistance: accumulatedDistance,
+        distanceFromPrevious: Math.round(segmentDistance * 10) / 10,
+        cumulativeDistance: Math.round(accumulatedDistance * 10) / 10,
         etaMinutes: Math.max(2, Math.round(accumulatedTime)), // at least 2 minutes ETA
       });
 
@@ -902,16 +1028,20 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
           // Ambient glow backdrop shadow path
           L.polyline(streetPoints, {
             color: routeColor,
-            weight: isHovered || isSelected || isRiderSelected ? 8 : 4,
-            opacity: isHovered || isSelected || isRiderSelected ? 0.35 : 0.15,
+            weight: isHovered || isSelected || isRiderSelected ? 8 : 4.5,
+            opacity: isHovered || isSelected || isRiderSelected ? 0.35 : 0.18,
+            lineCap: 'round',
+            lineJoin: 'round',
           }).addTo(routesGroup);
 
-          // Core sharp street path
+          // Core sharp street path following real street geometry
           L.polyline(streetPoints, {
             color: routeColor,
-            weight: isHovered || isSelected || isRiderSelected ? 3.5 : 2,
-            opacity: isHovered || isSelected || isRiderSelected ? 0.95 : 0.65,
-            dashArray: isSimulating ? '3, 4' : 'none',
+            weight: isHovered || isSelected || isRiderSelected ? 4 : 2.5,
+            opacity: isHovered || isSelected || isRiderSelected ? 0.95 : 0.75,
+            lineCap: 'round',
+            lineJoin: 'round',
+            dashArray: isSimulating ? '6, 6' : 'none',
           }).addTo(routesGroup);
 
           // Place order marker (Show Parada # instead of order number)
@@ -971,14 +1101,27 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
           currentLatLng = orderLatLng;
         });
 
-        // Tracker line: Connect the rider's live position to their first/next destination (or Hub if none)
+        // Tracker line: Connect the rider's live position to their first/next destination (or Hub if none) along real streets
         const trackerTargetLatLng = rPendingOrders.length > 0 ? getOrderGeoCoords(rPendingOrders[0]) : hubLatLng;
         const riderToTargetPoints = getStreetRoutePoints(riderLatLng, trackerTargetLatLng, rider.id + '_tracker');
+        
+        // Ambient soft track line
         L.polyline(riderToTargetPoints, {
-          color: routeColor,
-          weight: isRiderSelected ? 3 : 1.5,
-          opacity: 0.65,
-          dashArray: '5, 5',
+          color: isRiderSelected ? '#38bdf8' : routeColor,
+          weight: 6,
+          opacity: 0.25,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routesGroup);
+
+        // Core tracker line
+        L.polyline(riderToTargetPoints, {
+          color: isRiderSelected ? '#0284c7' : routeColor,
+          weight: isRiderSelected ? 3.5 : 2,
+          opacity: 0.85,
+          dashArray: '5, 6',
+          lineCap: 'round',
+          lineJoin: 'round',
         }).addTo(routesGroup);
       }
     });
@@ -1009,7 +1152,8 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
     customOrderSequences, 
     visibleRoutes,
     filterDateFrom,
-    filterDateTo
+    filterDateTo,
+    realStreetSegments
   ]);
 
 
@@ -1464,7 +1608,14 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
 
                   {/* HIGH-FIDELITY LIVE PROGRESS TRACKER (Linear stepper) */}
                   {(() => {
-                    const riderAllOrders = orders.filter(o => o.riderId === selectedRider.id);
+                    const activeDateFrom = filterDateFrom || getSaoPauloISODate();
+                    const activeDateTo = filterDateTo || getSaoPauloISODate();
+
+                    const riderAllOrders = orders.filter(o => {
+                      if (o.riderId !== selectedRider.id) return false;
+                      if (o.status !== 'Concluído' && o.status !== 'Cancelado') return true;
+                      return isOrderInDatePeriod(o, activeDateFrom, activeDateTo);
+                    });
                     const completed = riderAllOrders.filter(o => o.status === 'Concluído').length;
                     const totalCount = riderAllOrders.length;
                     const progressPercent = totalCount > 0 ? (completed / totalCount) * 100 : 0;
@@ -1897,14 +2048,21 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
 
                         {/* Completed deliveries in timeline for high fidelity history */}
                         {(() => {
-                          const riderAllOrders = orders.filter(o => o.riderId === selectedRiderId);
+                          const activeDateFrom = filterDateFrom || getSaoPauloISODate();
+                          const activeDateTo = filterDateTo || getSaoPauloISODate();
+
+                          const riderAllOrders = orders.filter(o => {
+                            if (o.riderId !== selectedRiderId) return false;
+                            if (o.status !== 'Concluído' && o.status !== 'Cancelado') return true;
+                            return isOrderInDatePeriod(o, activeDateFrom, activeDateTo);
+                          });
                           const completedOrders = riderAllOrders.filter(o => o.status === 'Concluído' || o.status === 'Cancelado');
                           
                           if (completedOrders.length === 0) return null;
                           return (
                             <div className="pt-4 border-t border-slate-200">
                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2.5">
-                                Paradas Finalizadas ({completedOrders.length})
+                                Paradas Finalizadas ({completedOrders.length}) {filterDateFrom || filterDateTo ? '• Período' : '• Hoje'}
                               </span>
                               <div className="space-y-2 pl-3 border-l border-dashed border-slate-200">
                                 {completedOrders.map((order) => (
@@ -2019,6 +2177,19 @@ export default function RiderTrackingView({ riders: propsRiders, orders: propsOr
                         </span>
                       </div>
                     )}
+
+                    {/* Real street routing indicator */}
+                    <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-1.5 shadow-lg flex items-center gap-2 text-white">
+                      <Navigation size={11} className={isLoadingRealRoutes ? "text-amber-400 animate-spin" : "text-emerald-400"} />
+                      <div className="flex flex-col">
+                        <span className="text-[8.5px] font-black uppercase tracking-wider font-mono text-slate-200">
+                          {isLoadingRealRoutes ? 'Calculando Ruas...' : 'Roteamento Real por Ruas'}
+                        </span>
+                        <span className="text-[7.5px] font-bold text-emerald-400 font-mono">
+                          OpenStreetMap / OSRM
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Map style selection overlay - Centered horizontally at the top */}

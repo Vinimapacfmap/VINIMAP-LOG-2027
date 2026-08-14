@@ -194,17 +194,30 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
   // Gathering unique list of partners / clients across transactions & orders
   const partnerOptions = useMemo(() => {
     const set = new Set<string>();
+    const seenNormalized = new Set<string>();
+    const result: string[] = [];
+
+    const addVal = (raw: string | undefined | null) => {
+      const val = raw?.trim();
+      if (!val) return;
+      const lower = val.toLowerCase();
+      if (!seenNormalized.has(lower)) {
+        seenNormalized.add(lower);
+        result.push(val);
+      }
+    };
+
     transactions.forEach(t => {
       if (t.recipientOrPayer && t.recipientOrPayer.trim()) {
-        set.add(t.recipientOrPayer.trim());
+        addVal(t.recipientOrPayer.trim());
       }
     });
     orders.forEach(o => {
-      if (o.partnerName && o.partnerName.trim()) set.add(getPartnerDisplayName(o.partnerName, clientPartners));
-      if (o.clientName && o.clientName.trim()) set.add(o.clientName.trim());
+      if (o.partnerName && o.partnerName.trim()) addVal(getPartnerDisplayName(o.partnerName, clientPartners));
+      if (o.clientName && o.clientName.trim()) addVal(o.clientName.trim());
     });
-    return Array.from(set).sort();
-  }, [transactions, orders]);
+    return result.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [transactions, orders, clientPartners]);
 
   const handleOpenPartnerPdfModal = () => {
     if (partnerFilter !== 'Todos') {
@@ -1747,8 +1760,8 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
                   className="bg-transparent border-none text-[11px] font-bold text-slate-700 outline-none cursor-pointer pr-1 max-w-[150px] truncate"
                 >
                   <option value="Todos">Todos</option>
-                  {partnerOptions.map(p => (
-                    <option key={p} value={p}>{p}</option>
+                  {partnerOptions.map((p, idx) => (
+                    <option key={`cp-partner-opt-${p}-${idx}`} value={p}>{p}</option>
                   ))}
                 </select>
               </div>
@@ -2774,8 +2787,8 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
                     onChange={(e) => setSelectedPdfPartner(e.target.value)}
                     className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
                   >
-                    {partnerOptions.map(p => (
-                      <option key={p} value={p}>{p}</option>
+                    {partnerOptions.map((p, idx) => (
+                      <option key={`pdf-partner-opt-${p}-${idx}`} value={p}>{p}</option>
                     ))}
                   </select>
                 </div>

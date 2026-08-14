@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import CepInput, { ViaCepData } from './CepInput';
+import AddressAutocompleteInput from './AddressAutocompleteInput';
+import { AddressLookupResult } from '../utils/addressLookupService';
 import { 
   Plus, 
   Trash2, 
@@ -795,15 +797,37 @@ export default function HubRegistration({
 
                 {/* Address, Cidade & Estado */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="col-span-1 md:col-span-2 space-y-1">
-                    <label className="text-xs font-bold text-slate-700">Endereço Completo *</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Avenida Paulista, 1000 - Bela Vista"
+                  <div className="col-span-1 md:col-span-2">
+                    <AddressAutocompleteInput
+                      label="Endereço Completo"
+                      placeholder="Ex: Avenida Paulista, 1000 - Bela Vista ou Rua Cerro Corá..."
                       value={address}
-                      onChange={(e) => setAddress(e.target.value)}
+                      onChange={(val) => setAddress(val)}
+                      onCepFound={async (lookup) => {
+                        if (lookup.cep) {
+                          setCep(lookup.cep);
+                        }
+                        if (lookup.localidade) {
+                          setCidade(lookup.localidade);
+                        }
+                        if (lookup.uf) {
+                          setEstado(lookup.uf);
+                        }
+                        if (lookup.lat && lookup.lng) {
+                          updateCoordinates(lookup.lat, lookup.lng);
+                        } else if (lookup.cleanCep) {
+                          try {
+                            const geocoded = await geocodeCepAddress(lookup.cleanCep, lookup.formattedAddress);
+                            updateCoordinates(geocoded.lat, geocoded.lng);
+                          } catch (err) {
+                            console.warn('Geocoding on CEP lookup error:', err);
+                          }
+                        }
+                      }}
                       required
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      showCepBadge={true}
+                      showSuggestions={true}
+                      id="hub-address-input"
                     />
                   </div>
 

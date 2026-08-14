@@ -975,8 +975,8 @@ export default function VolumeCalculator({ clientPartners, onCreateOrder }: Volu
                         className="w-full px-2 py-1.5 text-[11px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 text-slate-700"
                       >
                         <option value="">Selecione o Parceiro...</option>
-                        {clientPartners.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} ({p.region})</option>
+                        {clientPartners.map((p, idx) => (
+                          <option key={`vc-p-${p.id}-${idx}`} value={p.id}>{p.name} ({p.region})</option>
                         ))}
                       </select>
                     </div>

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   INITIAL_RIDERS, 
   INITIAL_ORDERS, 
@@ -13,7 +13,7 @@ import {
 } from './data/mock';
 import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHistoryEntry, isMatchingClientCode, CepRange, CepTableHistoryItem, CompanyHub, BillingModelType } from './types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime } from './utils/dateUtils';
-import { getPartnerDisplayName } from './utils/partnerUtils';
+import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider } from './utils/partnerUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from './utils/addressUtils';
 import { playNotificationAudioAlert } from './utils/notificationUtils';
 import { generateStaticSvgMap, geocodeAddressBackend, convertToGeoLat, convertToGeoLng } from './utils/locationUtils';
@@ -41,6 +41,8 @@ import DailyNotebook from './components/DailyNotebook';
 import OtimizadorRotasInteligente from './components/OtimizadorRotasInteligente';
 import HubRegistration from './components/HubRegistration';
 import CepInput from './components/CepInput';
+import AddressAutocompleteInput from './components/AddressAutocompleteInput';
+import { AddressLookupResult } from './utils/addressLookupService';
 import LocalStorageSyncStatus from './components/LocalStorageSyncStatus';
 import LogoHubManager from './components/LogoHubManager';
 import { applyDynamicPwaManifestAndIcons, getDriverAppInstallUrl } from './utils/pwaUtils';
@@ -1529,37 +1531,24 @@ export default function App() {
     setFilterShowDelayed(false);
   };
 
-  // Real-time order status progression simulation (disabled to preserve real user input data)
-  /*
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setOrders((prevOrders) => {
-        const progressable = prevOrders.filter(
-          (o) => o.date === todayStr && (o.status === 'Em rota' || o.status === 'Entregando')
-        );
-        if (progressable.length === 0) return prevOrders;
+  // Instant Partner and Rider Selection Handlers (Independent of Status)
+  const handleSelectPartner = useCallback((partnerVal: string) => {
+    setFilterPartner(partnerVal);
+    // When selecting a partner, instantly display orders independent of status
+    setActiveOrderTab('Todos');
+    if (filterStatus) {
+      setFilterStatus('');
+    }
+  }, [filterStatus]);
 
-        const randomIndex = Math.floor(Math.random() * progressable.length);
-        const randomOrder = progressable[randomIndex];
-        
-        let nextStatus: OrderStatus;
-        if (randomOrder.status === 'Em rota') {
-          nextStatus = 'Entregando';
-        } else {
-          nextStatus = 'Concluído';
-        }
-
-        setTimeout(() => {
-          handleUpdateStatus(randomOrder.id, nextStatus);
-        }, 50);
-
-        return prevOrders;
-      });
-    }, 12000);
-
-    return () => clearInterval(interval);
-  }, [todayStr]);
-  */
+  const handleSelectRider = useCallback((riderVal: string) => {
+    setFilterRiderId(riderVal);
+    // When selecting a rider, instantly display orders independent of status
+    setActiveOrderTab('Todos');
+    if (filterStatus) {
+      setFilterStatus('');
+    }
+  }, [filterStatus]);
 
   // Redirect old individual sections to unified administrative panel tabs
   useEffect(() => {
@@ -1590,67 +1579,122 @@ export default function App() {
     }
   }, [activeSection]);
 
-  // Filtered orders to be used across the entire system
-  const filteredOrders = orders.filter((order) => {
-    const isSearching = searchQuery.trim() !== '';
+  // Filtered orders to be used across the entire system (memoized for instantaneous UI response)
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const isSearching = searchQuery.trim() !== '';
 
-    if (isSearching) {
-      const q = searchQuery.toLowerCase().trim();
-      const riderName = riders.find(r => r.id === order.riderId)?.name.toLowerCase() || '';
-      const matchesQuery = 
-        order.id.toLowerCase().includes(q) ||
-        order.clientName.toLowerCase().includes(q) ||
-        order.region.toLowerCase().includes(q) ||
-        order.address.toLowerCase().includes(q) ||
-        matchesAddressQuery(order.address, searchQuery) ||
-        (order.partnerName && order.partnerName.toLowerCase().includes(q)) ||
-        (order.cep && order.cep.replace(/\D/g, '').includes(q)) ||
-        (order.protocolNumber && order.protocolNumber.toLowerCase().includes(q)) ||
-        (order.recipientName && order.recipientName.toLowerCase().includes(q)) ||
-        (order.recipientDoc && order.recipientDoc.toLowerCase().includes(q)) ||
-        (order.status && order.status.toLowerCase().includes(q)) ||
-        (order.riderId && (order.riderId.toLowerCase().includes(q) || riderName.includes(q)));
+      if (isSearching) {
+        const q = searchQuery.toLowerCase().trim();
+        const riderName = riders.find(r => r.id === order.riderId)?.name.toLowerCase() || '';
+        const matchesQuery = 
+          order.id.toLowerCase().includes(q) ||
+          order.clientName.toLowerCase().includes(q) ||
+          order.region.toLowerCase().includes(q) ||
+          order.address.toLowerCase().includes(q) ||
+          matchesAddressQuery(order.address, searchQuery) ||
+          (order.partnerName && order.partnerName.toLowerCase().includes(q)) ||
+          (order.cep && order.cep.replace(/\D/g, '').includes(q)) ||
+          (order.protocolNumber && order.protocolNumber.toLowerCase().includes(q)) ||
+          (order.recipientName && order.recipientName.toLowerCase().includes(q)) ||
+          (order.recipientDoc && order.recipientDoc.toLowerCase().includes(q)) ||
+          (order.status && order.status.toLowerCase().includes(q)) ||
+          (order.riderId && (order.riderId.toLowerCase().includes(q) || riderName.includes(q)));
 
-      // When actively searching, return true if matching search query, ignoring status/rider/date/partner/cep filters
-      if (matchesQuery) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-
-    // Default filters when not searching
-    if (filterShowDelayed) {
-      const isDelayed = order.date < todayStr && order.status !== 'Concluído' && order.status !== 'Cancelado';
-      const isToday = order.date === todayStr;
-      if (!isDelayed && !isToday) return false;
-    } else {
-      if (filterDateFrom || filterDateTo) {
-        const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo, filterStatus);
-        if (!matchesDatePeriod) {
+        // When actively searching, return true if matching search query, ignoring status/rider/date/partner/cep filters
+        if (matchesQuery) {
+          return true;
+        } else {
           return false;
         }
       }
-    }
 
-    if (filterPartner && order.partnerName !== filterPartner) {
-      return false;
-    }
-    if (filterRiderId && order.riderId !== filterRiderId) {
-      return false;
-    }
-    if (filterStatus && order.status !== filterStatus) {
-      return false;
-    }
-    if (filterCep) {
-      const cleanCep = filterCep.replace('-', '').trim();
-      const cleanOrderCep = order.cep.replace('-', '').trim();
-      if (!cleanOrderCep.includes(cleanCep)) {
+      // Default filters when not searching
+      if (filterShowDelayed) {
+        const isDelayed = order.date < todayStr && order.status !== 'Concluído' && order.status !== 'Cancelado';
+        const isToday = order.date === todayStr;
+        if (!isDelayed && !isToday) return false;
+      } else {
+        if (filterDateFrom || filterDateTo) {
+          const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo, filterStatus);
+          if (!matchesDatePeriod) {
+            return false;
+          }
+        }
+      }
+
+      if (filterPartner && !isOrderMatchingPartner(order, filterPartner, clientPartners)) {
         return false;
       }
-    }
-    return true;
-  });
+      if (filterRiderId && !isOrderMatchingRider(order, filterRiderId, riders)) {
+        return false;
+      }
+      if (filterStatus && order.status !== filterStatus) {
+        return false;
+      }
+      if (filterCep) {
+        const cleanCep = filterCep.replace('-', '').trim();
+        const cleanOrderCep = order.cep.replace('-', '').trim();
+        if (!cleanOrderCep.includes(cleanCep)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [orders, searchQuery, riders, clientPartners, filterShowDelayed, todayStr, filterDateFrom, filterDateTo, filterPartner, filterRiderId, filterStatus, filterCep]);
+
+  // KPI orders computed matching the date period, partner, rider, and CEP filters (without status restriction so status cards reflect actual counts for the active period/rider)
+  const kpiOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const isSearching = searchQuery.trim() !== '';
+      if (isSearching) {
+        const q = searchQuery.toLowerCase().trim();
+        const riderName = riders.find(r => r.id === order.riderId)?.name.toLowerCase() || '';
+        return (
+          order.id.toLowerCase().includes(q) ||
+          order.clientName.toLowerCase().includes(q) ||
+          order.region.toLowerCase().includes(q) ||
+          order.address.toLowerCase().includes(q) ||
+          matchesAddressQuery(order.address, searchQuery) ||
+          (order.partnerName && order.partnerName.toLowerCase().includes(q)) ||
+          (order.cep && order.cep.replace(/\D/g, '').includes(q)) ||
+          (order.protocolNumber && order.protocolNumber.toLowerCase().includes(q)) ||
+          (order.recipientName && order.recipientName.toLowerCase().includes(q)) ||
+          (order.recipientDoc && order.recipientDoc.toLowerCase().includes(q)) ||
+          (order.status && order.status.toLowerCase().includes(q)) ||
+          (order.riderId && (order.riderId.toLowerCase().includes(q) || riderName.includes(q)))
+        );
+      }
+
+      if (filterShowDelayed) {
+        const isDelayed = order.date < todayStr && order.status !== 'Concluído' && order.status !== 'Cancelado';
+        const isToday = order.date === todayStr;
+        if (!isDelayed && !isToday) return false;
+      } else {
+        if (filterDateFrom || filterDateTo) {
+          const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo);
+          if (!matchesDatePeriod) {
+            return false;
+          }
+        }
+      }
+
+      if (filterPartner && !isOrderMatchingPartner(order, filterPartner, clientPartners)) {
+        return false;
+      }
+      if (filterRiderId && !isOrderMatchingRider(order, filterRiderId, riders)) {
+        return false;
+      }
+      if (filterCep) {
+        const cleanCep = filterCep.replace('-', '').trim();
+        const cleanOrderCep = order.cep.replace('-', '').trim();
+        if (!cleanOrderCep.includes(cleanCep)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [orders, searchQuery, riders, clientPartners, filterShowDelayed, todayStr, filterDateFrom, filterDateTo, filterPartner, filterRiderId, filterCep]);
 
   // Dynamic Chart Data based on filteredOrders
   const dynamicChartData = [
@@ -3506,8 +3550,8 @@ export default function App() {
             <div className="space-y-2.5">
               <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Parceiros com Cobertura:</p>
               <div className="divide-y divide-slate-150 max-h-[180px] overflow-y-auto pr-1">
-                {matchingPartners.map(({ partner, range }) => (
-                  <div key={partner.id} className="py-2.5 flex items-center justify-between gap-3 text-xs font-semibold">
+                {matchingPartners.map(({ partner, range }, idx) => (
+                  <div key={`${partner.id}-${range?.id || idx}-${idx}`} className="py-2.5 flex items-center justify-between gap-3 text-xs font-semibold">
                     <div className="min-w-0">
                       <p className="text-slate-800 font-bold truncate">{partner.name}</p>
                       <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
@@ -3745,12 +3789,18 @@ export default function App() {
                   setFilterCep={setFilterCep}
                   riders={riders}
                   clientPartners={clientPartners}
+                  orders={orders}
+                  totalFilteredOrdersCount={filteredOrders.length}
                   onClearFilters={handleClearFilters}
+                  onSelectPartner={handleSelectPartner}
+                  onSelectRider={handleSelectRider}
                 />
 
                 {/* 6 Key Performance Indicators Section */}
                 <KPISection 
-                  orders={filteredOrders} 
+                  orders={kpiOrders} 
+                  filterDateFrom={filterDateFrom}
+                  filterDateTo={filterDateTo}
                   activeTab={activeOrderTab}
                   onCardClick={(status) => {
                     setActiveOrderTab(status);
@@ -3823,7 +3873,11 @@ export default function App() {
                   setFilterCep={setFilterCep}
                   riders={riders}
                   clientPartners={clientPartners}
+                  orders={orders}
+                  totalFilteredOrdersCount={filteredOrders.length}
                   onClearFilters={handleClearFilters}
+                  onSelectPartner={handleSelectPartner}
+                  onSelectRider={handleSelectRider}
                 />
 
                 {/* Delayed Orders / Previous Days Alert Card */}
@@ -4903,20 +4957,30 @@ export default function App() {
                                 />
                               </div>
 
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Endereço Principal (Rua, Nº, Bairro) *</label>
-                                <input
-                                  type="text"
-                                  value={newClientAddr}
-                                  onChange={(e) => setNewClientAddr(e.target.value)}
-                                  placeholder="Ex: Alameda Tietê, 450 - Jardins"
-                                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  required
-                                />
-                                <p className="text-[9px] text-slate-400 mt-1 leading-relaxed">
-                                  Dica: Digite o CEP acima e clique em "Buscar" para preencher Cidade, Estado e Endereço automaticamente.
-                                </p>
-                              </div>
+                              <AddressAutocompleteInput
+                                label="Endereço Principal (Rua, Nº, Bairro)"
+                                placeholder="Ex: Alameda Tietê, 450 - Jardins ou Av. Paulista..."
+                                value={newClientAddr}
+                                onChange={(val) => setNewClientAddr(val)}
+                                onCepFound={(lookup) => {
+                                  if (lookup.cep) {
+                                    setNewClientCep(lookup.cep);
+                                  }
+                                  if (lookup.localidade) {
+                                    setNewClientCidade(lookup.localidade);
+                                  }
+                                  if (lookup.uf) {
+                                    setNewClientEstado(lookup.uf);
+                                  }
+                                  if (lookup.region) {
+                                    setNewClientRegion(lookup.region);
+                                  }
+                                }}
+                                required
+                                showCepBadge={true}
+                                showSuggestions={true}
+                                id="new-client-address"
+                              />
 
                               <div>
                                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Status de Faturamento</label>
@@ -5313,16 +5377,23 @@ export default function App() {
                               />
                             </div>
 
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Endereço Completo</label>
-                              <input
-                                  type="text"
-                                  value={newRiderAddress}
-                                  onChange={(e) => setNewRiderAddress(e.target.value)}
-                                  placeholder="Ex: Av. Paulista, 1000 - Bela Vista, São Paulo - SP"
-                                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                            </div>
+                            <AddressAutocompleteInput
+                              label="Endereço Completo"
+                              placeholder="Ex: Av. Paulista, 1000 - Bela Vista, São Paulo - SP"
+                              value={newRiderAddress}
+                              onChange={(val) => setNewRiderAddress(val)}
+                              onCepFound={(lookup) => {
+                                if (lookup.cep && !newRiderAddress.includes(lookup.cep)) {
+                                  // Auto-format full address if user chose a suggestion or auto-completed
+                                  if (!newRiderAddress.includes('CEP')) {
+                                    setNewRiderAddress(`${lookup.formattedAddress} (CEP: ${lookup.cep})`);
+                                  }
+                                }
+                              }}
+                              showCepBadge={true}
+                              showSuggestions={true}
+                              id="new-rider-address"
+                            />
 
                             <div>
                               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nº do Dispositivo (Login)</label>
@@ -6164,7 +6235,7 @@ export default function App() {
                   <div>
                     <RidersList 
                       riders={riders} 
-                      orders={orders}
+                      orders={kpiOrders}
                       selectedRiderId={selectedRiderId} 
                       setSelectedRiderId={setSelectedRiderId} 
                     />

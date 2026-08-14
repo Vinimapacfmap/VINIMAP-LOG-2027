@@ -2559,8 +2559,8 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                           className="w-full px-2.5 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700 font-semibold cursor-pointer"
                         >
                           <option value="">Todos os Parceiros</option>
-                          {clientPartners?.map((cp) => (
-                            <option key={cp.id} value={cp.id}>
+                          {clientPartners?.map((cp, idx) => (
+                            <option key={`alocar-cp-${cp.id}-${idx}`} value={cp.id}>
                               {cp.name}
                             </option>
                           ))}

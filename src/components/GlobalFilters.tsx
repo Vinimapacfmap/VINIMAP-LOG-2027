@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
-import { DeliveryRider, OrderStatus, ClientPartner } from '../types';
-import { formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
+import { useState, useMemo } from 'react';
+import { DeliveryRider, OrderStatus, ClientPartner, Order } from '../types';
+import { formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod } from '../utils/dateUtils';
+import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider } from '../utils/partnerUtils';
 import { 
   Filter, 
   Calendar, 
@@ -16,7 +17,11 @@ import {
   Store,
   ChevronDown,
   ChevronUp,
-  Search
+  Search,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+  Bike
 } from 'lucide-react';
 
 interface GlobalFiltersProps {
@@ -36,7 +41,11 @@ interface GlobalFiltersProps {
   setFilterCep: (val: string) => void;
   riders: DeliveryRider[];
   clientPartners?: ClientPartner[];
+  orders?: Order[];
   onClearFilters: () => void;
+  onSelectPartner?: (val: string) => void;
+  onSelectRider?: (val: string) => void;
+  totalFilteredOrdersCount?: number;
 }
 
 export default function GlobalFilters({
@@ -56,21 +65,93 @@ export default function GlobalFilters({
   setFilterCep,
   riders,
   clientPartners,
+  orders,
   onClearFilters,
+  onSelectPartner,
+  onSelectRider,
+  totalFilteredOrdersCount,
 }: GlobalFiltersProps) {
   const [isOpen, setIsOpen] = useState(true);
 
-  // List of known partners from mock data & clientPartners
-  const partners = Array.from(new Set([
-    ...(clientPartners?.map(cp => cp.name) || []),
-    'Burger King',
-    'Droga Raia',
-    'McDonalds',
-    'Pizzaria Bella',
-    'Supermercado Extra',
-    'Lojas Americanas',
-    'Zé Delivery'
-  ])).sort();
+  // Build a distinct list of partner entries from clientPartners, orders and mock data
+  const partnerOptions = useMemo(() => {
+    const list: { value: string; label: string; name: string; code?: string }[] = [];
+    const seenValues = new Set<string>();
+
+    const addOption = (val: string | undefined | null, name: string, code?: string, label?: string) => {
+      const cleanVal = (val || name || '').trim();
+      if (!cleanVal) return;
+      const normalizedKey = cleanVal.toLowerCase();
+      if (seenValues.has(normalizedKey)) return;
+      seenValues.add(normalizedKey);
+
+      const finalName = name?.trim() || cleanVal;
+      const finalLabel = label || `${finalName}${code ? ` (${code})` : ''}`;
+      list.push({
+        value: cleanVal,
+        name: finalName,
+        code,
+        label: finalLabel
+      });
+    };
+
+    // 1. Registered ClientPartners
+    if (clientPartners && clientPartners.length > 0) {
+      clientPartners.forEach(cp => {
+        const pName = cp.name?.trim() || cp.razaoSocial?.trim() || 'Parceiro';
+        addOption(cp.name || pName, pName, cp.codigoCliente);
+      });
+    }
+
+    // 2. Extra partners present in orders
+    if (orders && orders.length > 0) {
+      orders.forEach(o => {
+        const rawP = o.partnerName?.trim();
+        if (rawP) {
+          const displayName = getPartnerDisplayName(rawP, clientPartners);
+          addOption(displayName, displayName);
+        }
+      });
+    }
+
+    // 3. Fallback well-known mock partners if not seen
+    const defaultPartners = ['Burger King', 'Droga Raia', 'McDonalds', 'Pizzaria Bella', 'Supermercado Extra', 'Lojas Americanas', 'Zé Delivery'];
+    defaultPartners.forEach(dp => {
+      addOption(dp, dp);
+    });
+
+    return list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [clientPartners, orders]);
+
+  // Order counts in the active date range per partner
+  const countsByPartner = useMemo(() => {
+    if (!orders || orders.length === 0) return {};
+    const map: Record<string, number> = {};
+    orders.forEach(o => {
+      if (isOrderInDatePeriod(o, filterDateFrom, filterDateTo)) {
+        partnerOptions.forEach(po => {
+          if (isOrderMatchingPartner(o, po.value, clientPartners)) {
+            map[po.value] = (map[po.value] || 0) + 1;
+          }
+        });
+      }
+    });
+    return map;
+  }, [orders, filterDateFrom, filterDateTo, partnerOptions, clientPartners]);
+
+  // Order counts in the active date range per rider
+  const countsByRider = useMemo(() => {
+    if (!orders || orders.length === 0) return {};
+    const map: Record<string, number> = {};
+    orders.forEach(o => {
+      if (isOrderInDatePeriod(o, filterDateFrom, filterDateTo)) {
+        if (o.riderId) {
+          map[o.riderId] = (map[o.riderId] || 0) + 1;
+        }
+      }
+    });
+    return map;
+  }, [orders, filterDateFrom, filterDateTo]);
 
   // List of possible order statuses
   const statuses: { value: OrderStatus; label: string }[] = [
@@ -82,6 +163,38 @@ export default function GlobalFilters({
     { value: 'Cancelado', label: 'Cancelado' }
   ];
 
+  // Handlers for instant selection and status independence
+  const handlePartnerChange = (val: string) => {
+    if (onSelectPartner) {
+      onSelectPartner(val);
+    } else {
+      setFilterPartner(val);
+      if (val && filterStatus) {
+        setFilterStatus('');
+      }
+    }
+  };
+
+  const handleRiderChange = (val: string) => {
+    if (onSelectRider) {
+      onSelectRider(val);
+    } else {
+      setFilterRiderId(val);
+      if (val && filterStatus) {
+        setFilterStatus('');
+      }
+    }
+  };
+
+  // Selected names for pills display
+  const selectedPartnerObj = partnerOptions.find(p => p.value === filterPartner || p.name === filterPartner);
+  const selectedPartnerLabel = selectedPartnerObj ? selectedPartnerObj.label : filterPartner;
+  const selectedPartnerCount = filterPartner ? (countsByPartner[filterPartner] ?? 0) : 0;
+
+  const selectedRiderObj = riders.find(r => r.id === filterRiderId);
+  const selectedRiderLabel = selectedRiderObj ? `${selectedRiderObj.name} (${selectedRiderObj.vehicle})` : filterRiderId;
+  const selectedRiderCount = filterRiderId ? (countsByRider[filterRiderId] ?? 0) : 0;
+
   // Count active filters
   const activeCount = [
     searchQuery,
@@ -92,6 +205,9 @@ export default function GlobalFilters({
     filterStatus,
     filterCep
   ].filter(Boolean).length;
+
+  const todayIso = getSaoPauloISODate();
+  const isTodayOnly = filterDateFrom === todayIso && filterDateTo === todayIso;
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-xs transition-all overflow-hidden" id="global-filters-panel">
@@ -107,11 +223,20 @@ export default function GlobalFilters({
           </div>
           <div>
             <h3 className="font-black text-slate-900 text-xs">Filtros Operacionais & Busca Global</h3>
-            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">Filtrar por código, cliente, condutor, datas, CEP e status</p>
+            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">
+              {isTodayOnly ? 'Exibindo pedidos de Hoje (Padrão)' : `Período: ${formatToBrazilianDate(filterDateFrom)} até ${formatToBrazilianDate(filterDateTo)}`}
+              {filterPartner ? ` • Parceiro: ${selectedPartnerLabel}` : ''}
+              {filterRiderId ? ` • Condutor: ${selectedRiderObj?.name || filterRiderId}` : ''}
+            </p>
           </div>
           {activeCount > 0 && (
             <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-700 text-[10px] font-black text-white shadow-xs">
               {activeCount} {activeCount === 1 ? 'filtro ativo' : 'filtros ativos'}
+            </span>
+          )}
+          {typeof totalFilteredOrdersCount === 'number' && (
+            <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black border border-emerald-300">
+              {totalFilteredOrdersCount} {totalFilteredOrdersCount === 1 ? 'pedido listado' : 'pedidos listados'}
             </span>
           )}
         </div>
@@ -138,160 +263,319 @@ export default function GlobalFilters({
 
       {/* Inputs Form Section */}
       {isOpen && (
-        <div className="p-3 sm:p-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5" id="filters-form-grid">
+        <div className="p-3 sm:p-4 border-t border-slate-100 space-y-3" id="filters-form-container">
           
-          {/* 1. BUSCA GLOBAL (Nº Pedido, Cliente, Destinatário, CEP, DANFE) */}
-          <div className="space-y-1 sm:col-span-2 lg:col-span-2">
-            <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between select-none">
-              <span className="flex items-center gap-1 text-blue-700 font-extrabold">
-                <Search size={11} className="text-blue-600" />
-                Busca Global de Pedidos
-              </span>
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery && setSearchQuery('')}
-                  className="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
-                >
-                  limpar
-                </button>
-              )}
-            </label>
-            <div className="relative flex items-center">
-              <Search size={14} className="absolute left-2.5 text-slate-500 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Nº Pedido, Cliente, Destinatário, CEP, DANFE..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-7 py-1.5 bg-blue-50/40 border border-blue-200 rounded-xl text-xs font-bold text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery && setSearchQuery('')}
-                  className="absolute right-2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5 rounded-full hover:bg-slate-200/50"
-                >
-                  <X size={12} />
-                </button>
-              )}
+          {/* Main Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5" id="filters-form-grid">
+            
+            {/* 1. BUSCA GLOBAL (Nº Pedido, Cliente, Destinatário, CEP, DANFE) */}
+            <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between select-none">
+                <span className="flex items-center gap-1 text-blue-700 font-extrabold">
+                  <Search size={11} className="text-blue-600" />
+                  Busca Global de Pedidos
+                </span>
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery && setSearchQuery('')}
+                    className="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
+                  >
+                    limpar
+                  </button>
+                )}
+              </label>
+              <div className="relative flex items-center">
+                <Search size={14} className="absolute left-2.5 text-slate-500 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Nº Pedido, Cliente, Destinatário, CEP, DANFE..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-7 py-1.5 bg-blue-50/40 border border-blue-200 rounded-xl text-xs font-bold text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery && setSearchQuery('')}
+                    className="absolute right-2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5 rounded-full hover:bg-slate-200/50"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* 2. Data Inicial Filter */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between select-none">
-              <span className="flex items-center gap-1">
-                <Calendar size={11} className="text-slate-600" />
-                Data Inicial
-              </span>
-              {filterDateFrom && (
-                <span className="text-[10px] text-blue-700 font-black lowercase">
-                  ({formatToBrazilianDate(filterDateFrom)})
+            {/* 2. Data Inicial Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between select-none">
+                <span className="flex items-center gap-1">
+                  <Calendar size={11} className="text-slate-600" />
+                  Data Inicial
                 </span>
-              )}
-            </label>
-            <input
-              type="date"
-              value={filterDateFrom}
-              max={filterDateTo || undefined}
-              onChange={(e) => {
-                const val = e.target.value;
-                setFilterDateFrom(val);
-                if (val && filterDateTo && val > filterDateTo) {
-                  setFilterDateTo(val);
-                } else if (val && !filterDateTo) {
-                  setFilterDateTo(val);
-                }
-              }}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-            />
-          </div>
-
-          {/* 3. Data Final Filter */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between select-none">
-              <span className="flex items-center gap-1">
-                <Calendar size={11} className="text-slate-600" />
-                Data Final
-              </span>
-              {filterDateTo && (
-                <span className="text-[10px] text-blue-700 font-black lowercase">
-                  ({formatToBrazilianDate(filterDateTo)})
-                </span>
-              )}
-            </label>
-            <input
-              type="date"
-              value={filterDateTo}
-              min={filterDateFrom || undefined}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val && filterDateFrom && val < filterDateFrom) {
+                {filterDateFrom && (
+                  <span className="text-[10px] text-blue-700 font-black lowercase">
+                    ({formatToBrazilianDate(filterDateFrom)})
+                  </span>
+                )}
+              </label>
+              <input
+                type="date"
+                value={filterDateFrom}
+                max={filterDateTo || undefined}
+                onChange={(e) => {
+                  const val = e.target.value;
                   setFilterDateFrom(val);
-                }
-                setFilterDateTo(val);
-              }}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-            />
+                  if (val && filterDateTo && val > filterDateTo) {
+                    setFilterDateTo(val);
+                  } else if (val && !filterDateTo) {
+                    setFilterDateTo(val);
+                  }
+                }}
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+              />
+            </div>
+
+            {/* 3. Data Final Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between select-none">
+                <span className="flex items-center gap-1">
+                  <Calendar size={11} className="text-slate-600" />
+                  Data Final
+                </span>
+                {filterDateTo && (
+                  <span className="text-[10px] text-blue-700 font-black lowercase">
+                    ({formatToBrazilianDate(filterDateTo)})
+                  </span>
+                )}
+              </label>
+              <input
+                type="date"
+                value={filterDateTo}
+                min={filterDateFrom || undefined}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val && filterDateFrom && val < filterDateFrom) {
+                    setFilterDateFrom(val);
+                  }
+                  setFilterDateTo(val);
+                }}
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+              />
+            </div>
+
+            {/* 4. Partner Client Filter (Instant Selection & Switch) */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between">
+                <span className="flex items-center gap-1 text-purple-700 font-black">
+                  <Store size={11} className="text-purple-600" />
+                  Cliente Parceiro
+                </span>
+                {filterPartner && (
+                  <button
+                    type="button"
+                    onClick={() => handlePartnerChange('')}
+                    className="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
+                  >
+                    limpar
+                  </button>
+                )}
+              </label>
+              <div className="relative">
+                <select
+                  value={filterPartner}
+                  onChange={(e) => handlePartnerChange(e.target.value)}
+                  className={`w-full px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer appearance-none pr-7 ${
+                    filterPartner 
+                      ? 'bg-purple-50 border-2 border-purple-500 text-purple-950 font-black shadow-xs ring-2 ring-purple-100' 
+                      : 'bg-slate-50 border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white'
+                  }`}
+                  id="filter-partner-select"
+                >
+                  <option value="">Todos os Clientes</option>
+                  {partnerOptions.map((p, idx) => {
+                    const count = countsByPartner[p.value] ?? 0;
+                    return (
+                      <option key={`partner-opt-${p.value}-${idx}`} value={p.value}>
+                        {p.label} {count > 0 ? `(${count} no período)` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 5. Conductor/Rider Filter (Instant Selection & Switch) */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between">
+                <span className="flex items-center gap-1 text-emerald-700 font-black">
+                  <User size={11} className="text-emerald-600" />
+                  Condutor
+                </span>
+                {filterRiderId && (
+                  <button
+                    type="button"
+                    onClick={() => handleRiderChange('')}
+                    className="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
+                  >
+                    limpar
+                  </button>
+                )}
+              </label>
+              <div className="relative">
+                <select
+                  value={filterRiderId}
+                  onChange={(e) => handleRiderChange(e.target.value)}
+                  className={`w-full px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer appearance-none pr-7 ${
+                    filterRiderId 
+                      ? 'bg-emerald-50 border-2 border-emerald-500 text-emerald-950 font-black shadow-xs ring-2 ring-emerald-100' 
+                      : 'bg-slate-50 border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white'
+                  }`}
+                  id="filter-rider-select"
+                >
+                  <option value="">Todos os Condutores</option>
+                  {riders.map((r, idx) => {
+                    const count = countsByRider[r.id] ?? 0;
+                    return (
+                      <option key={`rider-opt-${r.id}-${idx}`} value={r.id}>
+                        {r.name} ({r.vehicle}) {count > 0 ? `(${count} no período)` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 6. Status Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center gap-1">
+                <Activity size={11} className="text-slate-600" />
+                Status
+              </label>
+              <div className="relative">
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className={`w-full px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer appearance-none pr-7 ${
+                    filterStatus 
+                      ? 'bg-blue-50 border-2 border-blue-500 text-blue-950 font-black shadow-xs' 
+                      : 'bg-slate-50 border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white'
+                  }`}
+                  id="filter-status-select"
+                >
+                  <option value="">Todos os Status</option>
+                  {statuses.map((s, idx) => (
+                    <option key={`status-opt-${s.value}-${idx}`} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
           </div>
 
-          {/* 4. Partner Client Filter */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center gap-1">
-              <Store size={11} className="text-slate-600" />
-              Cliente Parceiro
-            </label>
-            <select
-              value={filterPartner}
-              onChange={(e) => setFilterPartner(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-            >
-              <option value="">Todos os Clientes</option>
-              {partners.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
+          {/* Quick Active Filter Badges & Instant Feedback Strip */}
+          {(filterPartner || filterRiderId || filterStatus || !isTodayOnly) && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
+              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                <Sparkles size={12} className="text-blue-500" />
+                Filtro Rápido Ativo:
+              </span>
 
-          {/* 5. Conductor/Rider Filter */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center gap-1">
-              <User size={11} className="text-slate-600" />
-              Condutor
-            </label>
-            <select
-              value={filterRiderId}
-              onChange={(e) => setFilterRiderId(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-            >
-              <option value="">Todos os Condutores</option>
-              {riders.map((r) => (
-                <option key={r.id} value={r.id}>{r.name} ({r.vehicle})</option>
-              ))}
-            </select>
-          </div>
+              {/* Partner Active Pill */}
+              {filterPartner && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-100 border border-purple-300 text-purple-900 font-extrabold rounded-lg shadow-2xs animate-fadeIn">
+                  <Store size={12} className="text-purple-700" />
+                  <span>Parceiro: <strong>{selectedPartnerLabel}</strong></span>
+                  {selectedPartnerCount > 0 && (
+                    <span className="bg-purple-200 text-purple-900 px-1.5 py-0.2 rounded-md text-[10px]">
+                      {selectedPartnerCount} {selectedPartnerCount === 1 ? 'pedido' : 'pedidos'}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handlePartnerChange('')}
+                    className="ml-1 p-0.5 hover:bg-purple-200 rounded text-purple-700 hover:text-purple-950 cursor-pointer"
+                    title="Remover filtro de parceiro"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
 
-          {/* 6. Status Filter */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block flex items-center gap-1">
-              <Activity size={11} className="text-slate-600" />
-              Status
-            </label>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-            >
-              <option value="">Todos os Status</option>
-              {statuses.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </div>
+              {/* Rider Active Pill */}
+              {filterRiderId && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg shadow-2xs animate-fadeIn">
+                  <Bike size={12} className="text-emerald-700" />
+                  <span>Condutor: <strong>{selectedRiderLabel}</strong></span>
+                  {selectedRiderCount > 0 && (
+                    <span className="bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded-md text-[10px]">
+                      {selectedRiderCount} {selectedRiderCount === 1 ? 'pedido' : 'pedidos'}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleRiderChange('')}
+                    className="ml-1 p-0.5 hover:bg-emerald-200 rounded text-emerald-700 hover:text-emerald-950 cursor-pointer"
+                    title="Remover filtro de condutor"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              {/* Status Active Pill */}
+              {filterStatus && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 border border-blue-300 text-blue-900 font-bold rounded-lg shadow-2xs">
+                  <Activity size={12} className="text-blue-700" />
+                  <span>Status: <strong>{filterStatus}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => setFilterStatus('')}
+                    className="ml-1 p-0.5 hover:bg-blue-200 rounded text-blue-700 hover:text-blue-950 cursor-pointer"
+                    title="Mostrar todos os status"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              {/* Period Pill (if not today) */}
+              {!isTodayOnly && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 border border-slate-300 text-slate-800 font-bold rounded-lg shadow-2xs">
+                  <Calendar size={12} className="text-slate-600" />
+                  <span>Período: <strong>{formatToBrazilianDate(filterDateFrom)} até {formatToBrazilianDate(filterDateTo)}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = getSaoPauloISODate();
+                      setFilterDateFrom(today);
+                      setFilterDateTo(today);
+                    }}
+                    className="ml-1 text-[10px] text-blue-600 hover:underline cursor-pointer"
+                    title="Redefinir para hoje"
+                  >
+                    (Voltar p/ Hoje)
+                  </button>
+                </span>
+              )}
+
+              {/* Reset all button */}
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="text-[11px] font-bold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer ml-auto"
+              >
+                Limpar todos os filtros
+              </button>
+            </div>
+          )}
 
         </div>
       )}
     </div>
   );
 }
+

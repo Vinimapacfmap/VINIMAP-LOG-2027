@@ -8,6 +8,8 @@ import { Order, OrderPriority, ClientPartner } from '../types';
 import { getSaoPauloISODate, getSaoPauloTime } from '../utils/dateUtils';
 import { getCoordinatesFromCep, geocodeAddressBackend } from '../utils/locationUtils';
 import CepInput, { ViaCepData } from './CepInput';
+import AddressAutocompleteInput from './AddressAutocompleteInput';
+import { AddressLookupResult } from '../utils/addressLookupService';
 import { 
   X, 
   ShoppingBag, 
@@ -311,21 +313,27 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
                     </div>
                   </div>
 
-                  {/* Delivery Address */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Endereço / Logradouro *</label>
-                    <div className="relative group">
-                      <MapPin size={14} className="absolute left-3 top-2.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                      <textarea
-                        required
-                        rows={2}
-                        placeholder="Av. Paulista, Rua Augusta, Bairro..."
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all resize-none"
-                      />
-                    </div>
-                  </div>
+                  {/* Delivery Address with Automatic CEP Autocomplete */}
+                  <AddressAutocompleteInput
+                    label="Endereço / Logradouro"
+                    placeholder="Digite o endereço (ex: Av. Paulista, 1000 - Bela Vista ou Rua Cerro Corá)..."
+                    value={address}
+                    onChange={(val) => setAddress(val)}
+                    onCepFound={(lookup) => {
+                      if (lookup.cep) {
+                        setCep(lookup.cep);
+                      }
+                      if (lookup.region) {
+                        setRegion(lookup.region);
+                      }
+                    }}
+                    required
+                    isTextarea={true}
+                    rows={2}
+                    showCepBadge={true}
+                    showSuggestions={true}
+                    id="new-order-delivery-address"
+                  />
 
                   {/* Number & Complement Grid */}
                   <div className="grid grid-cols-2 gap-3">
@@ -422,8 +430,8 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
                         onChange={(e) => setPartnerName(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all cursor-pointer"
                       >
-                        {clientPartners && clientPartners.map((cp) => (
-                          <option key={cp.id} value={cp.id}>
+                        {clientPartners && clientPartners.map((cp, idx) => (
+                          <option key={`no-cp-${cp.id}-${idx}`} value={cp.id}>
                             [{cp.id}] {cp.name}
                           </option>
                         ))}

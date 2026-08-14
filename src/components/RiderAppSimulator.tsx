@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DeliveryRider, Order, OrderStatus, ActivityLog, ClientPartner, isMatchingClientCode, CompanyHub } from '../types';
-import { getSaoPauloISODate, getSaoPauloDate, getSaoPauloTime } from '../utils/dateUtils';
+import { getSaoPauloISODate, getSaoPauloDate, getSaoPauloTime, extractISODateFromTimestamp } from '../utils/dateUtils';
 import { compareOrdersByCep } from '../utils/addressUtils';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
@@ -1345,16 +1345,19 @@ export default function RiderAppSimulator({
       return true;
     }
 
-    // For completed / canceled orders, show if completed today or has today activity
-    if (order.date === todayIso || order.deliveryDate === todayIso || order.dataConclusao === todayIso || order.occurrenceDate === todayIso) {
-      return true;
+    // For completed orders, show ONLY if completed TODAY (Padrão: exibir apenas pedidos concluídos do dia)
+    if (order.status === 'Concluído') {
+      const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || order.date) || order.deliveryDate || order.dataConclusao || order.date;
+      return completionDate === todayIso;
     }
 
-    const hasTodayAllocation = order.history?.some(h => 
-      h.timestamp && h.timestamp.startsWith(todayFormatted)
-    );
-    
-    return !!hasTodayAllocation;
+    // For canceled orders, show if canceled today
+    if (order.status === 'Cancelado') {
+      const canceledDate = extractISODateFromTimestamp(order.date) || order.date;
+      return canceledDate === todayIso;
+    }
+
+    return false;
   };
 
   const driverActiveOrders = orders.filter(isOrderActiveForDriver).sort((a, b) => {
@@ -1433,18 +1436,20 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
   return raw.recipientDoc || raw.DocumentoRecebedor || raw.doc || undefined;
 };
 
-  // Sync / pre-populate protocols based on completed orders
+  // Sync / pre-populate protocols based on completed orders of today for the driver
   useEffect(() => {
     if (!orders || orders.length === 0) return;
     
-    // Find completed orders for this driver or all drivers if no specific rider selected
+    // Find completed orders for this driver or all drivers if no specific rider selected (default today)
     const completed = orders.filter(o => {
       const isConclued = o.status === 'Concluído' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o);
       if (!isConclued) return false;
       if (selectedRiderId) {
-        return o.riderId === selectedRiderId;
+        const matchesRider = o.riderId === selectedRiderId || (selectedRider && (o.riderId === selectedRider.id || o.riderId === selectedRider.name));
+        if (!matchesRider) return false;
       }
-      return true;
+      const orderDate = extractISODateFromTimestamp(o.deliveryDate || o.dataConclusao || o.date) || o.deliveryDate || o.dataConclusao || o.date;
+      return orderDate === todayIso;
     });
     
     setDeliveryProtocols(prevProtocols => {
@@ -4030,9 +4035,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                   <CheckCircle2 size={13} />
                                 </div>
                                 <div>
-                                  <span className="text-[8px] font-bold text-emerald-600 uppercase block">Concluído</span>
+                                  <span className="text-[8px] font-bold text-emerald-600 uppercase block">Concluído (Hoje)</span>
                                   <span className="text-[7.5px] font-semibold text-slate-400 leading-none block uppercase">
-                                    {focusedOrder ? 'Clique p/ Dar Baixa' : 'Total Concluído'}
+                                    {focusedOrder ? 'Clique p/ Dar Baixa' : 'Total do Dia'}
                                   </span>
                                 </div>
                               </div>
@@ -5706,9 +5711,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 
                 {/* Completed */}
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 space-y-1">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Total Concluído</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Total Concluído (Hoje)</span>
                   <span className="text-lg font-black text-slate-800 font-mono">
-                    {selectedRider ? selectedRider.completedDeliveries : 0} bipes
+                    {completedCount} bipes
                   </span>
                 </div>
 

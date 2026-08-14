@@ -305,7 +305,7 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
     }> = {};
 
     targetOrders.forEach(order => {
-      const partner = getPartnerDisplayName(order.partnerName, clientPartners);
+      const partner = (getPartnerDisplayName(order.partnerName, clientPartners) || 'Outros').trim();
       const mYear = getFormattedMonthYear(order.date);
 
       if (!partnerMap[partner]) {
@@ -809,8 +809,8 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
                     className="bg-transparent text-xs font-extrabold text-slate-700 outline-none cursor-pointer pr-1"
                   >
                     <option value="all">Todos os Parceiros (Consolidado)</option>
-                    {partnersData.map(p => (
-                      <option key={p.name} value={p.name}>{p.name}</option>
+                    {partnersData.map((p, idx) => (
+                      <option key={`adv-partner-${p.name}-${idx}`} value={p.name}>{p.name}</option>
                     ))}
                   </select>
                 </div>

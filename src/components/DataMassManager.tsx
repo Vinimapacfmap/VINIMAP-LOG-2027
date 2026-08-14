@@ -846,8 +846,8 @@ export default function DataMassManager({
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-100"
               >
                 <option value="all">🔀 Distribuir Aleatoriamente entre Clientes</option>
-                {clientPartners.map((c) => (
-                  <option key={c.id} value={c.id}>
+                {clientPartners.map((c, idx) => (
+                  <option key={`dm-cp-${c.id}-${idx}`} value={c.id}>
                     {c.name} ({c.type})
                   </option>
                 ))}
@@ -864,8 +864,8 @@ export default function DataMassManager({
               >
                 <option value="auto">🤖 Atribuir Automático (Sorteio entre Entregadores)</option>
                 <option value="none">🚫 Não Atribuir (Manter Sem Condutor)</option>
-                {deliveryRiders.map((r) => (
-                  <option key={r.id} value={r.id}>
+                {deliveryRiders.map((r, idx) => (
+                  <option key={`dm-rider-${r.id}-${idx}`} value={r.id}>
                     {r.name} ({r.vehicle})
                   </option>
                 ))}
@@ -1043,8 +1043,8 @@ export default function DataMassManager({
                   className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
                 >
                   <option value="all">Todos os Clientes</option>
-                  {clientPartners.map((c) => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
+                  {clientPartners.map((c, idx) => (
+                    <option key={`dm-purge-cp-${c.id}-${idx}`} value={c.name}>{c.name}</option>
                   ))}
                 </select>
               </div>

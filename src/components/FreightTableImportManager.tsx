@@ -938,8 +938,8 @@ export default function FreightTableImportManager({
               onChange={(e) => setSelectedClientId(e.target.value)}
               className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              {clientPartners.map(c => (
-                <option key={c.id} value={c.id}>
+              {clientPartners.map((c, idx) => (
+                <option key={`ft-cp-${c.id}-${idx}`} value={c.id}>
                   {c.codigoCliente ? `[${c.codigoCliente}] ` : ''}{c.name} ({c.region})
                 </option>
               ))}

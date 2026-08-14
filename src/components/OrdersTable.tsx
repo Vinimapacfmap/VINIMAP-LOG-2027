@@ -8,7 +8,7 @@ import { compressImage } from '../utils/imageCompressor';
 import { Order, OrderStatus, DeliveryRider, OrderHistoryEntry, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, formatOrderTime, extractISODateFromTimestamp } from '../utils/dateUtils';
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
-import { getPartnerDisplayName as getPartnerDisplayNameUtil } from '../utils/partnerUtils';
+import { getPartnerDisplayName as getPartnerDisplayNameUtil, isOrderMatchingPartner, isOrderMatchingRider } from '../utils/partnerUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
 import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult } from '../utils/locationUtils';
 import CepInput, { ViaCepData } from './CepInput';
@@ -923,13 +923,13 @@ function OrdersTable({
 
       // Default filters when not searching
       const matchesTab = activeTab === 'Todos' || order.status === activeTab;
-      const matchesPartner = localPartner === 'Todos' || order.partnerName === localPartner;
-      const matchesRider = localRider === 'Todos' || order.riderId === localRider;
+      const matchesPartner = localPartner === 'Todos' || isOrderMatchingPartner(order, localPartner, clientPartners);
+      const matchesRider = localRider === 'Todos' || isOrderMatchingRider(order, localRider, riders);
       const matchesRegion = localRegion === 'Todos' || order.region === localRegion;
 
       return matchesTab && matchesPartner && matchesRider && matchesRegion;
     });
-  }, [orders, activeTab, searchQuery, localPartner, localRider, localRegion, riders]);
+  }, [orders, activeTab, searchQuery, localPartner, localRider, localRegion, riders, clientPartners]);
 
   // Sort orders based on sortConfig
   const sortedOrders = useMemo(() => {
@@ -1073,14 +1073,14 @@ function OrdersTable({
   }, [sortedOrders, currentPage, itemsPerPage]);
 
   const memoizedClientPartnerOptions = useMemo(() => {
-    return clientPartners.map(cp => (
-      <option key={cp.id} value={cp.id}>{cp.name}</option>
+    return clientPartners.map((cp, idx) => (
+      <option key={`table-cp-${cp.id}-${idx}`} value={cp.id}>{cp.name}</option>
     ));
   }, [clientPartners]);
 
   const memoizedRiderOptions = useMemo(() => {
-    return riders.map(r => (
-      <option key={r.id} value={r.id}>{r.name} ({r.vehicle})</option>
+    return riders.map((r, idx) => (
+      <option key={`table-rider-${r.id}-${idx}`} value={r.id}>{r.name} ({r.vehicle})</option>
     ));
   }, [riders]);
 
