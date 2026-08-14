@@ -460,11 +460,12 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [orders, clientPartners, riders, financialTransactions, companyHubs]);
 
+  const exportDatabaseContingencyRef = useRef(exportDatabaseContingency);
+  exportDatabaseContingencyRef.current = exportDatabaseContingency;
+
   // Effect B: End-of-Day Automatic Contingency Check (>= 18h or when date changes)
   useEffect(() => {
     const checkEndOfDayContingency = () => {
-      if (orders.length === 0 && clientPartners.length === 0) return;
-
       const dateToday = getSaoPauloISODate();
       const lastDownloadDate = localStorage.getItem('vinimap_last_contingency_download_date');
 
@@ -475,7 +476,7 @@ export default function App() {
       // If hour is 18 (6 PM) or later and today's auto-download hasn't run yet
       if (currentHour >= 18 && lastDownloadDate !== dateToday) {
         console.log('[Contingency] Fim de dia operacional detectado. Executando download automático de contingência...');
-        exportDatabaseContingency(true);
+        exportDatabaseContingencyRef.current(true);
       }
     };
 
@@ -486,7 +487,7 @@ export default function App() {
       clearTimeout(timeout);
       clearInterval(interval);
     };
-  }, [orders, clientPartners, exportDatabaseContingency]);
+  }, []);
 
   // Effect C: Window unload safeguard
   useEffect(() => {
@@ -519,6 +520,74 @@ export default function App() {
 
   // Global listener registry for aggressive Firestore snapshot cleanup
   const listenerCleanupRegistry = useRef<Set<() => void>>(new Set());
+
+  // Real-time instant GPS broadcast synchronization across browser tabs and mobile devices
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel('vinimap_realtime_channel');
+        channel.onmessage = (event) => {
+          const data = event.data;
+          if (data && data.riderId && data.realGeoLat !== undefined && data.realGeoLng !== undefined) {
+            setRiders(prev => prev.map(r => {
+              if (r.id === data.riderId) {
+                return {
+                  ...r,
+                  lat: data.lat ?? r.lat,
+                  lng: data.lng ?? r.lng,
+                  realGeoLat: data.realGeoLat,
+                  realGeoLng: data.realGeoLng,
+                  gpsAccuracy: data.gpsAccuracy ?? r.gpsAccuracy,
+                  lastGpsUpdate: data.lastGpsUpdate ?? r.lastGpsUpdate,
+                  isGpsRealActive: data.isGpsRealActive !== undefined ? data.isGpsRealActive : true
+                };
+              }
+              return r;
+            }));
+          }
+        };
+      }
+    } catch (e) {
+      console.warn('BroadcastChannel initialization warning:', e);
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'vinimap_last_rider_coords' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          if (data && data.riderId && data.realGeoLat !== undefined && data.realGeoLng !== undefined) {
+            setRiders(prev => prev.map(r => {
+              if (r.id === data.riderId) {
+                return {
+                  ...r,
+                  lat: data.lat ?? r.lat,
+                  lng: data.lng ?? r.lng,
+                  realGeoLat: data.realGeoLat,
+                  realGeoLng: data.realGeoLng,
+                  gpsAccuracy: data.gpsAccuracy ?? r.gpsAccuracy,
+                  lastGpsUpdate: data.lastGpsUpdate ?? r.lastGpsUpdate,
+                  isGpsRealActive: data.isGpsRealActive !== undefined ? data.isGpsRealActive : true
+                };
+              }
+              return r;
+            }));
+          }
+        } catch (err) {
+          // ignore parsing error
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      if (channel) {
+        try { channel.close(); } catch (e) {}
+      }
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
 
   const registerSnapshotListener = useCallback((unsub: () => void): (() => void) => {
     listenerCleanupRegistry.current.add(unsub);
@@ -765,6 +834,73 @@ export default function App() {
       cleanupAllFirestoreListeners();
     };
   }, [registerSnapshotListener, cleanupAllFirestoreListeners]);
+
+  // Cross-tab real-time listener for instant driver GPS updates
+  useEffect(() => {
+    const handleBroadcastMsg = (event: MessageEvent) => {
+      const data = event.data;
+      if (data && data.type === 'RIDER_COORDS_UPDATE' && data.riderId) {
+        setRiders(prev => prev.map(r => {
+          if (r.id === data.riderId) {
+            return {
+              ...r,
+              lat: data.lat,
+              lng: data.lng,
+              realGeoLat: data.realGeoLat,
+              realGeoLng: data.realGeoLng,
+              gpsAccuracy: data.gpsAccuracy,
+              lastGpsUpdate: data.lastGpsUpdate,
+              isGpsRealActive: data.isGpsRealActive
+            };
+          }
+          return r;
+        }));
+      }
+    };
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        channel = new BroadcastChannel('vinimap_realtime_channel');
+        channel.addEventListener('message', handleBroadcastMsg);
+      } catch (e) {}
+    }
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'vinimap_last_rider_coords' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          if (data && data.riderId) {
+            setRiders(prev => prev.map(r => {
+              if (r.id === data.riderId) {
+                return {
+                  ...r,
+                  lat: data.lat,
+                  lng: data.lng,
+                  realGeoLat: data.realGeoLat,
+                  realGeoLng: data.realGeoLng,
+                  gpsAccuracy: data.gpsAccuracy,
+                  lastGpsUpdate: data.lastGpsUpdate,
+                  isGpsRealActive: data.isGpsRealActive
+                };
+              }
+              return r;
+            }));
+          }
+        } catch (err) {}
+      }
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+
+    return () => {
+      if (channel) {
+        channel.removeEventListener('message', handleBroadcastMsg);
+        channel.close();
+      }
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, []);
 
   const handleSaveCepRanges = async (clientId: string, ranges: CepRange[], history?: CepTableHistoryItem[]) => {
     try {
@@ -1058,40 +1194,51 @@ export default function App() {
     lastGpsUpdate?: string, 
     isGpsRealActive?: boolean
   ) => {
+    let finalSyncRealLat = realGeoLat;
+    let finalSyncRealLng = realGeoLng;
+
+    if (finalSyncRealLat === undefined || finalSyncRealLng === undefined) {
+      if (lat < -10) {
+        finalSyncRealLat = lat;
+        finalSyncRealLng = lng;
+      } else {
+        finalSyncRealLat = convertToGeoLat(lat);
+        finalSyncRealLng = convertToGeoLng(lng);
+      }
+    }
+
+    // Instant local broadcast to all browser tabs and components
+    try {
+      const payload = {
+        type: 'RIDER_COORDS_UPDATE',
+        riderId,
+        lat,
+        lng,
+        realGeoLat: finalSyncRealLat,
+        realGeoLng: finalSyncRealLng,
+        gpsAccuracy: gpsAccuracy || 5,
+        lastGpsUpdate: lastGpsUpdate || 'Agora mesmo',
+        isGpsRealActive: isGpsRealActive !== undefined ? isGpsRealActive : true,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('vinimap_last_rider_coords', JSON.stringify(payload));
+      if (typeof BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('vinimap_realtime_channel');
+        channel.postMessage(payload);
+        channel.close();
+      }
+    } catch (e) {
+      // Ignore broadcast errors
+    }
+
     setRiders(prev => prev.map(r => {
       if (r.id === riderId) {
-        let syncRealLat = realGeoLat;
-        let syncRealLng = realGeoLng;
-
-        // Auto-synchronize realGeoLat and realGeoLng if not provided or if lat/lng were updated
-        if (syncRealLat === undefined || syncRealLng === undefined) {
-          if (lat < -10) {
-            syncRealLat = lat;
-            syncRealLng = lng;
-          } else {
-            syncRealLat = convertToGeoLat(lat);
-            syncRealLng = convertToGeoLng(lng);
-          }
-        }
-
-        console.log(`[GPS Telemetry Log - ${r.name || riderId}]`, {
-          riderId,
-          riderName: r.name,
-          rawInput: { lat, lng, realGeoLat, realGeoLng },
-          isNativeGeo: lat < -10,
-          convertedGeo: { lat: syncRealLat, lng: syncRealLng },
-          calculatedFrom: (lat < -10) ? 'Direct GPS Coordinates' : `SVG Percent Matrix -> (${convertToGeoLat(lat).toFixed(6)}, ${convertToGeoLng(lng).toFixed(6)})`,
-          gpsAccuracy,
-          lastGpsUpdate,
-          isGpsRealActive
-        });
-
         const updated = {
           ...r,
           lat,
           lng,
-          realGeoLat: syncRealLat,
-          realGeoLng: syncRealLng,
+          realGeoLat: finalSyncRealLat,
+          realGeoLng: finalSyncRealLng,
           ...(gpsAccuracy !== undefined ? { gpsAccuracy } : {}),
           ...(lastGpsUpdate !== undefined ? { lastGpsUpdate } : {}),
           ...(isGpsRealActive !== undefined ? { isGpsRealActive } : {})
@@ -6187,14 +6334,14 @@ export default function App() {
               <DailyNotebook />
             )}
 
-            {/* VIEW 12: RIDER LOCATION TRACKING SCREEN */}
-            {activeSection === 'localizacao' && (
+            {/* VIEW 12: UNIFIED RIDER TRACKING AND MAP SCREEN */}
+            {(activeSection === 'localizacao' || activeSection === 'mapa') && (
               <motion.div
                 key="localizacao-view"
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
-                className="space-y-6"
+                className="w-full"
                 id="view-localizacao"
               >
                 <RiderTrackingView 
@@ -6204,43 +6351,6 @@ export default function App() {
                   onUpdateOrderStatus={handleUpdateStatus}
                   activeHub={companyHubs.find(h => h.active)}
                 />
-              </motion.div>
-            )}
-
-            {/* VIEW 14: LIVE MAP SCREEN */}
-            {activeSection === 'mapa' && (
-              <motion.div
-                key="mapa-ao-vivo-view"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                className="space-y-6"
-                id="view-mapa-ao-vivo"
-              >
-                <div>
-                  <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Mapa ao Vivo</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">Acompanhamento e rastreamento em tempo real de condutores e faturamento.</p>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                  <div className="xl:col-span-2">
-                    <MapContainer 
-                      riders={riders} 
-                      orders={filteredOrders} 
-                      selectedRiderId={selectedRiderId} 
-                      setSelectedRiderId={setSelectedRiderId} 
-                      activeHub={companyHubs.find(h => h.active)}
-                    />
-                  </div>
-                  <div>
-                    <RidersList 
-                      riders={riders} 
-                      orders={kpiOrders}
-                      selectedRiderId={selectedRiderId} 
-                      setSelectedRiderId={setSelectedRiderId} 
-                    />
-                  </div>
-                </div>
               </motion.div>
             )}
 

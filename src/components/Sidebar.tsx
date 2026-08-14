@@ -79,8 +79,7 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
     { id: 'importar', label: 'Importar Pedidos', icon: FileSpreadsheet },
     { id: 'restaurar_backup', label: 'Restaurar Backup por Período', icon: RotateCcw, badge: 'BACKUP' },
     { id: 'caderno', label: 'Caderno Diário', icon: Notebook },
-    { id: 'mapa', label: 'Mapa ao Vivo', icon: Map, pulse: true },
-    { id: 'localizacao', label: 'Localizar Condutor', icon: MapPin, pulse: true },
+    { id: 'localizacao', label: 'Rastrear Condutor & Mapa', icon: MapPin, pulse: true },
     { id: 'rotas', label: 'Otimizar Rota', icon: TrendingUp },
     { id: 'logo_sede', label: 'Logo da Sede', icon: ImageIcon, badge: 'NOVO' },
     { 

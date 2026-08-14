@@ -99,7 +99,7 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
     return () => {
       isMounted = false;
     };
-  }, [riders, orders, activeHub]);
+  }, [riders, orders, activeHub?.id, activeHub?.lat, activeHub?.lng]);
 
   // Offline Map Cache State
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -328,21 +328,18 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
     iconAnchor: [8, 8]
   });
 
-  // Custom Sequenced Order Leaflet Icon Creator
+  // Custom Sequenced Order Leaflet Icon Creator - clean uncluttered map view
   const createSequencedOrderIcon = (id: string, sequenceNum: number, isHigh: boolean) => L.divIcon({
     className: 'custom-sequenced-order-icon',
     html: `
-      <div class="relative flex flex-col items-center cursor-pointer">
-        <div class="bg-slate-900/90 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-md mb-0.5 whitespace-nowrap border ${isHigh ? 'border-rose-500' : 'border-orange-500'}">
-          Parada #${sequenceNum}
-        </div>
+      <div class="relative flex items-center justify-center cursor-pointer transition-transform hover:scale-115">
         <div class="relative w-6 h-6 rounded-full border-2 border-white flex items-center justify-center shadow-lg ${isHigh ? 'bg-rose-600' : 'bg-orange-600'} text-white text-[10px] font-black">
           ${sequenceNum}
         </div>
       </div>
     `,
-    iconSize: [50, 45],
-    iconAnchor: [25, 38]
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
   });
 
   // Custom Rider Leaflet Icon Creator

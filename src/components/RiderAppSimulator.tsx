@@ -439,6 +439,13 @@ export default function RiderAppSimulator({
             // Fallback for active driver session: restore details if order exists, otherwise dashboard
             setCurrentScreen(savedOrderId ? 'details' : 'dashboard');
           }
+
+          // Auto-start GPS by default upon active session restore
+          setTimeout(() => {
+            if (typeof navigator !== 'undefined' && navigator.geolocation) {
+              startRealGpsTracking();
+            }
+          }, 300);
         }
       }
     }
@@ -1249,6 +1256,14 @@ export default function RiderAppSimulator({
       changeSelectedRiderId(riders[0].id);
     }
   }, [riders, selectedRiderId, isStandalone, isEffectiveRealDevice]);
+
+  // Auto-activate real GPS tracking when driver is active on a real device or when tracking starts
+  useEffect(() => {
+    if (selectedRider && currentScreen !== 'login' && !isRealGpsActive && (realGpsStatus === 'off' || realGpsStatus === 'connecting') && typeof navigator !== 'undefined' && navigator.geolocation) {
+      // Auto-start GPS tracking
+      startRealGpsTracking();
+    }
+  }, [selectedRider?.id, currentScreen, isEffectiveRealDevice, isStandalone]);
 
   // Active highlighted/selected order in focus
   const focusedOrder = (currentScreen === 'details' && selectedOrder)
@@ -2915,6 +2930,12 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       setPhoneInput('');
                       setPasswordInput('');
                       setLoginError(null);
+
+                      // Enable GPS by default on connect
+                      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                        startRealGpsTracking();
+                        captureInstantLocation();
+                      }
                     }}
                     className="px-3.5 py-2 bg-sky-500 hover:bg-sky-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
                   >
@@ -3248,11 +3269,17 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       setPasswordInput('');
                       setLoginError(null);
 
+                      // Automatically activate device GPS tracking by default upon login
+                      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                        startRealGpsTracking();
+                        captureInstantLocation();
+                      }
+
                       // Welcome alert notification
                       setTimeout(() => {
                         triggerPhoneNotification(
                           `Olá, ${matched.name}! 👋`,
-                          `Seu plantão operacional foi iniciado no veículo ${matched.vehicle}.`,
+                          `GPS do dispositivo ativado por padrão. Plantão iniciado no veículo ${matched.vehicle}.`,
                           'success'
                         );
                       }, 500);
