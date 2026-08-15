@@ -10,7 +10,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Order, DeliveryRider, OrderStatus, ClientPartner, BillingModelType } from '../types';
 import { formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
-import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
+import { calculateRiderCommissionForOrder, extractOrderCep, formatCepDisplay } from '../utils/billingUtils';
 import { getPartnerDisplayName } from '../utils/partnerUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
 import { 
@@ -1000,7 +1000,8 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                         const isConcluded = order.status === 'Concluído';
                         const commResult = calculateRiderCommissionForOrder(simulatedRider || undefined, order, clientPartners);
                         const orderCommission = commResult.total;
-                        const orderCep = order.cep || (order.rawData && (order.rawData.CEP || order.rawData.cep)) || '-';
+                        const cleanCep = extractOrderCep(order);
+                        const orderCep = cleanCep ? formatCepDisplay(cleanCep) : (order.cep || '-');
                         
                         return (
                            <tr key={order.id} className="hover:bg-slate-50/40 print:hover:bg-transparent">
@@ -1016,10 +1017,10 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                             <td className="px-4 py-3 text-slate-600 font-semibold truncate max-w-[120px]">
                               {order.clientName}
                             </td>
-                            <td className="px-4 py-3 text-slate-500 font-medium truncate max-w-[150px]" title={order.address}>
+                            <td className="px-4 py-3 text-slate-600 font-medium truncate max-w-[170px]" title={order.address}>
                               {order.address}
                             </td>
-                            <td className="px-4 py-3 text-slate-500 font-mono text-[11px] font-semibold whitespace-nowrap">
+                            <td className="px-4 py-3 text-slate-700 font-mono text-[11px] font-bold whitespace-nowrap">
                               {orderCep}
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-slate-700 print:hidden">

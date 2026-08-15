@@ -55,6 +55,7 @@ import GithubPanel from './components/GithubPanel';
 import DataMassManager from './components/DataMassManager';
 import BackupRestoreByPeriod from './components/BackupRestoreByPeriod';
 import { RevenueByPartnerChart } from './components/RevenueByPartnerChart';
+import { FinancialRepassesSummaryPanel } from './components/FinancialRepassesSummaryPanel';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from './data/financialMock';
 import { AdminLogin } from './components/AdminLogin';
 import { supabase, isSupabaseConfigured } from './supabase';
@@ -303,7 +304,7 @@ export default function App() {
   } | null>(null);
   const [financialTransactions, setFinancialTransactions] = useState<FinancialTransaction[]>([]);
 
-  const [financeSubTab, setFinanceSubTab] = useState<'repasses' | 'contas'>('contas');
+  const [financeSubTab, setFinanceSubTab] = useState<'resumo' | 'repasses' | 'contas'>('resumo');
   const [searchClientQuery, setSearchClientQuery] = useState('');
   const [searchRiderQuery, setSearchRiderQuery] = useState('');
   const [unifiedQueryCep, setUnifiedQueryCep] = useState('');
@@ -4261,8 +4262,21 @@ export default function App() {
                   {adminTab === 'financeiro' && (
                     <div className="space-y-6">
                       {/* Sub-tab Navigation */}
-                      <div className="flex bg-slate-100 p-1 rounded-xl self-start gap-1 max-w-md">
+                      <div className="flex bg-slate-100 p-1 rounded-xl self-start gap-1 max-w-xl overflow-x-auto">
                         <button
+                          type="button"
+                          onClick={() => setFinanceSubTab('resumo')}
+                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                            financeSubTab === 'resumo'
+                              ? 'bg-white text-blue-700 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          <Coins size={13} />
+                          <span>Resumo de Repasses & Planilha</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setFinanceSubTab('repasses')}
                           className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                             financeSubTab === 'repasses'
@@ -4270,10 +4284,11 @@ export default function App() {
                               : 'text-slate-500 hover:text-slate-800'
                           }`}
                         >
-                          <Coins size={13} />
-                          <span>Faturamento & Repasses</span>
+                          <FileSpreadsheet size={13} />
+                          <span>Extrato de Pedidos</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => setFinanceSubTab('contas')}
                           className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                             financeSubTab === 'contas'
@@ -4286,7 +4301,14 @@ export default function App() {
                         </button>
                       </div>
 
-                      {financeSubTab === 'repasses' ? (
+                      {financeSubTab === 'resumo' ? (
+                        <FinancialRepassesSummaryPanel
+                          orders={orders}
+                          riders={riders}
+                          clientPartners={clientPartners}
+                          onOpenRiderBilling={(rId) => setBillingModalRiderId(rId)}
+                        />
+                      ) : financeSubTab === 'repasses' ? (
                         <div className="space-y-6">
                           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div>
@@ -4598,8 +4620,10 @@ export default function App() {
                       transactions={financialTransactions}
                       onUpdateTransactions={handleUpdateFinancialTransactions}
                       orders={orders}
+                      riders={riders}
                       clientPartners={clientPartners}
                       onDeleteOrder={handleDeleteOrder}
+                      onOpenRiderBilling={(rId) => setBillingModalRiderId(rId)}
                     />
                   )}
                 </div>

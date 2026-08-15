@@ -587,6 +587,44 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<Re
   return null;
 }
 
+/**
+ * Calculates straight-line distance in kilometers between two GPS coordinates using the Haversine formula.
+ */
+export function getHaversineDistance(
+  lat1OrCoords1: number | [number, number],
+  lon1OrCoords2: number | [number, number],
+  lat2?: number,
+  lon2?: number
+): number {
+  let lat1: number, lon1: number, p2Lat: number, p2Lon: number;
+
+  if (Array.isArray(lat1OrCoords1) && Array.isArray(lon1OrCoords2)) {
+    lat1 = lat1OrCoords1[0];
+    lon1 = lat1OrCoords1[1];
+    p2Lat = lon1OrCoords2[0];
+    p2Lon = lon1OrCoords2[1];
+  } else {
+    lat1 = Number(lat1OrCoords1);
+    lon1 = Number(lon1OrCoords2);
+    p2Lat = Number(lat2);
+    p2Lon = Number(lon2);
+  }
+
+  if (isNaN(lat1) || isNaN(lon1) || isNaN(p2Lat) || isNaN(p2Lon)) return 0;
+
+  const R = 6371; // Earth's radius in km
+  const dLat = ((p2Lat - lat1) * Math.PI) / 180;
+  const dLon = ((p2Lon - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((p2Lat * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
+
 export { searchCepByAddress, fetchAddressSuggestions, formatCepString, getRegionFromCepOrBairro } from './addressLookupService';
 export type { AddressLookupResult, AddressSuggestionItem } from './addressLookupService';
 

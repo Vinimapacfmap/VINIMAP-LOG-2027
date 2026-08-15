@@ -37,6 +37,7 @@ import {
   FinancialTransaction,
   CompanyHub 
 } from '../types';
+import { syncRetryQueue, QueuePriority } from '../utils/syncRetryQueue';
 import { INITIAL_RIDERS, INITIAL_ORDERS, INITIAL_LOGS } from '../data/mock';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from '../data/financialMock';
 
@@ -504,8 +505,8 @@ export async function recordRiderAllocationAuditLog(
   }
 }
 
-// Order CRUD operations
-export async function dbSaveOrder(order: Order) {
+// Order CRUD operations with Priority Retry Queue
+export async function dbSaveOrder(order: Order, explicitPriority?: QueuePriority) {
   // Check previous riderId before saving
   let prevRiderId: string | undefined = undefined;
   if (!getIsFirestoreQuotaExceeded()) {
@@ -523,42 +524,32 @@ export async function dbSaveOrder(order: Order) {
   // Record audit log if rider allocation changed
   await recordRiderAllocationAuditLog(order.id, prevRiderId, order.riderId);
 
-  // 1. Always save to Supabase independently
+  // 1. Update local contingency storage immediately
   try {
-    await sbSaveOrder(order);
-  } catch (err) {
-    console.warn('Supabase save order warning:', err);
-  }
-
-  // 2. Save to Firestore if quota is not exceeded
-  if (!getIsFirestoreQuotaExceeded()) {
-    try {
-      const cleanedPayload = removeUndefinedFields(order);
-      await setDoc(doc(db, 'orders', order.id), cleanedPayload);
-      console.log(`[dbSaveOrder SUCCESS] Order #${order.id} written to Firestore.`);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `orders/${order.id}`);
+    const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+    if (rawBackup) {
+      const parsed = JSON.parse(rawBackup);
+      if (parsed.orders && Array.isArray(parsed.orders)) {
+        const index = parsed.orders.findIndex((o: Order) => o.id === order.id);
+        if (index >= 0) {
+          parsed.orders[index] = order;
+        } else {
+          parsed.orders.unshift(order);
+        }
+        localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
+      }
     }
-  }
+  } catch (_) {}
+
+  // 2. Delegate persistence to Priority Retry Queue (Handles Supabase & Firestore with auto-retry and backoff)
+  return await syncRetryQueue.enqueueSave(order, explicitPriority);
 }
 
-export async function dbDeleteOrder(orderId: string) {
-  try {
-    await sbDeleteOrder(orderId);
-  } catch (err) {
-    console.warn('Supabase delete order warning:', err);
-  }
-
-  if (!getIsFirestoreQuotaExceeded()) {
-    try {
-      await deleteDoc(doc(db, 'orders', orderId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `orders/${orderId}`);
-    }
-  }
+export async function dbDeleteOrder(orderId: string, explicitPriority: QueuePriority = 'NORMAL') {
+  return await syncRetryQueue.enqueueDelete(orderId, explicitPriority);
 }
 
-export async function dbBulkSaveOrders(orders: Order[]) {
+export async function dbBulkSaveOrders(orders: Order[], explicitPriority?: QueuePriority) {
   // Audit rider allocation changes in bulk save
   if (!getIsFirestoreQuotaExceeded()) {
     for (const order of orders) {
@@ -576,39 +567,19 @@ export async function dbBulkSaveOrders(orders: Order[]) {
     }
   }
 
+  const results = [];
   for (const order of orders) {
-    await sbSaveOrder(order).catch(err => console.warn('Supabase bulk save order error:', err));
+    results.push(await syncRetryQueue.enqueueSave(order, explicitPriority));
   }
-
-  if (!getIsFirestoreQuotaExceeded()) {
-    try {
-      const batch = writeBatch(db);
-      orders.forEach(order => {
-        batch.set(doc(db, 'orders', order.id), removeUndefinedFields(order));
-      });
-      await batch.commit();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'orders');
-    }
-  }
+  return results;
 }
 
 export async function dbBulkDeleteOrders(orderIds: string[]) {
+  const results = [];
   for (const id of orderIds) {
-    await sbDeleteOrder(id).catch(err => console.warn('Supabase bulk delete order error:', err));
+    results.push(await syncRetryQueue.enqueueDelete(id));
   }
-
-  if (!getIsFirestoreQuotaExceeded()) {
-    try {
-      const batch = writeBatch(db);
-      orderIds.forEach(id => {
-        batch.delete(doc(db, 'orders', id));
-      });
-      await batch.commit();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, 'orders');
-    }
-  }
+  return results;
 }
 
 // Indexed query helpers for large datasets using Firestore composite indexes

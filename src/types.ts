@@ -52,6 +52,8 @@ export interface Order {
   email?: string;      // E-mail do cliente
   number?: string;     // Número do endereço
   complement?: string; // Complemento do endereço
+  city?: string;       // Cidade
+  state?: string;      // UF / Estado
 }
 
 export interface CepRange {

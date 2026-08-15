@@ -14,6 +14,7 @@ import { getSaoPauloDateTimeShort, getSaoPauloISODate, isOrderInDatePeriod } fro
 import { getCoordinatesFromCep } from '../utils/locationUtils';
 import SafeMapWrapper from './SafeMapWrapper';
 import { fetchOsrmMultiStopRoute, getCachedOsrmRoute } from '../utils/osrmService';
+import { RiderSelectDropdown } from './RiderSelectDropdown';
 import { 
   MapPin, 
   Phone, 
@@ -840,33 +841,26 @@ export default function RiderTrackingView({
       {/* TOP COMPACT TOOLBAR - DIRECTLY ATTACHED TO MAP */}
       <div className="bg-slate-950/95 border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 z-20">
         
-        {/* Left: Driver Selector (Dropdown + Quick Avatar Pills) */}
+        {/* Left: Driver Selector (Quick Search Dropdown with Avatar/Status/Distance + Quick Avatar Pills) */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Main Dropdown */}
-          <div className="relative min-w-[210px]">
-            <select
+          {/* Main Searchable Dropdown with Avatar & Distance */}
+          <div className="w-[260px] sm:w-[290px]">
+            <RiderSelectDropdown
               id="vinimap-quick-rider-select"
-              value={selectedRiderId || 'todos'}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedRiderId(val === 'todos' ? null : val);
-              }}
-              className="w-full pl-3 pr-8 py-1.5 bg-slate-900 border border-slate-700 hover:border-sky-500 rounded-xl text-xs font-black text-white focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all cursor-pointer appearance-none shadow-inner"
-            >
-              <option value="todos">🌍 Todos os Condutores ({riders.length})</option>
-              {riders.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.vehicle === 'Moto' ? '🏍️' : '🚲'} {r.name} • {r.status}
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-              <ChevronDown size={14} />
-            </div>
+              riders={riders}
+              selectedRiderId={selectedRiderId}
+              onSelectRider={(riderId) => setSelectedRiderId(riderId)}
+              referenceCoords={hubLatLng}
+              referenceLabel={activeHub?.name || 'HUB Central'}
+              orders={orders}
+              variant="dark"
+              placeholder="Pesquisar entregador..."
+              showDistance={true}
+            />
           </div>
 
           {/* Quick One-Click Driver Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-[420px] py-0.5 custom-scrollbar">
+          <div className="hidden lg:flex items-center gap-1.5 overflow-x-auto max-w-[340px] py-0.5 custom-scrollbar">
             <button
               onClick={() => setSelectedRiderId(null)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
@@ -1322,6 +1316,22 @@ export default function RiderTrackingView({
                   </span>
                 </div>
 
+                {/* Searchable Dropdown for Fast Selector */}
+                <div className="p-2.5 bg-slate-950/95 border-b border-slate-850">
+                  <RiderSelectDropdown
+                    id="vinimap-sidebar-rider-dropdown"
+                    riders={riders}
+                    selectedRiderId={selectedRiderId}
+                    onSelectRider={(riderId) => setSelectedRiderId(riderId)}
+                    referenceCoords={hubLatLng}
+                    referenceLabel={activeHub?.name || 'HUB Central'}
+                    orders={orders}
+                    variant="dark"
+                    placeholder="Localizar condutor por nome ou status..."
+                    showDistance={true}
+                  />
+                </div>
+
                 {/* Filter tabs */}
                 <div className="px-3 py-1.5 bg-slate-950/90 border-b border-slate-850 flex items-center gap-1 overflow-x-auto custom-scrollbar">
                   {(['Todos', 'Disponível', 'Em rota', 'Alerta'] as const).map((st) => (
@@ -1357,8 +1367,8 @@ export default function RiderTrackingView({
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
-                              <img src={r.avatar} alt={r.name} className="w-8.5 h-8.5 rounded-full object-cover border border-slate-700" />
-                              <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ${statusDot} ring-1 ring-slate-950`}></span>
+                              <img src={r.avatar} alt={r.name} className="w-9 h-9 rounded-full object-cover border border-slate-700" />
+                              <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${statusDot} ring-1 ring-slate-950`}></span>
                             </div>
                             <div className="min-w-0">
                               <h4 className="font-black text-xs text-white truncate group-hover:text-sky-300 transition-colors">{r.name}</h4>

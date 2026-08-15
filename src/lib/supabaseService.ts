@@ -14,6 +14,37 @@ import { sanitizeOrdersListConsistency } from '../utils/orderConsistency';
 // ============================================================================
 
 export function mapOrderToDb(o: Order) {
+  // Preserve and merge all vital delivery metadata, signatures, photos, and timestamps in raw_data JSON
+  const existingRaw = o.rawData || {};
+  const mergedRawData = {
+    ...existingRaw,
+    protocolNumber: o.protocolNumber || existingRaw.protocolNumber || existingRaw.NumeroProtocolo || existingRaw.protocolo,
+    signatureUrl: o.signatureUrl || existingRaw.signatureUrl || existingRaw.signatureImage || existingRaw.assinatura,
+    deliveryPhotoUrl: o.deliveryPhotoUrl || existingRaw.deliveryPhotoUrl || existingRaw.photoImage || existingRaw.fotoComprovante || existingRaw.foto,
+    recipientName: o.recipientName || existingRaw.recipientName || existingRaw.Recebedor || existingRaw.recebedor,
+    recipientDoc: o.recipientDoc || existingRaw.recipientDoc || existingRaw.DocumentoRecebedor || existingRaw.doc,
+    deliveryDate: o.deliveryDate || o.dataConclusao || existingRaw.deliveryDate || existingRaw.DataConclusao || existingRaw.DataEntrega,
+    deliveryTime: o.deliveryTime || o.horarioFinal || existingRaw.deliveryTime || existingRaw.HorarioFinal || existingRaw.HorarioEntrega,
+    dataConclusao: o.dataConclusao || o.deliveryDate || existingRaw.dataConclusao || existingRaw.DataConclusao,
+    horarioInicial: o.horarioInicial || o.createdAt || existingRaw.horarioInicial || existingRaw.HorarioInicio,
+    horarioFinal: o.horarioFinal || o.deliveryTime || existingRaw.horarioFinal || existingRaw.HorarioFinal,
+    occurrenceDate: o.occurrenceDate || existingRaw.occurrenceDate || existingRaw.DataOcorrencia,
+    sequence: o.sequence ?? existingRaw.sequence,
+    date: o.date || existingRaw.date || existingRaw.DataLancamento,
+    status: o.status,
+    priority: o.priority,
+    value: o.value,
+    deliveryValue: o.deliveryValue,
+    driverValue: o.driverValue,
+    riderId: o.riderId,
+    clientName: o.clientName,
+    phone: o.phone,
+    address: o.address,
+    region: o.region,
+    cep: o.cep,
+    history: o.history || existingRaw.history
+  };
+
   return {
     id: o.id,
     client_name: o.clientName,
@@ -30,15 +61,15 @@ export function mapOrderToDb(o: Order) {
     partner_name: o.partnerName || null,
     delivery_value: o.deliveryValue ?? 0,
     driver_value: o.driverValue ?? 0,
-    raw_data: o.rawData ? JSON.stringify(o.rawData) : null,
-    history: o.history ? JSON.stringify(o.history) : null,
+    raw_data: JSON.stringify(mergedRawData),
+    history: o.history ? JSON.stringify(o.history) : (mergedRawData.history ? JSON.stringify(mergedRawData.history) : null),
     protocol_number: o.protocolNumber || null,
     signature_url: o.signatureUrl || null,
     delivery_photo_url: o.deliveryPhotoUrl || null,
     recipient_name: o.recipientName || null,
     recipient_doc: o.recipientDoc || null,
-    delivery_date: o.deliveryDate || null,
-    delivery_time: o.deliveryTime || null,
+    delivery_date: o.deliveryDate || o.dataConclusao || null,
+    delivery_time: o.deliveryTime || o.horarioFinal || null,
     data_conclusao: o.dataConclusao || o.deliveryDate || null,
     horario_inicial: o.horarioInicial || o.createdAt || null,
     horario_final: o.horarioFinal || o.deliveryTime || null,
@@ -47,7 +78,9 @@ export function mapOrderToDb(o: Order) {
 }
 
 export function mapOrderFromDb(row: any): Order {
-  const rawDataObj = row.raw_data ? (typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data) : undefined;
+  const rawDataObj = row.raw_data ? (typeof row.raw_data === 'string' ? (() => {
+    try { return JSON.parse(row.raw_data); } catch (_) { return undefined; }
+  })() : row.raw_data) : undefined;
   
   const protocolNumber = row.protocol_number 
     || rawDataObj?.protocolNumber 
@@ -84,36 +117,83 @@ export function mapOrderFromDb(row: any): Order {
     || rawDataObj?.doc 
     || undefined;
 
+  const deliveryDate = row.delivery_date 
+    || row.data_conclusao 
+    || rawDataObj?.deliveryDate 
+    || rawDataObj?.DataEntrega 
+    || rawDataObj?.DataConclusao 
+    || rawDataObj?.dataConclusao 
+    || undefined;
+
+  const deliveryTime = row.delivery_time 
+    || row.horario_final 
+    || rawDataObj?.deliveryTime 
+    || rawDataObj?.HorarioEntrega 
+    || rawDataObj?.HorarioFinal 
+    || rawDataObj?.horarioFinal 
+    || undefined;
+
+  const dataConclusao = row.data_conclusao 
+    || deliveryDate 
+    || rawDataObj?.dataConclusao 
+    || rawDataObj?.DataConclusao 
+    || undefined;
+
+  const horarioInicial = row.horario_inicial 
+    || rawDataObj?.horarioInicial 
+    || rawDataObj?.HorarioInicio 
+    || rawDataObj?.horario_inicial 
+    || row.created_at 
+    || undefined;
+
+  const horarioFinal = row.horario_final 
+    || deliveryTime 
+    || rawDataObj?.horarioFinal 
+    || rawDataObj?.HorarioFinal 
+    || undefined;
+
+  const occurrenceDate = row.occurrence_date 
+    || rawDataObj?.occurrenceDate 
+    || rawDataObj?.DataOcorrencia 
+    || undefined;
+
+  const history = row.history 
+    ? (typeof row.history === 'string' ? (() => {
+        try { return JSON.parse(row.history); } catch (_) { return undefined; }
+      })() : row.history) 
+    : (rawDataObj?.history || undefined);
+
   return {
-    id: row.id,
-    clientName: row.client_name,
-    phone: row.phone || '',
-    address: row.address,
-    region: row.region || '',
-    status: row.status,
-    priority: row.priority,
-    value: Number(row.value),
-    riderId: row.rider_id || undefined,
-    createdAt: row.created_at,
-    itemsCount: row.items_count,
-    date: row.date,
-    cep: row.cep || '',
-    partnerName: row.partner_name || '',
-    deliveryValue: row.delivery_value !== null ? Number(row.delivery_value) : undefined,
-    driverValue: row.driver_value !== null ? Number(row.driver_value) : undefined,
+    id: String(row.id),
+    clientName: row.client_name || rawDataObj?.clientName || 'Cliente',
+    phone: row.phone || rawDataObj?.phone || '',
+    address: row.address || rawDataObj?.address || '',
+    region: row.region || rawDataObj?.region || '',
+    status: row.status || rawDataObj?.status || 'Pendente',
+    priority: row.priority || rawDataObj?.priority || 'Normal',
+    value: Number(row.value ?? rawDataObj?.value ?? 0),
+    riderId: row.rider_id || rawDataObj?.riderId || undefined,
+    createdAt: row.created_at || horarioInicial || '08:00',
+    itemsCount: row.items_count ?? rawDataObj?.itemsCount ?? 1,
+    date: row.date || rawDataObj?.date || rawDataObj?.DataLancamento || '2026-08-13',
+    cep: row.cep || rawDataObj?.cep || '',
+    partnerName: row.partner_name || rawDataObj?.partnerName || '',
+    deliveryValue: row.delivery_value !== null && row.delivery_value !== undefined ? Number(row.delivery_value) : (rawDataObj?.deliveryValue !== undefined ? Number(rawDataObj.deliveryValue) : undefined),
+    driverValue: row.driver_value !== null && row.driver_value !== undefined ? Number(row.driver_value) : (rawDataObj?.driverValue !== undefined ? Number(rawDataObj.driverValue) : undefined),
     rawData: rawDataObj,
-    history: row.history ? (typeof row.history === 'string' ? JSON.parse(row.history) : row.history) : undefined,
+    history,
     protocolNumber,
     signatureUrl,
     deliveryPhotoUrl,
     recipientName,
     recipientDoc,
-    deliveryDate: row.delivery_date || undefined,
-    deliveryTime: row.delivery_time || undefined,
-    dataConclusao: row.data_conclusao || row.delivery_date || undefined,
-    horarioInicial: row.horario_inicial || undefined,
-    horarioFinal: row.horario_final || row.delivery_time || undefined,
-    sequence: row.sequence !== null ? Number(row.sequence) : undefined
+    deliveryDate,
+    deliveryTime,
+    dataConclusao,
+    horarioInicial,
+    horarioFinal,
+    occurrenceDate,
+    sequence: row.sequence !== null && row.sequence !== undefined ? Number(row.sequence) : (rawDataObj?.sequence !== undefined ? Number(rawDataObj.sequence) : undefined)
   };
 }
 
@@ -326,10 +406,60 @@ export async function sbSaveOrder(order: Order) {
     console.log(`[Supabase sbSaveOrder] Upserting order #${order.id}...`);
     const dbOrder = mapOrderToDb(order);
     const { error } = await supabase.from('orders').upsert(dbOrder);
-    if (error) {
-      console.warn(`[Supabase sbSaveOrder] Error saving order #${order.id}:`, error);
+    if (!error) {
+      console.log(`[Supabase sbSaveOrder] Order #${order.id} saved successfully to Supabase.`);
+      return;
+    }
+
+    console.warn(`[Supabase sbSaveOrder] Full upsert failed for #${order.id}. Retrying with resilient base columns:`, error.message);
+
+    // Fallback: Retain essential schema columns + raw_data (which holds 100% of rich attributes in JSON)
+    const baseOrder = {
+      id: dbOrder.id,
+      client_name: dbOrder.client_name,
+      phone: dbOrder.phone,
+      address: dbOrder.address,
+      region: dbOrder.region,
+      status: dbOrder.status,
+      priority: dbOrder.priority,
+      value: dbOrder.value,
+      rider_id: dbOrder.rider_id,
+      items_count: dbOrder.items_count,
+      date: dbOrder.date,
+      cep: dbOrder.cep,
+      partner_name: dbOrder.partner_name,
+      delivery_value: dbOrder.delivery_value,
+      driver_value: dbOrder.driver_value,
+      raw_data: dbOrder.raw_data,
+      history: dbOrder.history
+    };
+
+    const { error: fallbackError } = await supabase.from('orders').upsert(baseOrder);
+    if (fallbackError) {
+      // Secondary fallback with minimum standard columns
+      const minOrder = {
+        id: dbOrder.id,
+        client_name: dbOrder.client_name,
+        phone: dbOrder.phone,
+        address: dbOrder.address,
+        region: dbOrder.region,
+        status: dbOrder.status,
+        priority: dbOrder.priority,
+        value: dbOrder.value,
+        rider_id: dbOrder.rider_id,
+        items_count: dbOrder.items_count,
+        date: dbOrder.date,
+        cep: dbOrder.cep,
+        raw_data: dbOrder.raw_data
+      };
+      const { error: minErr } = await supabase.from('orders').upsert(minOrder);
+      if (minErr) {
+        console.warn(`[Supabase sbSaveOrder] Minimal upsert failed for order #${order.id}:`, minErr);
+      } else {
+        console.log(`[Supabase sbSaveOrder] Minimal fallback succeeded for order #${order.id}.`);
+      }
     } else {
-      console.log(`[Supabase sbSaveOrder] Order #${order.id} saved successfully.`);
+      console.log(`[Supabase sbSaveOrder] Base fallback succeeded for order #${order.id}.`);
     }
   } catch (err) {
     console.warn(`[Supabase sbSaveOrder] Exception saving order #${order.id}:`, err);
@@ -595,7 +725,30 @@ export async function syncAllStateToSupabase(data: {
       return dbO;
     });
     const { error } = await supabase.from('orders').upsert(dbOrders);
-    if (error) throw new Error(`Error syncing orders: ${error.message}`);
+    if (error) {
+      console.warn('[Supabase Sync] Full orders upsert failed, retrying with base columns fallback...', error.message);
+      const baseOrders = dbOrders.map(dbO => ({
+        id: dbO.id,
+        client_name: dbO.client_name,
+        phone: dbO.phone,
+        address: dbO.address,
+        region: dbO.region,
+        status: dbO.status,
+        priority: dbO.priority,
+        value: dbO.value,
+        rider_id: dbO.rider_id,
+        items_count: dbO.items_count,
+        date: dbO.date,
+        cep: dbO.cep,
+        partner_name: dbO.partner_name,
+        delivery_value: dbO.delivery_value,
+        driver_value: dbO.driver_value,
+        raw_data: dbO.raw_data,
+        history: dbO.history
+      }));
+      const { error: retryErr } = await supabase.from('orders').upsert(baseOrders);
+      if (retryErr) throw new Error(`Error syncing orders: ${retryErr.message}`);
+    }
   }
 
   // 5. Sync Activity Logs

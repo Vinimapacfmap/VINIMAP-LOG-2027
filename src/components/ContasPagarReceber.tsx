@@ -5,9 +5,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FinancialTransaction, Order, ClientPartner } from '../types';
+import { FinancialTransaction, Order, ClientPartner, DeliveryRider } from '../types';
 import { formatToBrazilianDate, getSaoPauloISODate, getSaoPauloDate } from '../utils/dateUtils';
 import { getPartnerDisplayName } from '../utils/partnerUtils';
+import { FinancialRepassesSummaryPanel } from './FinancialRepassesSummaryPanel';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -63,8 +64,10 @@ interface ContasPagarReceberProps {
   transactions: FinancialTransaction[];
   onUpdateTransactions: (txs: FinancialTransaction[]) => void;
   orders?: Order[];
+  riders?: DeliveryRider[];
   clientPartners?: ClientPartner[];
   onDeleteOrder?: (orderId: string) => Promise<void>;
+  onOpenRiderBilling?: (riderId: string) => void;
 }
 
 // Utility to increment dates safely without timezone distortion
@@ -120,11 +123,13 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
   transactions,
   onUpdateTransactions,
   orders = [],
+  riders = [],
   clientPartners = [],
-  onDeleteOrder
+  onDeleteOrder,
+  onOpenRiderBilling
 }) => {
-  // Navigation tabs: 'all' | 'receivable' | 'payable' | 'charts' | 'insights'
-  const [activeTab, setActiveTab] = useState<'all' | 'receivable' | 'payable' | 'charts' | 'insights'>('all');
+  // Navigation tabs: 'all' | 'receivable' | 'payable' | 'charts' | 'insights' | 'repasses_planilha'
+  const [activeTab, setActiveTab] = useState<'all' | 'receivable' | 'payable' | 'charts' | 'insights' | 'repasses_planilha'>('all');
   
   // AI Insights states
   const [insightsData, setInsightsData] = useState<{
@@ -1479,6 +1484,17 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
           Análise Gráfica & Fluxo
         </button>
         <button
+          onClick={() => setActiveTab('repasses_planilha')}
+          className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+            activeTab === 'repasses_planilha' 
+              ? 'bg-violet-600 text-white shadow-xs' 
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <DollarSign size={13} />
+          <span>Resumo de Repasses (Planilha)</span>
+        </button>
+        <button
           onClick={() => setActiveTab('insights')}
           className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
             activeTab === 'insights' 
@@ -1727,6 +1743,15 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
               </button>
             </div>
           )}
+        </div>
+      ) : activeTab === 'repasses_planilha' ? (
+        <div className="space-y-6">
+          <FinancialRepassesSummaryPanel
+            orders={orders}
+            riders={riders}
+            clientPartners={clientPartners}
+            onOpenRiderBilling={onOpenRiderBilling}
+          />
         </div>
       ) : activeTab !== 'charts' ? (
         /* TABLE LIST VIEW (ALL, RECEIVABLE, PAYABLE) */

@@ -98,12 +98,55 @@ export function sanitizeOrderConsistency(
   let isModified = false;
   const updated = { ...order };
 
-  const orderIsoDate = normalizeToISODate(updated.date || updated.deliveryDate || updated.dataConclusao);
+  // Normalize order date
+  if (!updated.date || updated.date.trim() === '') {
+    const fallbackDate = updated.deliveryDate || updated.dataConclusao || updated.occurrenceDate || (updated.rawData?.DataLancamento || updated.rawData?.DataEntrega || updated.rawData?.data);
+    if (fallbackDate) {
+      updated.date = normalizeToISODate(fallbackDate);
+      isModified = true;
+    }
+  }
+
+  const orderIsoDate = normalizeToISODate(updated.date || updated.deliveryDate || updated.dataConclusao) || todayIso;
+
+  // Restore status to 'Concluído' if strong completion evidence exists
+  const hasEvidence = hasOrderCompletionEvidence(updated);
+  const rawStatus = updated.rawData?.Situacao || updated.rawData?.status || updated.rawData?.Status;
+  const isRawCompleted = rawStatus === 'Concluído' || rawStatus === 'Concluido' || rawStatus === 'Entregue';
+
+  if ((hasEvidence || isRawCompleted) && updated.status !== 'Concluído' && updated.status !== 'Cancelado' && updated.status !== 'Ocorrência') {
+    updated.status = 'Concluído';
+    isModified = true;
+  }
+
+  // Restore fields from rawData if missing in root
+  if (updated.rawData) {
+    if (!updated.protocolNumber && (updated.rawData.NumeroProtocolo || updated.rawData.protocolNumber || updated.rawData.protocolo)) {
+      updated.protocolNumber = updated.rawData.NumeroProtocolo || updated.rawData.protocolNumber || updated.rawData.protocolo;
+      isModified = true;
+    }
+    if (!updated.signatureUrl && (updated.rawData.signatureUrl || updated.rawData.signatureImage || updated.rawData.assinatura)) {
+      updated.signatureUrl = updated.rawData.signatureUrl || updated.rawData.signatureImage || updated.rawData.assinatura;
+      isModified = true;
+    }
+    if (!updated.deliveryPhotoUrl && (updated.rawData.deliveryPhotoUrl || updated.rawData.photoImage || updated.rawData.fotoComprovante || updated.rawData.foto)) {
+      updated.deliveryPhotoUrl = updated.rawData.deliveryPhotoUrl || updated.rawData.photoImage || updated.rawData.fotoComprovante || updated.rawData.foto;
+      isModified = true;
+    }
+    if (!updated.recipientName && (updated.rawData.Recebedor || updated.rawData.recipientName || updated.rawData.recebedor)) {
+      updated.recipientName = updated.rawData.Recebedor || updated.rawData.recipientName || updated.rawData.recebedor;
+      isModified = true;
+    }
+    if (!updated.recipientDoc && (updated.rawData.DocumentoRecebedor || updated.rawData.recipientDoc || updated.rawData.doc)) {
+      updated.recipientDoc = updated.rawData.DocumentoRecebedor || updated.rawData.recipientDoc || updated.rawData.doc;
+      isModified = true;
+    }
+  }
 
   // Rule 1: Populate completion or occurrence dates/times ONLY if status is 'Concluído' or 'Ocorrência'.
   if (updated.status === 'Concluído') {
     if (!updated.deliveryDate) {
-      updated.deliveryDate = updated.dataConclusao || orderIsoDate || todayIso;
+      updated.deliveryDate = updated.dataConclusao || (updated.rawData?.DataEntrega ? normalizeToISODate(updated.rawData.DataEntrega) : '') || orderIsoDate || todayIso;
       isModified = true;
     }
     if (!updated.dataConclusao) {
@@ -116,6 +159,14 @@ export function sanitizeOrderConsistency(
     }
     if (!updated.horarioFinal && updated.deliveryTime) {
       updated.horarioFinal = updated.deliveryTime;
+      isModified = true;
+    }
+    if (!updated.protocolNumber) {
+      updated.protocolNumber = `PROT-${(updated.id || 'PED').replace('ped-', '').toUpperCase()}`;
+      isModified = true;
+    }
+    if (!updated.recipientName) {
+      updated.recipientName = updated.clientName || 'Recebedor Titular';
       isModified = true;
     }
   }

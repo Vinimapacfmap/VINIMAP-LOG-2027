@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { DeliveryRider, Order, HubLocation } from '../types';
+import { DeliveryRider, Order } from '../types';
 import { 
   Search, 
   ChevronDown, 
