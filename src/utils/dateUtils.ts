@@ -73,7 +73,7 @@ export function getSaoPauloDateTimeShort(dateInput?: Date | string | number): st
 }
 
 /**
- * Safely converts an ISO date string (YYYY-MM-DD) to Brazilian date format (DD/MM/YYYY)
+ * Safely converts an ISO date string (YYYY-MM-DD) or DD-MM-YYYY or DD-MM to Brazilian date format (DD/MM/YYYY)
  * without timezone off-by-one errors.
  */
 export function formatToBrazilianDate(dateString?: string): string {
@@ -83,13 +83,28 @@ export function formatToBrazilianDate(dateString?: string): string {
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
     return clean;
   }
+  // If DD-MM-YYYY
+  const brHyphenMatch = clean.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (brHyphenMatch) {
+    return `${brHyphenMatch[1]}/${brHyphenMatch[2]}/${brHyphenMatch[3]}`;
+  }
+  // If DD-MM or DD/MM
+  const shortMatch = clean.match(/^(\d{2})[-/](\d{2})$/);
+  if (shortMatch) {
+    const currentYear = new Date().getFullYear();
+    return `${shortMatch[1]}/${shortMatch[2]}/${currentYear}`;
+  }
+  // If YYYY-MM-DD
+  const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  }
+  
   const parts = clean.split('-');
   if (parts.length === 3) {
-    // If YYYY-MM-DD
     if (parts[0].length === 4) {
       return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
-    // If DD-MM-YYYY
     return `${parts[0]}/${parts[1]}/${parts[2]}`;
   }
   
@@ -107,22 +122,62 @@ export function formatToBrazilianDate(dateString?: string): string {
 }
 
 /**
- * Safely extracts an ISO date string (YYYY-MM-DD) from various timestamp formats.
+ * Safely extracts an ISO date string (YYYY-MM-DD) from various timestamp formats,
+ * including DD-MM-YYYY, DD-MM, DD/MM/YYYY, DD/MM, and ISO dates.
  */
-export function extractISODateFromTimestamp(timestamp?: string): string | null {
+export function extractISODateFromTimestamp(timestamp?: string | number): string | null {
   if (!timestamp) return null;
-  const clean = timestamp.trim();
-  
+  const clean = String(timestamp).trim();
+  if (!clean) return null;
+
   // Format DD/MM/YYYY or DD/MM/YYYY HH:MM or DD/MM/YYYY HH:MM:SS
-  const brMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (brMatch) {
-    return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`; // YYYY-MM-DD
+  const brSlashMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brSlashMatch) {
+    return `${brSlashMatch[3]}-${brSlashMatch[2]}-${brSlashMatch[1]}`; // YYYY-MM-DD
   }
-  
+
+  // Format DD-MM-YYYY (e.g. 13-08-2026, 14-08-2026)
+  const brHyphenMatch = clean.match(/^(\d{2})-(\d{2})-(\d{4})/);
+  if (brHyphenMatch) {
+    return `${brHyphenMatch[3]}-${brHyphenMatch[2]}-${brHyphenMatch[1]}`; // YYYY-MM-DD
+  }
+
+  // Format DD-MM or DD/MM (e.g. 13-08, 14-08, 13/08, 14/08)
+  const shortMatch = clean.match(/^(\d{2})[-/](\d{2})$/);
+  if (shortMatch) {
+    const currentYear = new Date().getFullYear();
+    return `${currentYear}-${shortMatch[2]}-${shortMatch[1]}`;
+  }
+
   // Format YYYY-MM-DD or YYYY-MM-DD HH:MM
   const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
+
+  // Format YYYY/MM/DD
+  const isoSlashMatch = clean.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+  if (isoSlashMatch) {
+    return `${isoSlashMatch[1]}-${isoSlashMatch[2]}-${isoSlashMatch[3]}`;
+  }
+
+  // Format DD/MM/YY or DD-MM-YY
+  const shortYearMatch = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{2})$/);
+  if (shortYearMatch) {
+    const fullYear = `20${shortYearMatch[3]}`;
+    return `${fullYear}-${shortYearMatch[2]}-${shortYearMatch[1]}`;
+  }
+
+  // Handle Excel serial date numbers (e.g. 45882 ~ Aug 2026)
+  const numericVal = parseFloat(clean);
+  if (!isNaN(numericVal) && numericVal > 30000 && numericVal < 70000 && !clean.includes('-') && !clean.includes('/') && !clean.includes(':')) {
+    try {
+      const excelEpoch = new Date(1899, 11, 30);
+      const targetDate = new Date(excelEpoch.getTime() + numericVal * 86400000);
+      if (!isNaN(targetDate.getTime())) {
+        return getSaoPauloISODate(targetDate);
+      }
+    } catch (_) {}
   }
   
   try {
@@ -191,7 +246,16 @@ export function formatOrderTime(timeInput?: string | null): string {
  * Editing order data (metadata/audit history) does NOT alter the operational date or cause past orders to appear on today's view.
  */
 export function isOrderInDatePeriod(
-  order: { status?: string; date?: string; deliveryDate?: string; dataConclusao?: string; occurrenceDate?: string; history?: { timestamp: string; action?: string; details?: string }[] },
+  order: { 
+    status?: string; 
+    date?: string; 
+    deliveryDate?: string; 
+    dataConclusao?: string; 
+    occurrenceDate?: string; 
+    createdAt?: string;
+    rawData?: Record<string, string>;
+    history?: { timestamp: string; action?: string; details?: string }[] 
+  },
   dateFrom?: string,
   dateTo?: string,
   targetStatus?: string
@@ -209,13 +273,38 @@ export function isOrderInDatePeriod(
     rawPrimary = order.occurrenceDate || order.date;
   }
 
+  // Also collect all other candidate date values present on the order
+  const candidateDates: (string | undefined)[] = [
+    rawPrimary,
+    order.date,
+    order.deliveryDate,
+    order.dataConclusao,
+    order.occurrenceDate,
+    order.createdAt,
+    order.rawData?.Data,
+    order.rawData?.data,
+    order.rawData?.DataEntrega,
+    order.rawData?.dataEntrega,
+    order.rawData?.DataLancamento,
+    order.rawData?.dataLancamento,
+    order.rawData?.DataAgendamento,
+    order.rawData?.DataSolicitacao,
+    order.rawData?.DataCriacao,
+    order.rawData?.DataStatus,
+  ];
+
   let dateMatches = false;
-  if (rawPrimary) {
-    const primaryDate = extractISODateFromTimestamp(rawPrimary) || rawPrimary;
-    const directFrom = !isoFrom || (primaryDate >= isoFrom);
-    const directTo = !isoTo || (primaryDate <= isoTo);
-    if (directFrom && directTo) {
-      dateMatches = true;
+
+  for (const cand of candidateDates) {
+    if (!cand) continue;
+    const isoDate = extractISODateFromTimestamp(cand);
+    if (isoDate) {
+      const directFrom = !isoFrom || (isoDate >= isoFrom);
+      const directTo = !isoTo || (isoDate <= isoTo);
+      if (directFrom && directTo) {
+        dateMatches = true;
+        break;
+      }
     }
   }
 

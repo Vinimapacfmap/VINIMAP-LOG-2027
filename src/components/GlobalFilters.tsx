@@ -153,6 +153,11 @@ export default function GlobalFilters({
     return map;
   }, [orders, filterDateFrom, filterDateTo]);
 
+  // Alphabetically/Lexicographically sorted riders list
+  const sortedRiders = useMemo(() => {
+    return [...riders].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+  }, [riders]);
+
   // List of possible order statuses
   const statuses: { value: OrderStatus; label: string }[] = [
     { value: 'Não iniciado', label: 'Não iniciado' },
@@ -435,7 +440,7 @@ export default function GlobalFilters({
                   id="filter-rider-select"
                 >
                   <option value="">Todos os Condutores</option>
-                  {riders.map((r, idx) => {
+                  {sortedRiders.map((r, idx) => {
                     const count = countsByRider[r.id] ?? 0;
                     return (
                       <option key={`rider-opt-${r.id}-${idx}`} value={r.id}>

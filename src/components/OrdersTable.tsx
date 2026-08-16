@@ -236,7 +236,23 @@ function OrdersTable({
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(FIRST_10_COLUMNS));
   const [showColumnFilterMenu, setShowColumnFilterMenu] = useState<boolean>(false);
   const [columnSearchTerm, setColumnSearchTerm] = useState<string>('');
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({
+    key: 'DataSolicitacao',
+    direction: 'desc'
+  });
+
+  const handleSort = (key: string) => {
+    setSortConfig(current => {
+      if (!current || current.key !== key) {
+        return { key, direction: 'asc' };
+      }
+      if (current.direction === 'asc') {
+        return { key, direction: 'desc' };
+      }
+      // Return to default newest first date sorting
+      return { key: 'DataSolicitacao', direction: 'desc' };
+    });
+  };
   
   // Selection states
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -974,31 +990,43 @@ function OrdersTable({
 
       const keyLower = sortConfig.key.toLowerCase();
 
-      // 1. Check if we are sorting by date (contains "data" or "date" or matches date pattern)
+      // 1. Check if sorting by CEP
+      if (keyLower === 'cep') {
+        const cepA = valA.replace(/\D/g, '').padStart(8, '0');
+        const cepB = valB.replace(/\D/g, '').padStart(8, '0');
+        return sortConfig.direction === 'asc'
+          ? cepA.localeCompare(cepB)
+          : cepB.localeCompare(cepA);
+      }
+
+      // 2. Check if we are sorting by date (contains "data" or "date" or matches date pattern)
       const isDateCol = keyLower.includes('data') || keyLower.includes('date');
-      const isBrDatePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-      const isIsoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+      const isBrDatePattern = /^\d{2}\/\d{2}\/\d{4}/;
+      const isIsoDatePattern = /^\d{4}-\d{2}-\d{2}/;
 
       if (
         isDateCol || 
         (isBrDatePattern.test(valA) && isBrDatePattern.test(valB)) || 
         (isIsoDatePattern.test(valA) && isIsoDatePattern.test(valB))
       ) {
-        const toComparableDate = (str: any) => {
+        const toComparableDate = (str: any, orderObj?: Order) => {
           const clean = String(str || '').trim();
-          if (isBrDatePattern.test(clean)) {
-            const parts = clean.split('/');
-            return `${parts[2]}${parts[1]}${parts[0]}`;
+          let iso = extractISODateFromTimestamp(clean) || '';
+          if (!iso) {
+            if (/^\d{2}\/\d{2}\/\d{4}/.test(clean)) {
+              const parts = clean.split('/');
+              iso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            } else if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+              iso = clean.substring(0, 10);
+            }
           }
-          if (isIsoDatePattern.test(clean)) {
-            const parts = clean.split('-');
-            return `${parts[0]}${parts[1]}${parts[2]}`;
-          }
-          return clean;
+          const time = orderObj ? (orderObj.deliveryTime || orderObj.horarioFinal || orderObj.createdAt || orderObj.rawData?.HorarioInicio || '') : '';
+          const timeClean = String(time).replace(/\D/g, '').padEnd(6, '0');
+          return `${iso}_${timeClean}`;
         };
 
-        const dateA = toComparableDate(valA);
-        const dateB = toComparableDate(valB);
+        const dateA = toComparableDate(valA, a);
+        const dateB = toComparableDate(valB, b);
 
         return sortConfig.direction === 'asc' 
           ? String(dateA || '').localeCompare(String(dateB || '')) 
@@ -1319,15 +1347,6 @@ function OrdersTable({
     reordered[origIdx] = targetColName;
     reordered[origTargetIdx] = colName;
     setColumnsOrder(reordered);
-  };
-
-  // Sorting handler
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
   };
 
   // Row selection handlers

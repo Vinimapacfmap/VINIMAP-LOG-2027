@@ -11,6 +11,7 @@ import autoTable from 'jspdf-autotable';
 import { Order, ClientPartner, OrderStatus, DeliveryRider } from '../types';
 import { formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { getOrderFreightValue } from '../utils/billingUtils';
+import { compareOrdersByCep } from '../utils/addressUtils';
 import { 
   X, 
   Calendar, 
@@ -119,7 +120,7 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
       }
 
       return true;
-    });
+    }).sort(compareOrdersByCep);
   }, [orders, client, startDate, endDate, searchQuery, riders]);
 
   // Calculations for billing metrics

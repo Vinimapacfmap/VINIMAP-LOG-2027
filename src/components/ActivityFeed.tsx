@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useState, useMemo } from 'react';
 import { ActivityLog } from '../types';
 import { 
   Bell, 
@@ -11,7 +12,9 @@ import {
   AlertTriangle, 
   Clock, 
   ShieldAlert,
-  ArrowUpRight
+  ArrowUpRight,
+  ArrowDown,
+  ArrowUp
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -21,6 +24,12 @@ interface ActivityFeedProps {
 }
 
 export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProps) {
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+
+  const sortedLogs = useMemo(() => {
+    const copy = [...logs];
+    return sortOrder === 'desc' ? copy : copy.reverse();
+  }, [logs, sortOrder]);
   
   const getLogTypeStyles = (type: string) => {
     switch (type) {
@@ -59,8 +68,19 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
             <h3 className="font-bold text-slate-800 text-sm">Monitoramento de Atividades</h3>
             <p className="text-xs text-slate-400 mt-0.5">Histórico operacional da central em tempo real</p>
           </div>
-          <div className="p-1.5 rounded-lg bg-slate-50 text-slate-500">
-            <Bell size={16} />
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+              className="px-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+              title={sortOrder === 'desc' ? 'Mais recentes primeiro (clique para inverter)' : 'Mais antigos primeiro (clique para inverter)'}
+            >
+              {sortOrder === 'desc' ? <ArrowDown size={12} className="text-blue-600" /> : <ArrowUp size={12} className="text-blue-600" />}
+              <span>{sortOrder === 'desc' ? 'Recentes' : 'Antigos'}</span>
+            </button>
+            <div className="p-1.5 rounded-lg bg-slate-50 text-slate-500">
+              <Bell size={16} />
+            </div>
           </div>
         </div>
 
@@ -69,7 +89,7 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
           {/* Vertical joining timeline line */}
           <div className="absolute left-2.5 top-2.5 bottom-2.5 w-0.5 bg-slate-100" />
 
-          {logs.map((log, idx) => {
+          {sortedLogs.map((log, idx) => {
             const styles = getLogTypeStyles(log.type);
             const Icon = styles.icon;
 

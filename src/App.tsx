@@ -63,6 +63,7 @@ import { fetchAllStateFromSupabase, syncAllStateToSupabase } from './lib/supabas
 import { FinancialTransaction } from './types';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { sanitizeOrdersListConsistency, sanitizeOrderConsistency } from './utils/orderConsistency';
+import { realtimeSyncBus } from './utils/realtimeSync';
 
 import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from './firebase';
@@ -522,36 +523,60 @@ export default function App() {
   // Global listener registry for aggressive Firestore snapshot cleanup
   const listenerCleanupRegistry = useRef<Set<() => void>>(new Set());
 
-  // Real-time instant GPS broadcast synchronization across browser tabs and mobile devices
+  // Real-time instant broadcast synchronization across browser tabs and mobile devices
   useEffect(() => {
-    let channel: BroadcastChannel | null = null;
-    try {
-      if (typeof BroadcastChannel !== 'undefined') {
-        channel = new BroadcastChannel('vinimap_realtime_channel');
-        channel.onmessage = (event) => {
-          const data = event.data;
-          if (data && data.riderId && data.realGeoLat !== undefined && data.realGeoLng !== undefined) {
-            setRiders(prev => prev.map(r => {
-              if (r.id === data.riderId) {
-                return {
-                  ...r,
-                  lat: data.lat ?? r.lat,
-                  lng: data.lng ?? r.lng,
-                  realGeoLat: data.realGeoLat,
-                  realGeoLng: data.realGeoLng,
-                  gpsAccuracy: data.gpsAccuracy ?? r.gpsAccuracy,
-                  lastGpsUpdate: data.lastGpsUpdate ?? r.lastGpsUpdate,
-                  isGpsRealActive: data.isGpsRealActive !== undefined ? data.isGpsRealActive : true
-                };
-              }
-              return r;
-            }));
+    const unsub = realtimeSyncBus.subscribe('*', (msg) => {
+      const { type, payload } = msg;
+
+      if (type === 'RIDER_GPS_UPDATE' || (!type && payload && payload.riderId && payload.realGeoLat !== undefined)) {
+        const data = payload;
+        setRiders(prev => prev.map(r => {
+          if (r.id === data.riderId) {
+            return {
+              ...r,
+              lat: data.lat ?? r.lat,
+              lng: data.lng ?? r.lng,
+              realGeoLat: data.realGeoLat,
+              realGeoLng: data.realGeoLng,
+              gpsAccuracy: data.gpsAccuracy ?? r.gpsAccuracy,
+              lastGpsUpdate: data.lastGpsUpdate ?? r.lastGpsUpdate,
+              isGpsRealActive: data.isGpsRealActive !== undefined ? data.isGpsRealActive : true
+            };
           }
-        };
+          return r;
+        }));
+      } else if (type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED') {
+        const updatedOrder: Order = payload;
+        if (updatedOrder && updatedOrder.id) {
+          setOrders(prev => {
+            const exists = prev.some(o => o.id === updatedOrder.id);
+            if (exists) {
+              return prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o);
+            }
+            return [updatedOrder, ...prev];
+          });
+        }
+      } else if (type === 'ORDERS_BATCH_UPDATED') {
+        const batch: Order[] = payload;
+        if (Array.isArray(batch) && batch.length > 0) {
+          setOrders(prev => {
+            const map = new Map(prev.map(o => [o.id, o]));
+            batch.forEach(o => map.set(o.id, { ...(map.get(o.id) || {}), ...o }));
+            return Array.from(map.values());
+          });
+        }
+      } else if (type === 'ORDER_DELETED') {
+        const orderId: string = payload;
+        if (orderId) {
+          setOrders(prev => prev.filter(o => o.id !== orderId));
+        }
+      } else if (type === 'RIDER_UPDATED') {
+        const updatedRider: DeliveryRider = payload;
+        if (updatedRider && updatedRider.id) {
+          setRiders(prev => prev.map(r => r.id === updatedRider.id ? { ...r, ...updatedRider } : r));
+        }
       }
-    } catch (e) {
-      console.warn('BroadcastChannel initialization warning:', e);
-    }
+    });
 
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'vinimap_last_rider_coords' && e.newValue) {
@@ -583,9 +608,7 @@ export default function App() {
     window.addEventListener('storage', handleStorage);
 
     return () => {
-      if (channel) {
-        try { channel.close(); } catch (e) {}
-      }
+      unsub();
       window.removeEventListener('storage', handleStorage);
     };
   }, []);
@@ -2479,8 +2502,10 @@ export default function App() {
 
       // Instantly update local React state for snappy, real-time UI consistency
       setOrders(prev => prev.map(o => o.id === orderId ? updatedOrderObj : o));
+      realtimeSyncBus.broadcastOrderStatusChanged(updatedOrderObj);
       if (updatedRiderObj) {
         setRiders(prev => prev.map(r => r.id === updatedRiderObj.id ? updatedRiderObj : r));
+        realtimeSyncBus.broadcastRiderUpdate(updatedRiderObj);
       }
 
       // EXPLICIT VALIDATION STEP: Verify payload properties before executing dbSaveOrder
@@ -3278,6 +3303,9 @@ export default function App() {
       const allNewOrders = orders.map(o => updatedOrdersMap.get(o.id) || o);
 
       setOrders(allNewOrders);
+      if (updatedOrders.length > 0) {
+        realtimeSyncBus.broadcastOrdersBatch(updatedOrders);
+      }
 
       // Re-evaluate affected riders
       const ridersToSave: DeliveryRider[] = [];

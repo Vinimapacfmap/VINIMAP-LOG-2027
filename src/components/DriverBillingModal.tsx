@@ -12,7 +12,7 @@ import { Order, DeliveryRider, OrderStatus, ClientPartner, BillingModelType } fr
 import { formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { calculateRiderCommissionForOrder, extractOrderCep, formatCepDisplay } from '../utils/billingUtils';
 import { getPartnerDisplayName } from '../utils/partnerUtils';
-import { matchesAddressQuery } from '../utils/addressUtils';
+import { matchesAddressQuery, compareOrdersByCep } from '../utils/addressUtils';
 import { 
   X, 
   Calendar, 
@@ -142,7 +142,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
       }
 
       return true;
-    });
+    }).sort(compareOrdersByCep);
   }, [orders, riderId, startDate, endDate, searchQuery]);
 
   // Build simulated rider reflecting unsaved local settings to provide real-time calculation playground!

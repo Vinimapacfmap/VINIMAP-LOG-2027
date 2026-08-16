@@ -87,24 +87,30 @@ export function matchesAddressQuery(address: string | undefined | null, searchQu
 }
 
 /**
- * Compares two orders by CEP (Zip Code) in ascending numerical order as the default sequence for drivers.
- * Cleans non-digit characters so "01310-100" and "01310100" are compared consistently.
+ * Compares two orders by CEP (Zip Code) in strict lexicographical ascending order
+ * from lowest CEP (starting with 01...) to highest CEP (starting with 99...).
+ * Cleans non-digit characters and normalizes 8-digit strings so "01310-100", "01310100", etc. are compared consistently.
  * Independent of system creation date, launch time, or reallocation date/status.
  */
 export function compareOrdersByCep(
   a: { cep?: string; address?: string; id?: string },
   b: { cep?: string; address?: string; id?: string }
 ): number {
-  const cepA = (a.cep || '').replace(/\D/g, '');
-  const cepB = (b.cep || '').replace(/\D/g, '');
+  const rawCepA = (a.cep || '').replace(/\D/g, '');
+  const rawCepB = (b.cep || '').replace(/\D/g, '');
 
-  if (cepA && cepB) {
-    if (cepA !== cepB) {
-      return cepA.localeCompare(cepB, undefined, { numeric: true });
+  const hasCepA = rawCepA.length > 0;
+  const hasCepB = rawCepB.length > 0;
+
+  if (hasCepA && hasCepB) {
+    const padA = rawCepA.padStart(8, '0');
+    const padB = rawCepB.padStart(8, '0');
+    if (padA !== padB) {
+      return padA.localeCompare(padB);
     }
-  } else if (cepA) {
+  } else if (hasCepA) {
     return -1; // Order with CEP comes before order without CEP
-  } else if (cepB) {
+  } else if (hasCepB) {
     return 1;
   }
 
@@ -112,10 +118,10 @@ export function compareOrdersByCep(
   const addrA = String(a.address || '');
   const addrB = String(b.address || '');
   if (addrA !== addrB) {
-    return addrA.localeCompare(addrB, undefined, { numeric: true });
+    return addrA.localeCompare(addrB, 'pt-BR', { sensitivity: 'base', numeric: true });
   }
 
-  return String(a.id || '').localeCompare(String(b.id || ''));
+  return String(a.id || '').localeCompare(String(b.id || ''), 'pt-BR', { numeric: true });
 }
 
 /**

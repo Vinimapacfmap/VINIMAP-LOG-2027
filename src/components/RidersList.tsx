@@ -11,7 +11,10 @@ import {
   Star, 
   Battery, 
   ShieldAlert,
-  CheckCircle2
+  CheckCircle2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 interface RidersListProps {
@@ -118,6 +121,8 @@ const RiderItem = memo(function RiderItem({ rider, isSelected, onSelect }: Rider
 
 function RidersList({ riders, selectedRiderId, setSelectedRiderId, orders = [] }: RidersListProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<'name' | 'completedDeliveries' | 'status' | 'rating'>('completedDeliveries');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Automatically recalculate completed deliveries in real time based strictly on orders with status 'Concluído'
   const calculatedRiders = useCalculatedRiders(riders, orders);
@@ -127,9 +132,18 @@ function RidersList({ riders, selectedRiderId, setSelectedRiderId, orders = [] }
     return calculatedRiders.reduce((acc, r) => acc + (r.completedDeliveries || 0), 0);
   }, [calculatedRiders]);
 
-  // Filter riders based on search name or vehicle type with useMemo
+  const toggleSort = (field: 'name' | 'completedDeliveries' | 'status' | 'rating') => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'name' ? 'asc' : 'desc');
+    }
+  };
+
+  // Filter & Sort riders based on search name or vehicle type with useMemo
   const filteredRiders = useMemo(() => {
-    return (calculatedRiders || []).filter(r => {
+    const list = (calculatedRiders || []).filter(r => {
       if (!r) return false;
       const query = (searchTerm || '').toLowerCase();
       const name = (r.name || '').toLowerCase();
@@ -141,7 +155,21 @@ function RidersList({ riders, selectedRiderId, setSelectedRiderId, orders = [] }
         status.includes(query)
       );
     });
-  }, [calculatedRiders, searchTerm]);
+
+    return list.sort((a, b) => {
+      let comparison = 0;
+      if (sortField === 'name') {
+        comparison = (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' });
+      } else if (sortField === 'completedDeliveries') {
+        comparison = (a.completedDeliveries || 0) - (b.completedDeliveries || 0);
+      } else if (sortField === 'rating') {
+        comparison = (a.rating || 0) - (b.rating || 0);
+      } else if (sortField === 'status') {
+        comparison = (a.status || '').localeCompare(b.status || '');
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [calculatedRiders, searchTerm, sortField, sortDirection]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedRiderId(selectedRiderId === id ? null : id);
@@ -151,7 +179,7 @@ function RidersList({ riders, selectedRiderId, setSelectedRiderId, orders = [] }
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 flex flex-col justify-between h-[500px]" id="riders-list-container">
       
       {/* Header and Search */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-bold text-slate-800 text-sm">Entregadores Ativos</h3>
@@ -162,16 +190,73 @@ function RidersList({ riders, selectedRiderId, setSelectedRiderId, orders = [] }
           </span>
         </div>
 
-        {/* Small in-card filter search bar */}
-        <div className="relative group" id="riders-search-box">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-          <input
-            type="text"
-            placeholder="Filtrar por nome, veículo, status..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-8.5 pr-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-[11px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all"
-          />
+        {/* Small in-card filter search bar and Sort Pills */}
+        <div className="space-y-2">
+          <div className="relative group" id="riders-search-box">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+            <input
+              type="text"
+              placeholder="Filtrar por nome, veículo, status..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-8.5 pr-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-[11px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all"
+            />
+          </div>
+
+          {/* Quick Sort Options */}
+          <div className="flex items-center gap-1 overflow-x-auto text-[10px] pb-0.5">
+            <span className="text-slate-400 font-bold mr-1 shrink-0 flex items-center gap-0.5">
+              <ArrowUpDown size={10} /> Ordem:
+            </span>
+            <button
+              type="button"
+              onClick={() => toggleSort('completedDeliveries')}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer ${
+                sortField === 'completedDeliveries'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Entregas
+              {sortField === 'completedDeliveries' && (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleSort('name')}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer ${
+                sortField === 'name'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Nome (A-Z)
+              {sortField === 'name' && (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleSort('status')}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer ${
+                sortField === 'status'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Status
+              {sortField === 'status' && (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleSort('rating')}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer ${
+                sortField === 'rating'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Nota
+              {sortField === 'rating' && (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+            </button>
+          </div>
         </div>
       </div>
 

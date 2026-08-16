@@ -189,7 +189,7 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
   const [recurrenceFilter, setRecurrenceFilter] = useState<'Todos' | 'recurring' | 'single'>('Todos');
   const [partnerFilter, setPartnerFilter] = useState('Todos');
   const [sortField, setSortField] = useState<'dueDate' | 'amount'>('dueDate');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Export menu & Partner PDF Modal states
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);

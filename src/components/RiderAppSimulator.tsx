@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { DeliveryRider, Order, OrderStatus, ActivityLog, ClientPartner, isMatchingClientCode, CompanyHub } from '../types';
 import { getSaoPauloISODate, getSaoPauloDate, getSaoPauloTime, extractISODateFromTimestamp } from '../utils/dateUtils';
 import { compareOrdersByCep } from '../utils/addressUtils';
+import { isOrderMatchingRider } from '../utils/partnerUtils';
+import { realtimeSyncBus } from '../utils/realtimeSync';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
 
@@ -255,7 +257,19 @@ export default function RiderAppSimulator({
 
   const [selectedRiderId, setSelectedRiderId] = useState<string>('');
   const [lockedRiderId, setLockedRiderId] = useState<string | null>(null);
-  const selectedRider = riders.find(r => r.id === selectedRiderId);
+  const selectedRider = riders.find(r => {
+    if (!selectedRiderId) return false;
+    const cleanSel = selectedRiderId.trim().toLowerCase();
+    const selDigits = cleanSel.replace(/\D/g, '');
+    if (r.id.toLowerCase() === cleanSel) return true;
+    if (r.name.toLowerCase() === cleanSel) return true;
+    if (selDigits.length >= 8) {
+      if (r.phone && r.phone.replace(/\D/g, '') === selDigits) return true;
+      if (r.deviceNumber && r.deviceNumber.replace(/\D/g, '') === selDigits) return true;
+      if (r.cpfCnpj && r.cpfCnpj.replace(/\D/g, '') === selDigits) return true;
+    }
+    return false;
+  });
 
   // Apply dynamic PWA icons & manifest using Headquarters Logo
   useEffect(() => {
@@ -476,16 +490,19 @@ export default function RiderAppSimulator({
   // Sound effects generator via Web Audio API
   const playBeep = (freq = 800, duration = 0.1) => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.frequency.value = freq;
       gain.gain.setValueAtTime(0, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + duration);
@@ -534,19 +551,20 @@ export default function RiderAppSimulator({
 
   // Monitor newly assigned orders for current rider and trigger sound alert
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
+  const isAudioEffectMountedRef = useRef<boolean>(false);
 
   useEffect(() => {
-    if (!selectedRiderId || !selectedRider) return;
+    if (!selectedRiderId && !selectedRider) return;
 
     // Filter active orders assigned to selected driver
     const currentRiderOrders = orders.filter(o =>
-      (o.riderId === selectedRiderId || o.riderId === selectedRider.id || o.riderId === selectedRider.name) &&
+      isOrderMatchingRider(o, selectedRiderId || selectedRider?.id, riders) &&
       o.status !== 'Concluído' && o.status !== 'Cancelado'
     );
     const currentIds = new Set(currentRiderOrders.map(o => o.id));
 
-    // If initial load completed and new order IDs appear
-    if (prevOrderIdsRef.current.size > 0) {
+    // If already mounted, check for newly appeared orders
+    if (isAudioEffectMountedRef.current) {
       let newlyAddedCount = 0;
       currentIds.forEach(id => {
         if (!prevOrderIdsRef.current.has(id)) {
@@ -556,10 +574,17 @@ export default function RiderAppSimulator({
 
       if (newlyAddedCount > 0) {
         // Sound alert check (default: true)
-        const soundEnabled = selectedRider.enableSoundAlert !== false;
+        const soundEnabled = !selectedRider || selectedRider.enableSoundAlert !== false;
         if (soundEnabled) {
-          playNotificationSound(selectedRider.soundType || 'alerta_padrao');
+          playNotificationSound(selectedRider?.soundType || 'alerta_padrao');
         }
+
+        // Haptic feedback / vibration if supported
+        try {
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate([200, 100, 200]);
+          }
+        } catch (_) {}
 
         // Push notification on simulator screen
         setPhoneNotification({
@@ -568,10 +593,12 @@ export default function RiderAppSimulator({
         });
         setTimeout(() => setPhoneNotification(null), 6000);
       }
+    } else {
+      isAudioEffectMountedRef.current = true;
     }
 
     prevOrderIdsRef.current = currentIds;
-  }, [orders, selectedRiderId, selectedRider?.enableSoundAlert, selectedRider?.soundType]);
+  }, [orders, selectedRiderId, selectedRider?.enableSoundAlert, selectedRider?.soundType, riders]);
 
   // --- OFFLINE CACHE & NETWORK SIGNAL STATE ---
   const [isNetworkOffline, setIsNetworkOffline] = useState<boolean>(() => {
@@ -1121,6 +1148,16 @@ export default function RiderAppSimulator({
             nowTime,
             true
           );
+          realtimeSyncBus.broadcastRiderGps({
+            riderId: selectedRider.id,
+            lat: clampedLat,
+            lng: clampedLng,
+            realGeoLat: latitude,
+            realGeoLng: longitude,
+            gpsAccuracy: accuracy || 0,
+            lastGpsUpdate: nowTime,
+            isGpsRealActive: true
+          });
         }
 
         // Move phone Leaflet map marker if visible
@@ -1234,6 +1271,16 @@ export default function RiderAppSimulator({
             nowTime,
             true
           );
+          realtimeSyncBus.broadcastRiderGps({
+            riderId: selectedRider.id,
+            lat: nextLatPercent,
+            lng: nextLngPercent,
+            realGeoLat: latitude,
+            realGeoLng: longitude,
+            gpsAccuracy: accuracy || 0,
+            lastGpsUpdate: nowTime,
+            isGpsRealActive: true
+          });
         }
 
         triggerPhoneNotification(
@@ -1349,10 +1396,7 @@ export default function RiderAppSimulator({
   const todayFormatted = getSaoPauloDate();
 
   const isOrderActiveForDriver = (order: Order) => {
-    const isAssignedToRider = (
-      order.riderId === selectedRiderId ||
-      (selectedRider && (order.riderId === selectedRider.id || order.riderId === selectedRider.name))
-    );
+    const isAssignedToRider = isOrderMatchingRider(order, selectedRiderId || selectedRider?.id, riders);
     if (!isAssignedToRider) return false;
     
     // Open orders allocated to this driver MUST be displayed on driver screen today to follow route, even if from another date
@@ -1376,11 +1420,6 @@ export default function RiderAppSimulator({
   };
 
   const driverActiveOrders = orders.filter(isOrderActiveForDriver).sort((a, b) => {
-    const seqA = a.sequence !== undefined ? a.sequence : undefined;
-    const seqB = b.sequence !== undefined ? b.sequence : undefined;
-    if (seqA !== undefined && seqB !== undefined && seqA !== seqB) {
-      return seqA - seqB;
-    }
     return compareOrdersByCep(a, b);
   });
 
@@ -3565,81 +3604,41 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           onClick={(e) => e.stopPropagation()}
                           className="w-4/5 max-w-[280px] h-full bg-slate-900 text-white flex flex-col shadow-2xl overflow-y-auto"
                         >
-                          {/* Drawer Header */}
-                          <div className="p-4 bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700/80 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <img src={selectedRider?.avatar} className="w-9 h-9 rounded-full object-cover border-2 border-sky-400 shrink-0" />
-                              <div className="min-w-0">
-                                <h4 className="font-extrabold text-xs text-white truncate">{selectedRider?.name || 'Condutor'}</h4>
-                                <span className="text-[9px] font-bold text-sky-400 block uppercase">{selectedRider?.vehicle || 'Veículo'}</span>
+                          {/* Drawer Header with Logged-in Driver Profile Card */}
+                          <div className="p-4 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-800 border-b border-slate-700/80 shrink-0">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Condutor Conectado</span>
                               </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setIsDrawerMenuOpen(false)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-
-                          {/* DRIVER SELECTION SECTION IN LATERAL MENU */}
-                          <div className="p-4 border-b border-slate-800 space-y-3 bg-slate-950/60 shrink-0">
-                            <div className="flex items-center gap-1.5 text-sky-400 font-extrabold text-[10px] uppercase tracking-wider">
-                              <Users size={14} />
-                              <span>Selecionar Condutor</span>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-semibold text-slate-400 block">
-                                Alternar condutor ativo no App:
-                              </label>
-                              <select
-                                value={selectedRiderId}
-                                onChange={(e) => {
-                                  const newId = e.target.value;
-                                  if (newId) {
-                                    changeSelectedRiderId(newId);
-                                    const targetRider = riders.find(r => r.id === newId);
-                                    if (targetRider) {
-                                      setPhoneInput(targetRider.deviceNumber || targetRider.phone || '');
-                                      setPasswordInput(targetRider.password || '1234');
-                                    }
-                                    setIsDrawerMenuOpen(false);
-                                  }
-                                }}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-sky-400 cursor-pointer"
+                              <button
+                                type="button"
+                                onClick={() => setIsDrawerMenuOpen(false)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
                               >
-                                <option value="">-- Selecione o Condutor --</option>
-                                {riders.map(r => (
-                                  <option key={r.id} value={r.id}>
-                                    {r.name} ({r.vehicle || 'Moto'})
-                                  </option>
-                                ))}
-                              </select>
+                                <X size={16} />
+                              </button>
                             </div>
 
-                            <div className="space-y-1 max-h-[130px] overflow-y-auto pr-1">
-                              {riders.map(r => (
-                                <button
-                                  key={r.id}
-                                  type="button"
-                                  onClick={() => {
-                                    changeSelectedRiderId(r.id);
-                                    setPhoneInput(r.deviceNumber || r.phone || '');
-                                    setPasswordInput(r.password || '1234');
-                                    setIsDrawerMenuOpen(false);
-                                  }}
-                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-between transition-all cursor-pointer ${
-                                    selectedRiderId === r.id
-                                      ? 'bg-sky-600 text-white font-extrabold shadow-sm'
-                                      : 'bg-slate-800/60 hover:bg-slate-800 text-slate-300'
-                                  }`}
-                                >
-                                  <span className="truncate">{r.name}</span>
-                                  {selectedRiderId === r.id && <Check size={13} className="shrink-0" />}
-                                </button>
-                              ))}
+                            <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80">
+                              <img 
+                                src={selectedRider?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} 
+                                className="w-11 h-11 rounded-full object-cover border-2 border-sky-400 shrink-0 shadow-md" 
+                                alt={selectedRider?.name || 'Condutor'}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-extrabold text-sm text-white truncate">{selectedRider?.name || 'Condutor Vinimap'}</h4>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 uppercase">
+                                    {selectedRider?.vehicle || 'Moto'}
+                                  </span>
+                                  {selectedRider?.phone && (
+                                    <span className="text-[10px] text-slate-400 font-mono truncate">
+                                      {selectedRider.phone}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
 

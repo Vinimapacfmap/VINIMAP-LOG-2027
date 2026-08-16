@@ -4,27 +4,16 @@
  */
 
 import { Order, OrderStatus } from '../types';
-import { getSaoPauloISODate } from './dateUtils';
+import { getSaoPauloISODate, extractISODateFromTimestamp } from './dateUtils';
 
 /**
- * Normalizes any date string (YYYY-MM-DD or DD/MM/YYYY) to YYYY-MM-DD format for ISO comparison.
+ * Normalizes any date string (YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, DD-MM, DD/MM) to YYYY-MM-DD format for ISO comparison.
  */
 export function normalizeToISODate(dateStr?: string): string {
   if (!dateStr) return '';
   const clean = dateStr.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
-    const parts = clean.split('/');
-    return `${parts[2]}-${parts[1]}-${parts[0]}`;
-  }
-  const parts = clean.split('-');
-  if (parts.length === 3 && parts[0].length === 4) return clean;
-  try {
-    const d = new Date(clean);
-    if (!isNaN(d.getTime())) {
-      return getSaoPauloISODate(d);
-    }
-  } catch (_) {}
+  const extracted = extractISODateFromTimestamp(clean);
+  if (extracted) return extracted;
   return clean;
 }
 

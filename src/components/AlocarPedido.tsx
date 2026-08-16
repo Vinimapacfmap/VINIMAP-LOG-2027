@@ -48,6 +48,7 @@ import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBra
 import { hasOrderCompletionEvidence } from '../utils/orderConsistency';
 import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from '../utils/addressUtils';
+import { realtimeSyncBus } from '../utils/realtimeSync';
 
 const getStatusClasses = (status: string) => {
   switch (status) {
@@ -544,7 +545,10 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       }
     ];
 
-    onAllocateSuccess(updatedOrders, updatedRiders, logsGenerated);
+    const finalOrders = driverB ? resequenceRiderOrdersByCep(updatedOrders, driverB.id) : updatedOrders;
+    realtimeSyncBus.broadcastOrdersBatch(finalOrders);
+    updatedRiders.forEach(r => realtimeSyncBus.broadcastRiderUpdate(r));
+    onAllocateSuccess(finalOrders, updatedRiders, logsGenerated);
     setIsReallocateModalOpen(false);
     alert(`Sucesso! ${countToMove} pedido(s) realocado(s) com sucesso de ${driverA?.name || 'Origem'} para ${driverB?.name}.`);
   };
@@ -655,7 +659,10 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       }
     ];
 
-    onAllocateSuccess(updatedOrders, updatedRiders, logsGenerated);
+    const finalOrders = resequenceRiderOrdersByCep(updatedOrders, driverB.id);
+    realtimeSyncBus.broadcastOrdersBatch(finalOrders);
+    updatedRiders.forEach(r => realtimeSyncBus.broadcastRiderUpdate(r));
+    onAllocateSuccess(finalOrders, updatedRiders, logsGenerated);
     setSelectedOrderIds(new Set());
     alert(`Sucesso! ${countToMove} pedido(s) vinculados ao condutor ${driverB.name}. A tela de alocação foi atualizada.`);
   };
@@ -965,6 +972,11 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     });
     return total;
   }, [orders, selectedOrderIds]);
+
+  // Alphabetically/Lexicographically sorted riders list for dropdowns
+  const sortedRidersByName = React.useMemo(() => {
+    return [...riders].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+  }, [riders]);
 
   // Sync selected rider from prop list if empty
   useEffect(() => {
@@ -2239,7 +2251,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         >
                           <option value="todos">-- Todos os Pedidos (Com e Sem Condutor) --</option>
                           <option value="unassigned">-- Sem Condutor (Não Vinculados) --</option>
-                          {riders.map(r => {
+                          {sortedRidersByName.map(r => {
                             const countActive = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
                             return (
                               <option key={`fa-${r.id}`} value={r.id}>
@@ -2405,7 +2417,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                           style={{ overflow: 'visible', zIndex: 9999 }}
                         >
                           <option value="">-- Selecione o Condutor (B) --</option>
-                          {riders.map(r => {
+                          {sortedRidersByName.map(r => {
                             const countActive = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
                             const isSameAsA = filterDriverAId !== 'todos' && filterDriverAId !== 'unassigned' && r.id === filterDriverAId;
                             return (

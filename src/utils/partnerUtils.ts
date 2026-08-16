@@ -125,7 +125,7 @@ export function isOrderMatchingPartner(
 }
 
 /**
- * Checks if an order matches a selected rider/driver filter value (by ID, name, or phone).
+ * Checks if an order matches a selected rider/driver filter value (by ID, name, phone, deviceNumber, CPF).
  */
 export function isOrderMatchingRider(
   order: { riderId?: string; rawData?: Record<string, string> },
@@ -137,11 +137,17 @@ export function isOrderMatchingRider(
   }
 
   const cleanFilter = filterRiderId.trim().toLowerCase();
+  const filterDigits = cleanFilter.replace(/\D/g, '');
   const orderRiderId = (order.riderId || '').trim().toLowerCase();
+  const orderRiderDigits = orderRiderId.replace(/\D/g, '');
   const rawRider = (order.rawData?.['DispositivoCondutor'] || order.rawData?.['Entregador'] || order.rawData?.['Condutor'] || '').trim().toLowerCase();
+  const rawRiderDigits = rawRider.replace(/\D/g, '');
 
-  // 1. Exact ID or direct string match
+  // 1. Exact ID or direct string / digit match
   if (orderRiderId === cleanFilter || rawRider === cleanFilter) {
+    return true;
+  }
+  if (filterDigits.length >= 8 && (orderRiderDigits === filterDigits || rawRiderDigits === filterDigits)) {
     return true;
   }
 
@@ -150,15 +156,23 @@ export function isOrderMatchingRider(
     const targetRider = riders.find(r => 
       r.id.toLowerCase() === cleanFilter || 
       r.name.toLowerCase() === cleanFilter ||
-      (r.phone && r.phone.replace(/\D/g, '') === cleanFilter.replace(/\D/g, ''))
+      (r.phone && r.phone.replace(/\D/g, '') === filterDigits) ||
+      (r.deviceNumber && r.deviceNumber.replace(/\D/g, '') === filterDigits) ||
+      (r.cpfCnpj && r.cpfCnpj.replace(/\D/g, '') === filterDigits)
     );
 
     if (targetRider) {
-      if (orderRiderId === targetRider.id.toLowerCase()) return true;
-      if (orderRiderId === targetRider.name.toLowerCase()) return true;
-      if (rawRider === targetRider.id.toLowerCase()) return true;
-      if (rawRider === targetRider.name.toLowerCase()) return true;
-      if (targetRider.phone && rawRider === targetRider.phone.replace(/\D/g, '')) return true;
+      const tId = targetRider.id.toLowerCase();
+      const tName = targetRider.name.toLowerCase();
+      const tPhoneDigits = (targetRider.phone || '').replace(/\D/g, '');
+      const tDeviceDigits = (targetRider.deviceNumber || '').replace(/\D/g, '');
+      const tCpfDigits = (targetRider.cpfCnpj || '').replace(/\D/g, '');
+
+      if (orderRiderId === tId || orderRiderId === tName) return true;
+      if (rawRider === tId || rawRider === tName) return true;
+      if (tPhoneDigits && (orderRiderDigits === tPhoneDigits || rawRiderDigits === tPhoneDigits)) return true;
+      if (tDeviceDigits && (orderRiderDigits === tDeviceDigits || rawRiderDigits === tDeviceDigits)) return true;
+      if (tCpfDigits && (orderRiderDigits === tCpfDigits || rawRiderDigits === tCpfDigits)) return true;
     }
   }
 
