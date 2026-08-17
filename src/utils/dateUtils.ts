@@ -20,26 +20,78 @@ export function getSaoPauloTime(dateInput?: Date | string | number): string {
  * Formats a Date object or string to a local São Paulo date string (DD/MM/YYYY).
  */
 export function getSaoPauloDate(dateInput?: Date | string | number): string {
+  if (!dateInput) {
+    const d = new Date();
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(d);
+  }
+
   const iso = getSaoPauloISODate(dateInput); // YYYY-MM-DD
   const parts = iso.split('-');
   if (parts.length === 3) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
   
-  const d = dateInput ? new Date(dateInput) : new Date();
-  return new Intl.DateTimeFormat('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(d);
+  return formatToBrazilianDate(String(dateInput));
 }
 
 /**
  * Formats a Date object or string to a local São Paulo ISO date string (YYYY-MM-DD).
+ * Safely avoids UTC midnight shifting errors when parsing Brazilian date strings or ISO strings.
  */
 export function getSaoPauloISODate(dateInput?: Date | string | number): string {
-  const d = dateInput ? new Date(dateInput) : new Date();
+  if (!dateInput) {
+    const d = new Date();
+    return new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(d);
+  }
+
+  if (typeof dateInput === 'string') {
+    const clean = dateInput.trim();
+    if (!clean) {
+      return getSaoPauloISODate();
+    }
+    // If it's already in YYYY-MM-DD format (e.g. 2026-08-14)
+    const isoPureMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoPureMatch) {
+      return `${isoPureMatch[1]}-${isoPureMatch[2]}-${isoPureMatch[3]}`;
+    }
+    // If it's in DD/MM/YYYY or DD-MM-YYYY format (e.g. 14/08/2026 or 14-08-2026)
+    const brFullMatch = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+    if (brFullMatch) {
+      return `${brFullMatch[3]}-${brFullMatch[2]}-${brFullMatch[1]}`;
+    }
+    // If it's in DD-MM or DD/MM format (e.g. 14-08 or 14/08)
+    const brShortMatch = clean.match(/^(\d{2})[-/](\d{2})/);
+    if (brShortMatch && !clean.includes('T')) {
+      const currentYear = new Date().getFullYear();
+      return `${currentYear}-${brShortMatch[2]}-${brShortMatch[1]}`;
+    }
+    // If it's in DD/MM/YY or DD-MM-YY format (e.g. 14/08/26)
+    const brShortYearMatch = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{2})/);
+    if (brShortYearMatch) {
+      return `20${brShortYearMatch[3]}-${brShortYearMatch[2]}-${brShortYearMatch[1]}`;
+    }
+  }
+
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) {
+    return new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  }
+
   return new Intl.DateTimeFormat('fr-CA', {
     timeZone: 'America/Sao_Paulo',
     year: 'numeric',
@@ -78,28 +130,41 @@ export function getSaoPauloDateTimeShort(dateInput?: Date | string | number): st
  */
 export function formatToBrazilianDate(dateString?: string): string {
   if (!dateString) return '';
-  const clean = dateString.trim();
-  // If it's already in DD/MM/YYYY format, return it
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
-    return clean;
+  const clean = String(dateString).trim();
+  if (!clean) return '';
+
+  // If it's already in DD/MM/YYYY format
+  const brFullMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brFullMatch) {
+    return `${brFullMatch[1]}/${brFullMatch[2]}/${brFullMatch[3]}`;
   }
   // If DD-MM-YYYY
-  const brHyphenMatch = clean.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  const brHyphenMatch = clean.match(/^(\d{2})-(\d{2})-(\d{4})/);
   if (brHyphenMatch) {
     return `${brHyphenMatch[1]}/${brHyphenMatch[2]}/${brHyphenMatch[3]}`;
   }
   // If DD-MM or DD/MM
-  const shortMatch = clean.match(/^(\d{2})[-/](\d{2})$/);
-  if (shortMatch) {
+  const shortMatch = clean.match(/^(\d{2})[-/](\d{2})/);
+  if (shortMatch && !clean.includes('T')) {
     const currentYear = new Date().getFullYear();
     return `${shortMatch[1]}/${shortMatch[2]}/${currentYear}`;
   }
-  // If YYYY-MM-DD
+  // If YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
   const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
   }
-  
+  // If YYYY/MM/DD
+  const isoSlashMatch = clean.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+  if (isoSlashMatch) {
+    return `${isoSlashMatch[3]}/${isoSlashMatch[2]}/${isoSlashMatch[1]}`;
+  }
+  // If DD/MM/YY or DD-MM-YY
+  const shortYearMatch = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{2})/);
+  if (shortYearMatch) {
+    return `${shortYearMatch[1]}/${shortYearMatch[2]}/20${shortYearMatch[3]}`;
+  }
+
   const parts = clean.split('-');
   if (parts.length === 3) {
     if (parts[0].length === 4) {
@@ -107,15 +172,13 @@ export function formatToBrazilianDate(dateString?: string): string {
     }
     return `${parts[0]}/${parts[1]}/${parts[2]}`;
   }
-  
-  // Try to parse as date in Sao Paulo timezone
-  try {
-    const d = new Date(clean);
-    if (!isNaN(d.getTime())) {
-      return getSaoPauloDate(d);
+
+  const iso = extractISODateFromTimestamp(clean);
+  if (iso) {
+    const isoParts = iso.split('-');
+    if (isoParts.length === 3) {
+      return `${isoParts[2]}/${isoParts[1]}/${isoParts[0]}`;
     }
-  } catch (e) {
-    // Ignore and fallback
   }
   
   return clean;
@@ -143,13 +206,13 @@ export function extractISODateFromTimestamp(timestamp?: string | number): string
   }
 
   // Format DD-MM or DD/MM (e.g. 13-08, 14-08, 13/08, 14/08)
-  const shortMatch = clean.match(/^(\d{2})[-/](\d{2})$/);
-  if (shortMatch) {
+  const shortMatch = clean.match(/^(\d{2})[-/](\d{2})/);
+  if (shortMatch && !clean.includes('T')) {
     const currentYear = new Date().getFullYear();
     return `${currentYear}-${shortMatch[2]}-${shortMatch[1]}`;
   }
 
-  // Format YYYY-MM-DD or YYYY-MM-DD HH:MM
+  // Format YYYY-MM-DD or YYYY-MM-DD HH:MM or YYYY-MM-DDTHH:MM:SS
   const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
@@ -162,7 +225,7 @@ export function extractISODateFromTimestamp(timestamp?: string | number): string
   }
 
   // Format DD/MM/YY or DD-MM-YY
-  const shortYearMatch = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{2})$/);
+  const shortYearMatch = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{2})/);
   if (shortYearMatch) {
     const fullYear = `20${shortYearMatch[3]}`;
     return `${fullYear}-${shortYearMatch[2]}-${shortYearMatch[1]}`;
@@ -175,7 +238,10 @@ export function extractISODateFromTimestamp(timestamp?: string | number): string
       const excelEpoch = new Date(1899, 11, 30);
       const targetDate = new Date(excelEpoch.getTime() + numericVal * 86400000);
       if (!isNaN(targetDate.getTime())) {
-        return getSaoPauloISODate(targetDate);
+        const y = targetDate.getFullYear();
+        const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const d = String(targetDate.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
       }
     } catch (_) {}
   }
@@ -289,9 +355,21 @@ export function isOrderInDatePeriod(
     order.rawData?.dataLancamento,
     order.rawData?.DataAgendamento,
     order.rawData?.DataSolicitacao,
+    order.rawData?.dataSolicitacao,
     order.rawData?.DataCriacao,
     order.rawData?.DataStatus,
   ];
+
+  if (order.rawData && typeof order.rawData === 'object') {
+    Object.entries(order.rawData).forEach(([k, v]) => {
+      if (v && typeof v === 'string') {
+        const normKey = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (normKey.includes('data') || normKey.includes('date') || normKey.includes('solicit') || normKey.includes('dia')) {
+          candidateDates.push(v);
+        }
+      }
+    });
+  }
 
   let dateMatches = false;
 

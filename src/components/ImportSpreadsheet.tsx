@@ -29,7 +29,7 @@ import { Order, DeliveryRider, ClientPartner, isMatchingClientCode, OrderStatus 
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
 import * as XLSX from 'xlsx';
-import { getSaoPauloDateTimeShort, getSaoPauloISODate, getSaoPauloTime, extractISODateFromTimestamp } from '../utils/dateUtils';
+import { getSaoPauloDateTimeShort, getSaoPauloISODate, getSaoPauloTime, getSaoPauloDate, formatToBrazilianDate, extractISODateFromTimestamp } from '../utils/dateUtils';
 
 interface ImportSpreadsheetProps {
   orders: Order[];
@@ -301,13 +301,14 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
           warnings.push(`O parceiro '${codCliente}' será cadastrado automaticamente no sistema ao importar.`);
         }
       }
-      // Rule 2: Date Solicitação validation (flexible & robust - Regra de Data Vigente)
-      if (!dataSol) {
-        warnings.push(`DataSolicitacao não informada: o pedido será atribuído automaticamente à data vigente de hoje (${todayReal}).`);
+
+      // Rule 2: Mandatory 'DataSolicitacao' (Obrigatório estar preenchido quando houver dados na linha)
+      if (!dataSol || !dataSol.trim()) {
+        errors.push("Campo obrigatório ausente: 'DataSolicitacao' (A data da solicitação deve estar preenchida).");
       } else {
         const normalizedSolDate = normalizeDate(dataSol);
-        if (normalizedSolDate !== todayReal) {
-          warnings.push(`A 'DataSolicitacao' (${dataSol}) difere da data vigente (${todayReal}). O pedido será importado com a data (${normalizedSolDate}) e o filtro da Central será ajustado automaticamente.`);
+        if (!normalizedSolDate || normalizedSolDate.length < 8) {
+          errors.push(`Campo 'DataSolicitacao' com formato inválido: '${dataSol}'. Utilize o padrão brasileiro DD/MM/AAAA ou DD-MM-AAAA.`);
         }
       }
 
@@ -373,14 +374,14 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
   };
 
   const handleDownloadTemplate = () => {
-    // Generate genuine Excel spreadsheet (.xlsx) template file with today's real date to pass validation out-of-the-box
-    const todayStr = getRealTodayDateStr();
+    // Generate genuine Excel spreadsheet (.xlsx) template file with today's real date in Brazilian format (DD/MM/YYYY)
+    const todayBrStr = getSaoPauloDate(); // e.g. "17/08/2026"
     const headers = REQUIRED_COLUMNS;
     const sampleRow1 = [
-      '1', 'CL1-005', todayStr, '901', 'Carlos Silva', 'Av. Paulista, 1000', '01310-100', '11999998888', 'ent-1', 'Apto 42', '120.50', '18:00', 'carlos@email.com', '12345678000199', 'Rápida', 'CH-991', 'DANFE-111', todayStr, 'Burger King Paulista', '14:00', todayStr, 'São Paulo', 'SP', 'Entregar na portaria', '120.50', '12.00', '-23.5612', '-46.6543', '12345678909', '8.50', 'expresso', todayStr
+      '1', 'CL1-005', todayBrStr, '901', 'Carlos Silva', 'Av. Paulista, 1000', '01310-100', '11999998888', 'ent-1', 'Apto 42', '120.50', '18:00', 'carlos@email.com', '12345678000199', 'Rápida', 'CH-991', 'DANFE-111', todayBrStr, 'Burger King Paulista', '14:00', todayBrStr, 'São Paulo', 'SP', 'Entregar na portaria', '120.50', '12.00', '-23.5612', '-46.6543', '12345678909', '8.50', 'expresso', todayBrStr
     ];
     const sampleRow2 = [
-      '2', 'CL1-006', todayStr, '902', 'Ana Souza', 'Rua Augusta, 500', '01304-001', '11988887777', 'ent-2', 'Casa fundos', '75.00', '19:00', 'ana@email.com', '98765432000188', 'Normal', 'CH-992', 'DANFE-222', todayStr, 'Bella Augusta', '15:00', todayStr, 'São Paulo', 'SP', 'Tocar o interfone', '75.00', '10.00', '-23.5512', '-46.6643', '98765432101', '7.00', '', todayStr
+      '2', 'CL1-006', todayBrStr, '902', 'Ana Souza', 'Rua Augusta, 500', '01304-001', '11988887777', 'ent-2', 'Casa fundos', '75.00', '19:00', 'ana@email.com', '98765432000188', 'Normal', 'CH-992', 'DANFE-222', todayBrStr, 'Bella Augusta', '15:00', todayBrStr, 'São Paulo', 'SP', 'Tocar o interfone', '75.00', '10.00', '-23.5512', '-46.6643', '98765432101', '7.00', '', todayBrStr
     ];
 
     const aoaData = [headers, sampleRow1, sampleRow2];
@@ -1108,6 +1109,7 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
                         );
                         
                         const isMonetary = ['valorentrega', 'valorcondutor', 'valornotafiscal', 'valorreceber'].includes(normalizedHeader);
+                        const isDate = ['datasolicitacao', 'datalimite', 'dataagendamento', 'dataconclusao'].includes(normalizedHeader) || normalizedHeader.includes('data') || normalizedHeader.includes('date');
                         
                         return (
                           <td 
@@ -1120,6 +1122,8 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
                               <span className="text-slate-300 italic font-normal text-[11px]">vazio</span>
                             ) : isMonetary ? (
                               isNaN(parseFloat(val)) ? val : `R$ ${parseFloat(val).toFixed(2).replace('.', ',')}`
+                            ) : isDate ? (
+                              formatToBrazilianDate(val)
                             ) : (
                               val
                             )}
