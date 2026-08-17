@@ -8,7 +8,7 @@ import {
   CompanyHub 
 } from '../types';
 import { sanitizeOrdersListConsistency } from '../utils/orderConsistency';
-import { extractISODateFromTimestamp } from '../utils/dateUtils';
+import { extractISODateFromTimestamp, getSaoPauloISODate } from '../utils/dateUtils';
 
 // ============================================================================
 // MAPPING HELPER FUNCTIONS (camelCase <-> snake_case)
@@ -184,7 +184,7 @@ export function mapOrderFromDb(row: any): Order {
   const resolvedDate = extractISODateFromTimestamp(rawDateCandidate) 
     || (typeof rawDateCandidate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDateCandidate) ? rawDateCandidate : undefined)
     || (row.date ? String(row.date) : undefined)
-    || '2026-08-14';
+    || getSaoPauloISODate();
 
   const resolvedRiderId = row.rider_id 
     || rawDataObj?.riderId 

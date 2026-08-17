@@ -127,16 +127,16 @@ export function sanitizeOrderConsistency(
     }
   }
 
-  const orderIsoDate = normalizeToISODate(updated.date || updated.deliveryDate || updated.dataConclusao) || todayIso;
+  const orderIsoDate = normalizeToISODate(updated.date) || normalizeToISODate(updated.deliveryDate || updated.dataConclusao) || todayIso;
 
-  // Restore status to 'Concluído' if strong completion evidence exists
-  const hasEvidence = hasOrderCompletionEvidence(updated);
-  const rawStatus = updated.rawData?.Situacao || updated.rawData?.status || updated.rawData?.Status;
-  const isRawCompleted = rawStatus === 'Concluído' || rawStatus === 'Concluido' || rawStatus === 'Entregue';
-
-  if ((hasEvidence || isRawCompleted) && updated.status !== 'Concluído' && updated.status !== 'Cancelado' && updated.status !== 'Ocorrência') {
-    updated.status = 'Concluído';
-    isModified = true;
+  // Sync rawData status with authoritative order.status so that rawData does not have conflicting stale status
+  if (updated.rawData && updated.status) {
+    if (updated.rawData.status !== updated.status || updated.rawData.Situacao !== updated.status || updated.rawData.Status !== updated.status) {
+      updated.rawData.status = updated.status;
+      updated.rawData.Situacao = updated.status;
+      updated.rawData.Status = updated.status;
+      isModified = true;
+    }
   }
 
   // Restore fields from rawData if missing in root

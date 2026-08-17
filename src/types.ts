@@ -54,6 +54,7 @@ export interface Order {
   complement?: string; // Complemento do endereço
   city?: string;       // Cidade
   state?: string;      // UF / Estado
+  updatedAt?: string;  // ISO timestamp of latest modification
 }
 
 export interface CepRange {

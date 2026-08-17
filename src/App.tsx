@@ -648,9 +648,21 @@ export default function App() {
     const mergeOrders = (prev: Order[], incoming: Order[]): Order[] => {
       const map = new Map<string, Order>();
       prev.forEach(o => map.set(o.id, o));
-      incoming.forEach(o => {
-        const existing = map.get(o.id);
-        map.set(o.id, existing ? { ...existing, ...o } : o);
+      incoming.forEach(inc => {
+        const existing = map.get(inc.id);
+        if (!existing) {
+          map.set(inc.id, inc);
+        } else {
+          // If existing order has a newer updatedAt timestamp than incoming, preserve the latest local edit
+          const existingTime = existing.updatedAt || (existing.history && existing.history.length > 0 ? existing.history[existing.history.length - 1]?.timestamp : undefined);
+          const incTime = inc.updatedAt || (inc.history && inc.history.length > 0 ? inc.history[inc.history.length - 1]?.timestamp : undefined);
+
+          if (existingTime && incTime && existingTime > incTime) {
+            map.set(inc.id, { ...inc, ...existing });
+          } else {
+            map.set(inc.id, { ...existing, ...inc });
+          }
+        }
       });
       return Array.from(map.values());
     };
@@ -2252,12 +2264,20 @@ export default function App() {
         updatedRawData['DataOcorrencia'] = occDate;
         updatedRawData['occurrenceDate'] = occDate;
         if (!updatedRawData['DataEntrega']) updatedRawData['DataEntrega'] = occDate;
-      } else if (nextStatus === 'Não iniciado') {
+      } else {
         delete updatedRawData['DataConclusao'];
         delete updatedRawData['DataEntrega'];
         delete updatedRawData['dataconclusao'];
+        delete updatedRawData['dataConclusao'];
         delete updatedRawData['DataOcorrencia'];
+        delete updatedRawData['occurrenceDate'];
       }
+
+      // Authoritative status in rawData
+      updatedRawData['status'] = nextStatus;
+      updatedRawData['Situacao'] = nextStatus;
+      updatedRawData['Status'] = nextStatus;
+
       if (calculatedHorarioInicial) updatedRawData['HorarioInicio'] = calculatedHorarioInicial;
       if (calculatedHorarioFinal) {
         updatedRawData['HorarioFinal'] = calculatedHorarioFinal;
@@ -2292,13 +2312,14 @@ export default function App() {
         deliveryPhotoUrl: finalDeliveryPhotoUrl,
         recipientName: finalRecipientName,
         recipientDoc: finalRecipientDoc,
-        occurrenceDate: nextStatus === 'Ocorrência' ? (currentOrder.occurrenceDate || getSaoPauloISODate()) : currentOrder.occurrenceDate,
+        occurrenceDate: nextStatus === 'Ocorrência' ? (currentOrder.occurrenceDate || getSaoPauloISODate()) : (isConcluido ? currentOrder.occurrenceDate : undefined),
         deliveryDate: calculatedDeliveryDate,
         deliveryTime: calculatedDeliveryTime,
-        dataConclusao: calculatedDataConclusao,
+        dataConclusao: isConcluido ? calculatedDataConclusao : undefined,
         horarioInicial: calculatedHorarioInicial,
         horarioFinal: calculatedHorarioFinal,
-        rawData: updatedRawData
+        rawData: updatedRawData,
+        updatedAt: new Date().toISOString()
       };
 
       // Execute Automatic Customer Notification Processing if Order is Completed
@@ -2816,7 +2837,15 @@ export default function App() {
         finalOrder.riderId = undefined;
       }
 
+      finalOrder.updatedAt = new Date().toISOString();
+      if (finalOrder.rawData) {
+        finalOrder.rawData.status = finalOrder.status;
+        finalOrder.rawData.Situacao = finalOrder.status;
+        finalOrder.rawData.Status = finalOrder.status;
+      }
+
       setOrders(prev => prev.map(o => o.id === finalOrder.id ? finalOrder : o));
+      realtimeSyncBus.broadcastOrderStatusChanged(finalOrder);
       promises.push(dbSaveOrder(finalOrder));
 
       const nowTime = getSaoPauloTime();
@@ -2911,6 +2940,8 @@ export default function App() {
 
           const updatedRawData = { ...(order.rawData || {}) };
           updatedRawData['Situacao'] = nextStatus;
+          updatedRawData['status'] = nextStatus;
+          updatedRawData['Status'] = nextStatus;
           if (finalProtocolNumber) updatedRawData['NumeroProtocolo'] = finalProtocolNumber;
           if (finalSignatureUrl) {
             updatedRawData['signatureUrl'] = finalSignatureUrl;
@@ -2939,6 +2970,7 @@ export default function App() {
           } else if (!isConcluido) {
             delete updatedRawData['DataConclusao'];
             delete updatedRawData['dataconclusao'];
+            delete updatedRawData['dataConclusao'];
           }
           if (calculatedDeliveryTime) updatedRawData['HorarioFinal'] = calculatedDeliveryTime;
 
@@ -2956,7 +2988,8 @@ export default function App() {
             deliveryTime: calculatedDeliveryTime,
             dataConclusao: isConcluido ? calculatedDeliveryDate : undefined,
             horarioFinal: calculatedDeliveryTime,
-            rawData: updatedRawData
+            rawData: updatedRawData,
+            updatedAt: new Date().toISOString()
           });
         }
       });
@@ -2965,6 +2998,9 @@ export default function App() {
       const allNewOrders = orders.map(o => updatedOrdersMap.get(o.id) || o);
 
       setOrders(allNewOrders);
+      if (updatedOrders.length > 0) {
+        realtimeSyncBus.broadcastOrdersBatch(updatedOrders);
+      }
 
       // Re-evaluate affected riders
       const ridersToSave: DeliveryRider[] = [];
