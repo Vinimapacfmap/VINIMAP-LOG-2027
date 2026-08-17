@@ -105,15 +105,34 @@ export function isQuotaError(error: unknown): boolean {
   const code = (error as any)?.code;
   return (
     code === 'resource-exhausted' ||
+    code === 'RESOURCE_EXHAUSTED' ||
     msg.includes('resource-exhausted') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
     msg.includes('Quota limit exceeded') ||
     msg.includes('quota metric') ||
     msg.includes('Free daily write units per project') ||
-    msg.includes('Free daily read units per project')
+    msg.includes('Free daily read units per project') ||
+    msg.includes('Write stream exhausted') ||
+    msg.includes('maximum allowed queued writes') ||
+    msg.includes('maximum backoff delay') ||
+    msg.includes('overloading the backend')
   );
 }
 
 let isFirestoreQuotaExceededState = false;
+
+export function setIsFirestoreQuotaExceeded(exceeded: boolean = true): void {
+  isFirestoreQuotaExceededState = exceeded;
+  if (typeof window !== 'undefined') {
+    try {
+      if (exceeded) {
+        window.sessionStorage.setItem('firestore_quota_exceeded', 'true');
+      } else {
+        window.sessionStorage.removeItem('firestore_quota_exceeded');
+      }
+    } catch (_) {}
+  }
+}
 
 export function getIsFirestoreQuotaExceeded(): boolean {
   if (isFirestoreQuotaExceededState) return true;
