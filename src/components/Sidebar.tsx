@@ -33,7 +33,8 @@ import {
   Download,
   Image as ImageIcon,
   GitBranch,
-  RotateCcw
+  RotateCcw,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
@@ -43,11 +44,13 @@ interface SidebarProps {
   activeSection: string;
   setActiveSection: (section: string) => void;
   activeHub?: { name: string; logoUrl?: string };
+  onLogout?: () => void;
 }
 
-export default function Sidebar({ activeSection, setActiveSection, activeHub }: SidebarProps) {
+export default function Sidebar({ activeSection, setActiveSection, activeHub, onLogout }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const isExpanded = !collapsed || isHovered;
 
@@ -330,38 +333,116 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub }: 
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="p-3 bg-slate-50 rounded-2xl border border-slate-100/50"
+            className="p-3 bg-slate-50 rounded-2xl border border-slate-100/50 space-y-2"
           >
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Operação Ativa</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Operação Ativa</span>
+              </div>
+              <span className="text-[9px] font-mono text-slate-400">v1.4.2</span>
             </div>
-            <p className="text-[10px] text-slate-500 leading-normal mb-2">7 entregadores ativos em SP.</p>
-            <div className="flex items-center justify-between border-t border-slate-200/50 pt-2 mt-2">
-              <span className="text-[9px] font-mono text-slate-400">v1.4.2-Blue</span>
+            <p className="text-[10px] text-slate-500 leading-tight">Central Vinimap SP Conectada.</p>
+            
+            <div className="flex items-center justify-between border-t border-slate-200/50 pt-2 gap-1">
               <button 
                 onClick={() => setActiveSection('configuracoes')}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 cursor-pointer"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 text-[11px] font-semibold cursor-pointer transition-colors"
                 title="Configurações da Operação"
                 id="sidebar-settings-btn"
               >
-                <Settings size={14} />
+                <Settings size={13} />
+                <span>Ajustes</span>
+              </button>
+
+              <button 
+                onClick={() => setShowLogoutModal(true)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-100/70 text-[11px] font-bold cursor-pointer transition-colors"
+                title="Sair do Painel / Encerrar Sessão"
+                id="sidebar-logout-btn"
+              >
+                <LogOut size={13} />
+                <span>Sair</span>
               </button>
             </div>
           </motion.div>
         ) : (
-          <div className="flex flex-col items-center gap-3 py-2">
+          <div className="flex flex-col items-center gap-2 py-1">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <button 
               onClick={() => setActiveSection('configuracoes')}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              title="Configurações"
               id="sidebar-settings-collapsed-btn"
             >
               <Settings size={14} />
             </button>
+            <button 
+              onClick={() => setShowLogoutModal(true)}
+              className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+              title="Sair do Painel"
+              id="sidebar-logout-collapsed-btn"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
         )}
       </div>
+
+      {/* Sidebar Logout Confirmation Dialog */}
+      <AnimatePresence>
+        {showLogoutModal && (
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-[9999] p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full border border-slate-200 shadow-2xl text-center space-y-4 relative overflow-hidden"
+              id="sidebar-logout-modal"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
+                <LogOut size={26} className="stroke-[2.5]" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-black text-slate-800">Deseja sair do painel?</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Sua sessão de despachante será encerrada com segurança.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutModal(false)}
+                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowLogoutModal(false);
+                    if (onLogout) {
+                      onLogout();
+                    } else {
+                      const m = await import("../supabase");
+                      if (m.supabase) {
+                        await m.supabase.auth.signOut();
+                      }
+                      window.location.reload();
+                    }
+                  }}
+                  className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-xs rounded-xl shadow-md shadow-rose-200 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <LogOut size={14} />
+                  <span>Sim, Sair</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

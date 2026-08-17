@@ -45,6 +45,7 @@ interface HeaderProps {
   supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
   orders?: Order[];
   onNavigateToOrders?: () => void;
+  onNavigateToSection?: (section: string) => void;
 }
 
 export default function Header({ 
@@ -60,20 +61,30 @@ export default function Header({
   lastSupabaseSyncTime,
   supabaseSyncStatus = 'idle',
   orders = [],
-  onNavigateToOrders
+  onNavigateToOrders,
+  onNavigateToSection
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [timeStr, setTimeStr] = useState('');
   const [dateStr, setDateStr] = useState('');
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const profileContainerRef = useRef<HTMLDivElement>(null);
+  const notificationsContainerRef = useRef<HTMLDivElement>(null);
 
-  // Close search dropdown on click outside
+  // Close search, profile and notification dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setIsSearchFocused(false);
+      }
+      if (profileContainerRef.current && !profileContainerRef.current.contains(e.target as Node)) {
+        setShowProfile(false);
+      }
+      if (notificationsContainerRef.current && !notificationsContainerRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -309,35 +320,35 @@ export default function Header({
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
         
         {/* Real-Time Operational Clock & Date */}
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-600 font-mono" id="header-clock">
-          <Clock size={14} className="text-blue-500 animate-spin" style={{ animationDuration: '8s' }} />
+        <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-100 rounded-xl text-[11px] font-semibold text-slate-600 font-mono shrink-0" id="header-clock">
+          <Clock size={13} className="text-blue-500 animate-spin" style={{ animationDuration: '8s' }} />
           <span className="font-sans font-bold text-slate-700">{dateStr}</span>
           <span className="text-slate-300">•</span>
           <span>{timeStr}</span>
-          <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded uppercase font-sans font-bold">Ao Vivo</span>
+          <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded uppercase font-sans font-bold">Ao Vivo</span>
         </div>
 
         {/* Vercel Environment Badge */}
-        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 text-white rounded-xl text-[11px] font-extrabold shadow-xs border border-slate-800" title="Vercel Ready / Production Environment">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <div className="hidden 2xl:flex items-center gap-1.5 px-2 py-1 bg-slate-900 text-white rounded-xl text-[10px] font-extrabold shadow-2xs border border-slate-800 shrink-0" title="Vercel Ready / Production Environment">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
           <span className="tracking-tight">Vercel OS</span>
         </div>
 
         {/* Notifications Center */}
-        <div className="relative" id="notifications-dropdown-container">
+        <div className="relative shrink-0" id="notifications-dropdown-container" ref={notificationsContainerRef}>
           <button
             onClick={() => {
               setShowNotifications(!showNotifications);
               setShowProfile(false);
             }}
-            className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-100 cursor-pointer relative transition-all"
+            className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-100 cursor-pointer relative transition-all"
             id="header-notifications-btn"
           >
-            <Bell size={18} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full animate-bounce" />
+            <Bell size={16} />
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-bounce" />
           </button>
 
           <AnimatePresence>
@@ -361,16 +372,16 @@ export default function Header({
                     return (
                       <div 
                         key={notif.id} 
-                        className="p-3.5 hover:bg-slate-50/50 flex gap-3 transition-colors cursor-pointer"
+                        className="p-3 hover:bg-slate-50/50 flex gap-2.5 transition-colors cursor-pointer"
                       >
-                        <div className={`p-2 rounded-lg shrink-0 flex items-center justify-center ${
+                        <div className={`p-1.5 rounded-lg shrink-0 flex items-center justify-center ${
                           notif.type === 'danger' ? 'bg-rose-50 text-rose-600' :
                           notif.type === 'success' ? 'bg-emerald-50 text-emerald-600' :
                           'bg-blue-50 text-blue-600'
                         }`}>
-                          <Icon size={16} />
+                          <Icon size={14} />
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-slate-800">{notif.title}</p>
                           <p className="text-[11px] text-slate-500 mt-0.5 leading-normal">{notif.desc}</p>
                           <span className="text-[9px] text-slate-400 font-medium block mt-1 font-mono">{notif.time}</span>
@@ -405,7 +416,7 @@ export default function Header({
                 ? `Última sincronização com Supabase: ${lastSupabaseSyncTime}. Clique para sincronizar novamente.`
                 : 'Sincronizar todos os dados do painel com o Supabase imediatamente'
             }
-            className={`hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border shadow-3xs transition-all cursor-pointer shrink-0 group ${
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border shadow-3xs transition-all cursor-pointer shrink-0 group ${
               isSyncingSupabase
                 ? 'bg-amber-50 text-amber-700 border-amber-200/80 cursor-wait'
                 : supabaseSyncStatus === 'synced'
@@ -417,16 +428,16 @@ export default function Header({
             id="header-supabase-sync-btn"
           >
             {isSyncingSupabase ? (
-              <RefreshCw size={15} className="animate-spin text-amber-600 shrink-0" />
+              <RefreshCw size={13} className="animate-spin text-amber-600 shrink-0" />
             ) : supabaseSyncStatus === 'synced' ? (
-              <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
             ) : supabaseSyncStatus === 'error' ? (
-              <AlertCircle size={15} className="text-rose-600 shrink-0" />
+              <AlertCircle size={13} className="text-rose-600 shrink-0" />
             ) : (
-              <RefreshCw size={15} className="text-sky-600 group-hover:rotate-180 transition-transform duration-500 shrink-0" />
+              <RefreshCw size={13} className="text-sky-600 group-hover:rotate-180 transition-transform duration-500 shrink-0" />
             )}
 
-            <span>
+            <span className="hidden md:inline">
               {isSyncingSupabase
                 ? 'Sincronizando...'
                 : supabaseSyncStatus === 'synced'
@@ -437,10 +448,10 @@ export default function Header({
             </span>
 
             {supabaseSyncStatus === 'synced' && !isSyncingSupabase && (
-              <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0" />
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0" />
             )}
             {isSyncingSupabase && (
-              <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping shrink-0" />
+              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping shrink-0" />
             )}
           </button>
         )}
@@ -450,86 +461,141 @@ export default function Header({
           <button
             onClick={onExportContingency}
             title={lastContingencyTime ? `Contingência salva: ${lastContingencyTime}. Clique para baixar o arquivo JSON.` : 'Exportar Banco de Dados (Pedidos & Parceiros) em JSON para contingência'}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-200/80 shadow-3xs transition-all cursor-pointer shrink-0 group"
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 font-bold text-[11px] rounded-xl border border-emerald-200/80 shadow-3xs transition-all cursor-pointer shrink-0 group"
             id="header-contingency-btn"
           >
-            <Database size={15} className="text-emerald-600 group-hover:scale-110 transition-transform" />
-            <span className="hidden lg:inline">Contingência JSON</span>
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <Database size={13} className="text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
+            <span>Contingência</span>
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0" />
           </button>
         )}
 
         {/* Create Order Dispatch Action */}
         <button
           onClick={onNewOrderClick}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-sm rounded-xl shadow-md shadow-blue-100 hover:shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer shrink-0"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-xs hover:shadow-md transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer shrink-0"
           id="header-new-order-btn"
         >
-          <Plus size={16} className="stroke-[3]" />
+          <Plus size={15} className="stroke-[3] shrink-0" />
           <span>Novo Pedido</span>
         </button>
 
-        <div className="h-6 w-px bg-slate-200 shrink-0" />
+        <div className="h-5 w-px bg-slate-200 shrink-0" />
 
-        {/* User Account Menu */}
-        <div className="relative" id="profile-dropdown-container">
+        {/* User Account Menu with Enhanced Sair do Painel Card */}
+        <div className="relative shrink-0" id="profile-dropdown-container" ref={profileContainerRef}>
           <button
             onClick={() => {
               setShowProfile(!showProfile);
               setShowNotifications(false);
             }}
-            className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 bg-slate-50 hover:bg-slate-100 rounded-full border border-slate-100 cursor-pointer transition-all"
+            className="flex items-center gap-2 pl-1 pr-2.5 py-1 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 rounded-full border border-slate-200/80 cursor-pointer transition-all shadow-3xs group shrink-0"
             id="header-profile-btn"
+            title="Conta do Operador / Opções de Saída"
           >
-            <div className="w-8 h-8 rounded-full bg-blue-500 text-white font-extrabold flex items-center justify-center border-2 border-white shadow-sm shadow-blue-100">
-              D
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-black text-[10px] flex items-center justify-center border-2 border-white shadow-2xs shadow-blue-200 group-hover:scale-105 transition-transform shrink-0">
+              CA
             </div>
-            <div className="text-left hidden sm:block">
-              <p className="text-xs font-bold text-slate-800 leading-none">Despachante 01</p>
-              <p className="text-[10px] text-slate-400 font-medium mt-0.5">araocris524</p>
+            <div className="text-left hidden sm:block leading-tight">
+              <p className="text-[11px] font-bold text-slate-800 leading-tight group-hover:text-blue-600 transition-colors whitespace-nowrap">Despachante 01</p>
+              <p className="text-[9px] text-slate-400 font-medium leading-none whitespace-nowrap">araocris524</p>
             </div>
           </button>
 
           <AnimatePresence>
             {showProfile && (
               <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 mt-3 w-56 bg-white rounded-2xl border border-slate-100 shadow-xl py-2 z-50"
+                className="absolute right-0 top-full mt-2 w-72 sm:w-80 max-w-[calc(100vw-24px)] bg-white rounded-2xl border border-slate-200/90 shadow-2xl shadow-slate-900/15 overflow-hidden z-50 flex flex-col"
+                id="header-profile-dropdown"
               >
-                <div className="px-4 py-2.5 border-b border-slate-100">
-                  <p className="text-xs font-bold text-slate-800">Cristóvão Arão</p>
-                  <p className="text-[10px] text-slate-400">araocris524@gmail.com</p>
+                {/* User Identity Header */}
+                <div className="p-3.5 bg-gradient-to-br from-slate-900 via-slate-850 to-blue-950 text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-28 h-28 bg-blue-500/10 rounded-full blur-xl pointer-events-none" />
+                  
+                  <div className="flex items-center gap-2.5 relative z-10">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-black text-xs flex items-center justify-center border border-white/20 shadow-sm shrink-0">
+                      CA
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs font-bold text-white tracking-tight truncate leading-tight">Cristóvão Arão</h4>
+                      <p className="text-[10px] text-slate-300 truncate font-mono leading-tight mt-0.5">araocris524@gmail.com</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t border-white/10 text-[9.5px]">
+                    <span className="bg-blue-500/20 text-blue-200 px-2 py-0.5 rounded-full font-bold border border-blue-400/20 flex items-center gap-1 shrink-0 whitespace-nowrap">
+                      <ShieldCheck size={10} className="text-blue-300 shrink-0" />
+                      <span>Despachante Adm.</span>
+                    </span>
+                    <span className="text-emerald-400 font-bold flex items-center gap-1 ml-auto shrink-0 whitespace-nowrap">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                      <span>Sessão Ativa</span>
+                    </span>
+                  </div>
                 </div>
-                <div className="p-1 space-y-0.5">
-                  <button className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg cursor-pointer">
-                    <User size={14} className="text-slate-400" />
-                    <span>Meu Perfil</span>
-                  </button>
-                  <button className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg cursor-pointer">
-                    <SlidersHorizontal size={14} className="text-slate-400" />
-                    <span>Ajustes da Central</span>
-                  </button>
-                  <div className="h-px bg-slate-50 my-1" />
+
+                {/* Quick Navigation Items */}
+                <div className="p-1.5 space-y-0.5">
                   <button 
-                    onClick={async () => {
+                    onClick={() => {
                       setShowProfile(false);
-                      if (onLogout) {
-                        onLogout();
-                      } else {
-                        const m = await import("../supabase");
-                        if (m.supabase) {
-                          await m.supabase.auth.signOut();
-                        }
-                        window.location.reload();
-                      }
-                    }} 
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                      if (onNavigateToSection) onNavigateToSection('configuracoes');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50/70 rounded-xl transition-colors cursor-pointer group text-left"
                   >
-                    <LogOut size={14} />
-                    <span>Sair do Painel</span>
+                    <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-blue-100 text-slate-500 group-hover:text-blue-600 flex items-center justify-center shrink-0 transition-colors">
+                      <SlidersHorizontal size={13} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="leading-tight text-slate-800 group-hover:text-blue-700 font-bold text-[11px]">Ajustes da Central</p>
+                      <p className="text-[9.5px] text-slate-400 mt-0.5 leading-tight truncate">Parâmetros operacionais e preferências</p>
+                    </div>
+                    <ChevronRight size={13} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setShowProfile(false);
+                      if (onNavigateToSection) onNavigateToSection('sede');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50/70 rounded-xl transition-colors cursor-pointer group text-left"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-blue-100 text-slate-500 group-hover:text-blue-600 flex items-center justify-center shrink-0 transition-colors">
+                      <MapPin size={13} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="leading-tight text-slate-800 group-hover:text-blue-700 font-bold text-[11px]">Sede Operacional</p>
+                      <p className="text-[9.5px] text-slate-400 mt-0.5 leading-tight truncate">{activeHub?.name || 'Vinimap Matriz São Paulo'}</p>
+                    </div>
+                    <ChevronRight size={13} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+                </div>
+
+                {/* Elegant Sair do Painel Card */}
+                <div className="p-2 bg-slate-50 border-t border-slate-100">
+                  <button 
+                    onClick={() => {
+                      setShowProfile(false);
+                      setShowLogoutConfirmModal(true);
+                    }} 
+                    className="w-full p-2.5 bg-rose-50/90 hover:bg-rose-100 active:bg-rose-200/90 text-rose-700 border border-rose-200/80 rounded-xl flex items-center justify-between transition-all cursor-pointer group shadow-2xs"
+                    id="header-logout-card-action"
+                    title="Encerrar sessão de trabalho e sair do painel"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-rose-200/80 text-rose-700 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                        <LogOut size={14} />
+                      </div>
+                      <div className="text-left min-w-0">
+                        <p className="text-[11px] font-black text-rose-900 leading-tight">Sair do Painel</p>
+                        <p className="text-[9.5px] text-rose-600 font-medium leading-tight mt-0.5 truncate">Desconectar da Central com segurança</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={14} className="text-rose-400 group-hover:text-rose-700 group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
                 </div>
               </motion.div>
@@ -538,6 +604,62 @@ export default function Header({
         </div>
 
       </div>
+
+      {/* Elegant Logout Confirmation Modal */}
+      <AnimatePresence>
+        {showLogoutConfirmModal && (
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-[9999] p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full border border-slate-200 shadow-2xl text-center space-y-4 relative overflow-hidden"
+              id="logout-confirmation-modal"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
+                <LogOut size={26} className="stroke-[2.5]" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-black text-slate-800">Deseja sair do painel?</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Sua sessão de despachante será finalizada com segurança. Todos os dados e sincronizações foram preservados.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirmModal(false)}
+                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowLogoutConfirmModal(false);
+                    if (onLogout) {
+                      onLogout();
+                    } else {
+                      const m = await import("../supabase");
+                      if (m.supabase) {
+                        await m.supabase.auth.signOut();
+                      }
+                      window.location.reload();
+                    }
+                  }}
+                  className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-xs rounded-xl shadow-md shadow-rose-200 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  id="confirm-logout-btn"
+                >
+                  <LogOut size={14} />
+                  <span>Sim, Sair</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }

@@ -3826,7 +3826,12 @@ export default function App() {
     <div className="flex h-screen w-screen bg-slate-50/50 overflow-hidden font-sans antialiased text-slate-800">
       
       {/* Dynamic Left Sidebar Menu Navigation */}
-      <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} activeHub={companyHubs.find(h => h.active)} />
+      <Sidebar 
+        activeSection={activeSection} 
+        setActiveSection={setActiveSection} 
+        activeHub={companyHubs.find(h => h.active)} 
+        onLogout={handleLogout}
+      />
 
       {/* Main Control Panel Stage */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
@@ -3846,6 +3851,7 @@ export default function App() {
           supabaseSyncStatus={supabaseSyncStatus}
           orders={orders}
           onNavigateToOrders={() => setActiveSection('pedidos')}
+          onNavigateToSection={setActiveSection}
         />
 
         {/* Scrollable Stage area */}
