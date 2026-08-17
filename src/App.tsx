@@ -15,6 +15,7 @@ import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHis
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime } from './utils/dateUtils';
 import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider } from './utils/partnerUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from './utils/addressUtils';
+import { isOrderMatchingGlobalSearch } from './utils/searchUtils';
 import { playNotificationAudioAlert } from './utils/notificationUtils';
 import { generateStaticSvgMap, geocodeAddressBackend, convertToGeoLat, convertToGeoLng } from './utils/locationUtils';
 import Sidebar from './components/Sidebar';
@@ -644,6 +645,36 @@ export default function App() {
   useEffect(() => {
     let isCancelled = false;
 
+    const mergeOrders = (prev: Order[], incoming: Order[]): Order[] => {
+      const map = new Map<string, Order>();
+      prev.forEach(o => map.set(o.id, o));
+      incoming.forEach(o => {
+        const existing = map.get(o.id);
+        map.set(o.id, existing ? { ...existing, ...o } : o);
+      });
+      return Array.from(map.values());
+    };
+
+    const mergeRiders = (prev: DeliveryRider[], incoming: DeliveryRider[]): DeliveryRider[] => {
+      const map = new Map<string, DeliveryRider>();
+      prev.forEach(r => map.set(r.id, r));
+      incoming.forEach(r => {
+        const existing = map.get(r.id);
+        map.set(r.id, existing ? { ...existing, ...r } : r);
+      });
+      return Array.from(map.values());
+    };
+
+    const mergeClients = (prev: ClientPartner[], incoming: ClientPartner[]): ClientPartner[] => {
+      const map = new Map<string, ClientPartner>();
+      prev.forEach(c => map.set(c.id, c));
+      incoming.forEach(c => {
+        const existing = map.get(c.id);
+        map.set(c.id, existing ? { ...existing, ...c } : c);
+      });
+      return Array.from(map.values()).filter(c => !MOCK_CLIENT_IDS.includes(c.id));
+    };
+
     const loadFallbackData = async () => {
       if (isCancelled) return;
       // 1. Try loading from Supabase if configured
@@ -653,15 +684,15 @@ export default function App() {
           if (isCancelled) return;
           if (sbState.orders && sbState.orders.length > 0) {
             const { orders: sanitized, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(sbState.orders);
-            setOrders(sanitized);
+            setOrders(prev => mergeOrders(prev, sanitized));
             if (hasModified && modifiedOrders.length > 0) {
               dbBulkSaveOrders(modifiedOrders).catch(() => {});
             }
           }
           if (sbState.clients && sbState.clients.length > 0) {
-            setClientPartners(sbState.clients.filter((c: ClientPartner) => !MOCK_CLIENT_IDS.includes(c.id)));
+            setClientPartners(prev => mergeClients(prev, sbState.clients));
           }
-          if (sbState.riders && sbState.riders.length > 0) setRiders(sbState.riders);
+          if (sbState.riders && sbState.riders.length > 0) setRiders(prev => mergeRiders(prev, sbState.riders));
           if (sbState.logs && sbState.logs.length > 0) setLogs(sbState.logs);
           if (sbState.txs && sbState.txs.length > 0) setFinancialTransactions(sbState.txs);
           if (sbState.hubs && sbState.hubs.length > 0) setCompanyHubs(sbState.hubs);
@@ -680,15 +711,15 @@ export default function App() {
           if (isCancelled) return;
           if (parsed.orders && parsed.orders.length > 0) {
             const { orders: sanitized, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(parsed.orders);
-            setOrders(sanitized);
+            setOrders(prev => mergeOrders(prev, sanitized));
             if (hasModified && modifiedOrders.length > 0) {
               dbBulkSaveOrders(modifiedOrders).catch(() => {});
             }
           }
           if (parsed.clientPartners && parsed.clientPartners.length > 0) {
-            setClientPartners(parsed.clientPartners.filter((c: ClientPartner) => !MOCK_CLIENT_IDS.includes(c.id)));
+            setClientPartners(prev => mergeClients(prev, parsed.clientPartners));
           }
-          if (parsed.deliveryRiders && parsed.deliveryRiders.length > 0) setRiders(parsed.deliveryRiders);
+          if (parsed.deliveryRiders && parsed.deliveryRiders.length > 0) setRiders(prev => mergeRiders(prev, parsed.deliveryRiders));
           if (parsed.financialTransactions && parsed.financialTransactions.length > 0) setFinancialTransactions(parsed.financialTransactions);
           if (parsed.companyHubs && parsed.companyHubs.length > 0) setCompanyHubs(parsed.companyHubs);
           console.log('[Local Storage Contingency] Dados de contingência locais restaurados.');
@@ -715,6 +746,11 @@ export default function App() {
     // Auto purge mock client partners, riders and orders if any exist in remote database
     dbPurgeMockClientPartners().catch(() => {});
     dbPurgeMockRidersAndOrders().catch(() => {});
+
+    // Always attempt to load Supabase / backup state on startup
+    if (isSupabaseConfigured || (typeof window !== 'undefined' && localStorage.getItem('vinimap_contingency_backup_latest'))) {
+      loadFallbackData().catch(() => {});
+    }
 
     // 1. Ensure any stale or previous listeners are actively cleaned up
     cleanupAllFirestoreListeners();
@@ -757,7 +793,10 @@ export default function App() {
           docs.push(doc.data() as Order);
         });
         const { orders: sanitizedDocs, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(docs);
-        setOrders(sanitizedDocs);
+        setOrders(prev => {
+          if (prev.length === 0) return sanitizedDocs;
+          return mergeOrders(prev, sanitizedDocs);
+        });
         if (hasModified && modifiedOrders.length > 0) {
           console.log(`[Order Consistency] Persistindo correção de status para ${modifiedOrders.length} pedido(s) concluído(s) no Firestore.`);
           dbBulkSaveOrders(modifiedOrders).catch(() => {});
@@ -774,7 +813,10 @@ export default function App() {
             docs.push(data);
           }
         });
-        setClientPartners(docs);
+        setClientPartners(prev => {
+          if (prev.length === 0) return docs;
+          return mergeClients(prev, docs);
+        });
       }, (error) => handleListenerError(error, 'clientPartners'))
     );
 
@@ -784,7 +826,10 @@ export default function App() {
         snapshot.forEach(doc => {
           docs.push(doc.data() as DeliveryRider);
         });
-        setRiders(docs);
+        setRiders(prev => {
+          if (prev.length === 0) return docs;
+          return mergeRiders(prev, docs);
+        });
       }, (error) => handleListenerError(error, 'deliveryRiders'))
     );
 
@@ -1756,28 +1801,8 @@ export default function App() {
       const isSearching = searchQuery.trim() !== '';
 
       if (isSearching) {
-        const q = searchQuery.toLowerCase().trim();
-        const riderName = riders.find(r => r.id === order.riderId)?.name.toLowerCase() || '';
-        const matchesQuery = 
-          order.id.toLowerCase().includes(q) ||
-          order.clientName.toLowerCase().includes(q) ||
-          order.region.toLowerCase().includes(q) ||
-          order.address.toLowerCase().includes(q) ||
-          matchesAddressQuery(order.address, searchQuery) ||
-          (order.partnerName && order.partnerName.toLowerCase().includes(q)) ||
-          (order.cep && order.cep.replace(/\D/g, '').includes(q)) ||
-          (order.protocolNumber && order.protocolNumber.toLowerCase().includes(q)) ||
-          (order.recipientName && order.recipientName.toLowerCase().includes(q)) ||
-          (order.recipientDoc && order.recipientDoc.toLowerCase().includes(q)) ||
-          (order.status && order.status.toLowerCase().includes(q)) ||
-          (order.riderId && (order.riderId.toLowerCase().includes(q) || riderName.includes(q)));
-
-        // When actively searching, return true if matching search query, ignoring status/rider/date/partner/cep filters
-        if (matchesQuery) {
-          return true;
-        } else {
-          return false;
-        }
+        // Universal search: matches IDs, names, addresses, CEP, partners, riders, dates (e.g. 14-08), DANFE, documents & status aliases
+        return isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners);
       }
 
       // Default filters when not searching
@@ -1819,22 +1844,7 @@ export default function App() {
     return orders.filter((order) => {
       const isSearching = searchQuery.trim() !== '';
       if (isSearching) {
-        const q = searchQuery.toLowerCase().trim();
-        const riderName = riders.find(r => r.id === order.riderId)?.name.toLowerCase() || '';
-        return (
-          order.id.toLowerCase().includes(q) ||
-          order.clientName.toLowerCase().includes(q) ||
-          order.region.toLowerCase().includes(q) ||
-          order.address.toLowerCase().includes(q) ||
-          matchesAddressQuery(order.address, searchQuery) ||
-          (order.partnerName && order.partnerName.toLowerCase().includes(q)) ||
-          (order.cep && order.cep.replace(/\D/g, '').includes(q)) ||
-          (order.protocolNumber && order.protocolNumber.toLowerCase().includes(q)) ||
-          (order.recipientName && order.recipientName.toLowerCase().includes(q)) ||
-          (order.recipientDoc && order.recipientDoc.toLowerCase().includes(q)) ||
-          (order.status && order.status.toLowerCase().includes(q)) ||
-          (order.riderId && (order.riderId.toLowerCase().includes(q) || riderName.includes(q)))
-        );
+        return isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners);
       }
 
       if (filterShowDelayed) {

@@ -89,9 +89,40 @@ export function sanitizeOrderConsistency(
 
   // Normalize order date
   if (!updated.date || updated.date.trim() === '') {
-    const fallbackDate = updated.deliveryDate || updated.dataConclusao || updated.occurrenceDate || (updated.rawData?.DataLancamento || updated.rawData?.DataEntrega || updated.rawData?.data);
+    const fallbackDate = updated.deliveryDate 
+      || updated.dataConclusao 
+      || updated.occurrenceDate 
+      || updated.rawData?.DataSolicitacao 
+      || updated.rawData?.dataSolicitacao 
+      || updated.rawData?.DataLancamento 
+      || updated.rawData?.dataLancamento 
+      || updated.rawData?.DataEntrega 
+      || updated.rawData?.dataEntrega 
+      || updated.rawData?.Data 
+      || updated.rawData?.data 
+      || updated.rawData?.DataAgendamento 
+      || updated.rawData?.DataCriacao;
     if (fallbackDate) {
       updated.date = normalizeToISODate(fallbackDate);
+      isModified = true;
+    }
+  }
+
+  // Restore riderId from rawData if missing in root
+  if (!updated.riderId) {
+    const rawRider = updated.rawData?.riderId 
+      || updated.rawData?.Condutor 
+      || updated.rawData?.condutor 
+      || updated.rawData?.NomeCondutor 
+      || updated.rawData?.nomeCondutor 
+      || updated.rawData?.Entregador 
+      || updated.rawData?.entregador 
+      || updated.rawData?.Motorista 
+      || updated.rawData?.motorista 
+      || updated.rawData?.DispositivoCondutor 
+      || updated.rawData?.dispositivoCondutor;
+    if (rawRider) {
+      updated.riderId = rawRider;
       isModified = true;
     }
   }

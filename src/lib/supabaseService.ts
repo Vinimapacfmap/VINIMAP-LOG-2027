@@ -8,6 +8,7 @@ import {
   CompanyHub 
 } from '../types';
 import { sanitizeOrdersListConsistency } from '../utils/orderConsistency';
+import { extractISODateFromTimestamp } from '../utils/dateUtils';
 
 // ============================================================================
 // MAPPING HELPER FUNCTIONS (camelCase <-> snake_case)
@@ -163,21 +164,59 @@ export function mapOrderFromDb(row: any): Order {
       })() : row.history) 
     : (rawDataObj?.history || undefined);
 
+  const rawDateCandidate = row.date 
+    || deliveryDate 
+    || dataConclusao 
+    || occurrenceDate 
+    || rawDataObj?.date 
+    || rawDataObj?.DataSolicitacao 
+    || rawDataObj?.dataSolicitacao 
+    || rawDataObj?.DataLancamento 
+    || rawDataObj?.dataLancamento 
+    || rawDataObj?.DataEntrega 
+    || rawDataObj?.dataEntrega 
+    || rawDataObj?.Data 
+    || rawDataObj?.data 
+    || rawDataObj?.DataAgendamento 
+    || rawDataObj?.DataCriacao 
+    || row.created_at;
+
+  const resolvedDate = extractISODateFromTimestamp(rawDateCandidate) 
+    || (typeof rawDateCandidate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDateCandidate) ? rawDateCandidate : undefined)
+    || (row.date ? String(row.date) : undefined)
+    || '2026-08-14';
+
+  const resolvedRiderId = row.rider_id 
+    || rawDataObj?.riderId 
+    || rawDataObj?.Condutor 
+    || rawDataObj?.condutor 
+    || rawDataObj?.NomeCondutor 
+    || rawDataObj?.nomeCondutor 
+    || rawDataObj?.Entregador 
+    || rawDataObj?.entregador 
+    || rawDataObj?.NomeEntregador 
+    || rawDataObj?.Motorista 
+    || rawDataObj?.motorista 
+    || rawDataObj?.DispositivoCondutor 
+    || rawDataObj?.dispositivoCondutor 
+    || rawDataObj?.riderName 
+    || undefined;
+
   return {
     id: String(row.id),
-    clientName: row.client_name || rawDataObj?.clientName || 'Cliente',
-    phone: row.phone || rawDataObj?.phone || '',
-    address: row.address || rawDataObj?.address || '',
-    region: row.region || rawDataObj?.region || '',
-    status: row.status || rawDataObj?.status || 'Pendente',
+    clientName: row.client_name || rawDataObj?.clientName || rawDataObj?.Cliente || rawDataObj?.cliente || 'Cliente',
+    phone: row.phone || rawDataObj?.phone || rawDataObj?.Telefone || rawDataObj?.telefone || '',
+    address: row.address || rawDataObj?.address || rawDataObj?.Endereco || rawDataObj?.endereco || '',
+    region: row.region || rawDataObj?.region || rawDataObj?.Regiao || rawDataObj?.regiao || '',
+    status: row.status || rawDataObj?.status || 'Não iniciado',
     priority: row.priority || rawDataObj?.priority || 'Normal',
-    value: Number(row.value ?? rawDataObj?.value ?? 0),
-    riderId: row.rider_id || rawDataObj?.riderId || undefined,
+    value: Number(row.value ?? rawDataObj?.value ?? rawDataObj?.ValorEntrega ?? 0),
+    riderId: resolvedRiderId,
     createdAt: row.created_at || horarioInicial || '08:00',
     itemsCount: row.items_count ?? rawDataObj?.itemsCount ?? 1,
-    date: row.date || rawDataObj?.date || rawDataObj?.DataLancamento || '2026-08-13',
-    cep: row.cep || rawDataObj?.cep || '',
-    partnerName: row.partner_name || rawDataObj?.partnerName || '',
+    date: resolvedDate,
+    cep: row.cep || rawDataObj?.cep || rawDataObj?.CEP || '',
+    partnerName: row.partner_name || rawDataObj?.partnerName || rawDataObj?.NomeFantasia || rawDataObj?.CodigoCliente || '',
     deliveryValue: row.delivery_value !== null && row.delivery_value !== undefined ? Number(row.delivery_value) : (rawDataObj?.deliveryValue !== undefined ? Number(rawDataObj.deliveryValue) : undefined),
     driverValue: row.driver_value !== null && row.driver_value !== undefined ? Number(row.driver_value) : (rawDataObj?.driverValue !== undefined ? Number(rawDataObj.driverValue) : undefined),
     rawData: rawDataObj,
@@ -791,7 +830,7 @@ export interface SupabaseLoadedState {
 async function safeQueryTable(tableName: string) {
   try {
     if (!supabase) return { data: [], error: null };
-    const res = await supabase.from(tableName).select('*');
+    const res = await supabase.from(tableName).select('*').limit(50000);
     return { data: res.data || [], error: res.error };
   } catch (err) {
     console.warn(`[safeQueryTable] Exception fetching table ${tableName}:`, err);

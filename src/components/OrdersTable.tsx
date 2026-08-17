@@ -10,6 +10,7 @@ import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBra
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { getPartnerDisplayName as getPartnerDisplayNameUtil, isOrderMatchingPartner, isOrderMatchingRider } from '../utils/partnerUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
+import { isOrderMatchingGlobalSearch } from '../utils/searchUtils';
 import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult } from '../utils/locationUtils';
 import CepInput, { ViaCepData } from './CepInput';
 import { 
@@ -854,7 +855,7 @@ function OrdersTable({
           value = '19:00';
           break;
         case 'email': 
-          value = 'cliente@email.com';
+          value = order.rawData?.Email || order.rawData?.email || order.rawData?.['E-mail'] || '';
           break;
         case 'documentoempresa': 
           value = '60.312.441/0001-92';
@@ -918,23 +919,8 @@ function OrdersTable({
 
     return orders.filter((order) => {
       if (isSearching) {
-        const riderName = riders.find(r => r.id === order.riderId)?.name.toLowerCase() || '';
-        const matchesSearch = 
-          order.id.toLowerCase().includes(query) ||
-          order.clientName.toLowerCase().includes(query) ||
-          order.region.toLowerCase().includes(query) ||
-          order.address.toLowerCase().includes(query) ||
-          matchesAddressQuery(order.address, searchQuery) ||
-          (order.partnerName && order.partnerName.toLowerCase().includes(query)) ||
-          (order.cep && order.cep.replace(/\D/g, '').includes(query)) ||
-          (order.protocolNumber && order.protocolNumber.toLowerCase().includes(query)) ||
-          (order.recipientName && order.recipientName.toLowerCase().includes(query)) ||
-          (order.recipientDoc && order.recipientDoc.toLowerCase().includes(query)) ||
-          (order.status && order.status.toLowerCase().includes(query)) ||
-          (order.riderId && (order.riderId.toLowerCase().includes(query) || riderName.includes(query)));
-
-        // When actively searching, return true if matching search query, ignoring status tab or condutor/partner/region filters
-        return matchesSearch;
+        // Use universal global search matcher (supports dates like 14-08, DANFE, CPF, partner, etc.)
+        return isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners);
       }
 
       // Default filters when not searching
@@ -2293,6 +2279,14 @@ function OrdersTable({
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none" />
             <input
               type="text"
+              id="vinimap_orders_table_search_input"
+              name="vinimap_orders_table_search_input"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-form-type="other"
               placeholder="Buscar pedidos por Nº, Cliente, Endereço, CEP, DANFE ou Parceiro..."
               value={searchQuery}
               onChange={(e) => onSearchChange && onSearchChange(e.target.value)}

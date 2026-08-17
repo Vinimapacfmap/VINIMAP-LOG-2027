@@ -294,6 +294,14 @@ export default function GlobalFilters({
                 <Search size={14} className="absolute left-2.5 text-slate-500 pointer-events-none" />
                 <input
                   type="text"
+                  id="vinimap_global_order_search_filter"
+                  name="vinimap_global_order_search_filter"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-form-type="other"
                   placeholder="Nº Pedido, Cliente, Destinatário, CEP, DANFE..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
@@ -326,6 +334,9 @@ export default function GlobalFilters({
               </label>
               <input
                 type="date"
+                id="filter_date_from_input"
+                name="filter_date_from_input"
+                autoComplete="off"
                 value={filterDateFrom}
                 max={filterDateTo || undefined}
                 onChange={(e) => {
@@ -356,6 +367,9 @@ export default function GlobalFilters({
               </label>
               <input
                 type="date"
+                id="filter_date_to_input"
+                name="filter_date_to_input"
+                autoComplete="off"
                 value={filterDateTo}
                 min={filterDateFrom || undefined}
                 onChange={(e) => {
@@ -479,6 +493,77 @@ export default function GlobalFilters({
               </div>
             </div>
 
+          </div>
+
+          {/* Quick Date Presets Bar */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+              <Calendar size={11} className="text-slate-400" />
+              Atalhos de Data:
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const today = getSaoPauloISODate();
+                setFilterDateFrom(today);
+                setFilterDateTo(today);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-extrabold transition-all cursor-pointer border ${
+                filterDateFrom === todayIso && filterDateTo === todayIso
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+              }`}
+            >
+              Hoje
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const d = new Date();
+                d.setDate(d.getDate() - 1);
+                const yesterday = getSaoPauloISODate(d);
+                setFilterDateFrom(yesterday);
+                setFilterDateTo(yesterday);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer border ${
+                filterDateFrom && filterDateTo && filterDateFrom === filterDateTo && filterDateFrom !== todayIso
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+              }`}
+            >
+              Ontem
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const d = new Date();
+                d.setDate(d.getDate() - 7);
+                const past7 = getSaoPauloISODate(d);
+                setFilterDateFrom(past7);
+                setFilterDateTo(todayIso);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer border ${
+                filterDateFrom && filterDateTo === todayIso && filterDateFrom !== todayIso
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+              }`}
+            >
+              Últimos 7 dias
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterDateFrom('');
+                setFilterDateTo('');
+              }}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer border ${
+                !filterDateFrom && !filterDateTo
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+              }`}
+            >
+              Todos os Períodos
+            </button>
           </div>
 
           {/* Quick Active Filter Badges & Instant Feedback Strip */}
