@@ -62,22 +62,22 @@ function isOrderMatchingSingleToken(
   }
 
   // 7. Rider Matching (by ID, Name, Phone, Vehicle, Device, RawData, History)
-  const candidateRiderStrings: (string | undefined)[] = [
-    order.riderId,
-    order.rawData?.Condutor,
-    order.rawData?.condutor,
-    order.rawData?.NomeCondutor,
-    order.rawData?.nomeCondutor,
-    order.rawData?.Entregador,
-    order.rawData?.entregador,
-    order.rawData?.NomeEntregador,
-    order.rawData?.Motorista,
-    order.rawData?.motorista,
-    order.rawData?.DispositivoCondutor,
-    order.rawData?.dispositivoCondutor,
-    order.rawData?.riderName,
-    order.rawData?.Rider
-  ];
+  const candidateRiderStrings: string[] = [
+    order.riderId ? String(order.riderId) : '',
+    order.rawData?.Condutor !== undefined ? String(order.rawData.Condutor) : '',
+    order.rawData?.condutor !== undefined ? String(order.rawData.condutor) : '',
+    order.rawData?.NomeCondutor !== undefined ? String(order.rawData.NomeCondutor) : '',
+    order.rawData?.nomeCondutor !== undefined ? String(order.rawData.nomeCondutor) : '',
+    order.rawData?.Entregador !== undefined ? String(order.rawData.Entregador) : '',
+    order.rawData?.entregador !== undefined ? String(order.rawData.entregador) : '',
+    order.rawData?.NomeEntregador !== undefined ? String(order.rawData.NomeEntregador) : '',
+    order.rawData?.Motorista !== undefined ? String(order.rawData.Motorista) : '',
+    order.rawData?.motorista !== undefined ? String(order.rawData.motorista) : '',
+    order.rawData?.DispositivoCondutor !== undefined ? String(order.rawData.DispositivoCondutor) : '',
+    order.rawData?.dispositivoCondutor !== undefined ? String(order.rawData.dispositivoCondutor) : '',
+    order.rawData?.riderName !== undefined ? String(order.rawData.riderName) : '',
+    order.rawData?.Rider !== undefined ? String(order.rawData.Rider) : ''
+  ].filter(Boolean);
 
   for (const rStr of candidateRiderStrings) {
     if (rStr && rStr.toLowerCase().includes(cleanToken)) return true;
@@ -86,23 +86,23 @@ function isOrderMatchingSingleToken(
   if (riders && riders.length > 0) {
     // Find matching rider from riderId or rawData
     const matchedRider = riders.find(r => 
-      r.id === order.riderId || 
-      (order.riderId && r.name.toLowerCase().includes(order.riderId.toLowerCase())) ||
-      candidateRiderStrings.some(cs => cs && r.name.toLowerCase().includes(cs.toLowerCase()))
+      String(r.id || '').toLowerCase() === String(order.riderId || '').toLowerCase() || 
+      (order.riderId && String(r.name || '').toLowerCase().includes(String(order.riderId).toLowerCase())) ||
+      candidateRiderStrings.some(cs => cs && String(r.name || '').toLowerCase().includes(cs.toLowerCase()))
     );
 
     if (matchedRider) {
-      if (matchedRider.name.toLowerCase().includes(cleanToken)) return true;
-      if (matchedRider.vehicle && matchedRider.vehicle.toLowerCase().includes(cleanToken)) return true;
-      if (matchedRider.phone && matchedRider.phone.replace(/\D/g, '').includes(digitsToken)) return true;
-      if (matchedRider.deviceNumber && matchedRider.deviceNumber.toLowerCase().includes(cleanToken)) return true;
+      if (String(matchedRider.name || '').toLowerCase().includes(cleanToken)) return true;
+      if (matchedRider.vehicle && String(matchedRider.vehicle).toLowerCase().includes(cleanToken)) return true;
+      if (matchedRider.phone && String(matchedRider.phone).replace(/\D/g, '').includes(digitsToken)) return true;
+      if (matchedRider.deviceNumber && String(matchedRider.deviceNumber).toLowerCase().includes(cleanToken)) return true;
     }
 
     // Direct search matching any rider that matches this token if order references it
-    const tokenRider = riders.find(r => r.name.toLowerCase().includes(cleanToken) || r.id.toLowerCase() === cleanToken);
+    const tokenRider = riders.find(r => String(r.name || '').toLowerCase().includes(cleanToken) || String(r.id || '').toLowerCase() === cleanToken);
     if (tokenRider) {
-      if (order.riderId === tokenRider.id) return true;
-      if (candidateRiderStrings.some(cs => cs && cs.toLowerCase().includes(tokenRider.name.toLowerCase()))) return true;
+      if (String(order.riderId || '').toLowerCase() === String(tokenRider.id || '').toLowerCase()) return true;
+      if (candidateRiderStrings.some(cs => cs && cs.toLowerCase().includes(String(tokenRider.name || '').toLowerCase()))) return true;
     }
   }
 

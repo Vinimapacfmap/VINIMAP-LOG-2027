@@ -42,14 +42,17 @@ export function getCachedClientPartners(): ClientPartner[] {
  * Replaces raw codes (e.g. 'PAR-001', 'CL1-001', 'CL1-014') with full partner names.
  */
 export function getPartnerDisplayName(
-  rawNameOrCode: string | undefined | null,
+  rawNameOrCode: any,
   clientPartners?: ClientPartner[]
 ): string {
-  if (!rawNameOrCode || !rawNameOrCode.trim()) {
+  if (rawNameOrCode === undefined || rawNameOrCode === null) {
     return 'Parceiro Geral';
   }
 
-  const trimmed = rawNameOrCode.trim();
+  const trimmed = String(rawNameOrCode).trim();
+  if (!trimmed) {
+    return 'Parceiro Geral';
+  }
 
   // Combine provided clientPartners with cached partners if needed
   const partnersList = (clientPartners && clientPartners.length > 0)
@@ -60,13 +63,13 @@ export function getPartnerDisplayName(
   if (partnersList && partnersList.length > 0) {
     const matched = partnersList.find(cp => 
       isMatchingClientCode(trimmed, cp.id, cp.codigoCliente) ||
-      cp.id?.trim().toLowerCase() === trimmed.toLowerCase() ||
-      cp.codigoCliente?.trim().toLowerCase() === trimmed.toLowerCase() ||
-      cp.name?.trim().toLowerCase() === trimmed.toLowerCase() ||
-      cp.fantasia?.trim().toLowerCase() === trimmed.toLowerCase() ||
-      cp.razaoSocial?.trim().toLowerCase() === trimmed.toLowerCase() ||
-      (cp.codigoCliente && trimmed.toLowerCase().includes(cp.codigoCliente.toLowerCase())) ||
-      (cp.id && trimmed.toLowerCase().includes(cp.id.toLowerCase()))
+      String(cp.id || '').trim().toLowerCase() === trimmed.toLowerCase() ||
+      String(cp.codigoCliente || '').trim().toLowerCase() === trimmed.toLowerCase() ||
+      String(cp.name || '').trim().toLowerCase() === trimmed.toLowerCase() ||
+      String(cp.fantasia || '').trim().toLowerCase() === trimmed.toLowerCase() ||
+      String(cp.razaoSocial || '').trim().toLowerCase() === trimmed.toLowerCase() ||
+      (cp.codigoCliente && trimmed.toLowerCase().includes(String(cp.codigoCliente).toLowerCase())) ||
+      (cp.id && trimmed.toLowerCase().includes(String(cp.id).toLowerCase()))
     );
     if (matched && matched.name) {
       return matched.name;
@@ -113,21 +116,26 @@ export function getPartnerDisplayName(
  * Checks if an order matches a selected partner filter value (by ID, code, or name).
  */
 export function isOrderMatchingPartner(
-  order: { partnerName?: string; clientName?: string; rawData?: Record<string, string> },
-  filterPartner: string | undefined | null,
+  order: { partnerName?: any; clientName?: any; rawData?: Record<string, any> },
+  filterPartner: any,
   clientPartners?: ClientPartner[]
 ): boolean {
-  if (!filterPartner || filterPartner === 'Todos' || filterPartner.trim() === '') {
+  if (!filterPartner || filterPartner === 'Todos' || String(filterPartner).trim() === '') {
     return true;
   }
 
-  const cleanFilter = filterPartner.trim().toLowerCase();
-  const rawPartner = (order.partnerName || '').trim().toLowerCase();
-  const rawClient = (order.clientName || '').trim().toLowerCase();
-  const rawDataPartner = (order.rawData?.['CodigoCliente'] || order.rawData?.['Parceiro'] || order.rawData?.['Cliente'] || '').trim().toLowerCase();
+  const cleanFilter = String(filterPartner).trim().toLowerCase();
+  const rawPartner = String(order.partnerName ?? '').trim().toLowerCase();
+  const rawClient = String(order.clientName ?? '').trim().toLowerCase();
+  const rawDataPartner = String(
+    order.rawData?.['CodigoCliente'] ?? 
+    order.rawData?.['Parceiro'] ?? 
+    order.rawData?.['Cliente'] ?? 
+    ''
+  ).trim().toLowerCase();
 
   // Direct string / name equality
-  if (rawPartner === cleanFilter || rawClient === cleanFilter || rawDataPartner === cleanFilter) {
+  if (rawPartner === cleanFilter || rawClient === cleanFilter || (rawDataPartner && rawDataPartner === cleanFilter)) {
     return true;
   }
 
@@ -140,18 +148,18 @@ export function isOrderMatchingPartner(
   // If filterPartner is a clientPartner ID or name or code
   if (clientPartners && clientPartners.length > 0) {
     const targetCp = clientPartners.find(cp => 
-      cp.id.toLowerCase() === cleanFilter ||
-      cp.name.toLowerCase() === cleanFilter ||
-      (cp.codigoCliente && cp.codigoCliente.toLowerCase() === cleanFilter) ||
-      (cp.fantasia && cp.fantasia.toLowerCase() === cleanFilter) ||
-      (cp.razaoSocial && cp.razaoSocial.toLowerCase() === cleanFilter)
+      String(cp.id || '').toLowerCase() === cleanFilter ||
+      String(cp.name || '').toLowerCase() === cleanFilter ||
+      (cp.codigoCliente && String(cp.codigoCliente).toLowerCase() === cleanFilter) ||
+      (cp.fantasia && String(cp.fantasia).toLowerCase() === cleanFilter) ||
+      (cp.razaoSocial && String(cp.razaoSocial).toLowerCase() === cleanFilter)
     );
 
     if (targetCp) {
       if (isMatchingClientCode(order.partnerName, targetCp.id, targetCp.codigoCliente)) return true;
       if (isMatchingClientCode(order.clientName, targetCp.id, targetCp.codigoCliente)) return true;
-      if (rawPartner === targetCp.name.toLowerCase()) return true;
-      if (rawClient === targetCp.name.toLowerCase()) return true;
+      if (rawPartner === String(targetCp.name || '').toLowerCase()) return true;
+      if (rawClient === String(targetCp.name || '').toLowerCase()) return true;
       if (rawDataPartner && isMatchingClientCode(rawDataPartner, targetCp.id, targetCp.codigoCliente)) return true;
     }
 
@@ -159,9 +167,9 @@ export function isOrderMatchingPartner(
     const orderCp = clientPartners.find(cp => isMatchingClientCode(order.partnerName, cp.id, cp.codigoCliente));
     if (orderCp) {
       if (
-        orderCp.id.toLowerCase() === cleanFilter ||
-        orderCp.name.toLowerCase() === cleanFilter ||
-        (orderCp.codigoCliente && orderCp.codigoCliente.toLowerCase() === cleanFilter)
+        String(orderCp.id || '').toLowerCase() === cleanFilter ||
+        String(orderCp.name || '').toLowerCase() === cleanFilter ||
+        (orderCp.codigoCliente && String(orderCp.codigoCliente).toLowerCase() === cleanFilter)
       ) {
         return true;
       }
@@ -212,52 +220,38 @@ export function getCachedDeliveryRiders(): DeliveryRider[] {
  * Checks if an order matches a selected rider/driver filter value (by ID, name, phone, deviceNumber, CPF).
  */
 export function isOrderMatchingRider(
-  order: { riderId?: string; rawData?: Record<string, string> },
-  filterRiderId: string | undefined | null,
+  order: { riderId?: any; rawData?: Record<string, any> },
+  filterRiderId: any,
   riders?: DeliveryRider[]
 ): boolean {
-  if (!filterRiderId || filterRiderId === 'Todos' || filterRiderId.trim() === '') {
+  if (!filterRiderId || filterRiderId === 'Todos' || String(filterRiderId).trim() === '') {
     return true;
   }
 
-  const cleanFilter = filterRiderId.trim().toLowerCase();
+  const cleanFilter = String(filterRiderId).trim().toLowerCase();
   const filterDigits = cleanFilter.replace(/\D/g, '');
-  const orderRiderId = (order.riderId || '').trim().toLowerCase();
+  const orderRiderId = String(order.riderId ?? '').trim().toLowerCase();
   const orderRiderDigits = orderRiderId.replace(/\D/g, '');
 
   // Extract rider identification from any known rawData key
   const rawData = order.rawData || {};
-  const rawRiderKeys = [
-    'DispositivoCondutor',
-    'Entregador',
-    'Condutor',
-    'Motorista',
-    'Dispositivo',
-    'Rider',
-    'Driver',
-    'NomeCondutor',
-    'NomeEntregador',
-    'IDCondutor',
-    'IdEntregador',
-    'CodigoEntregador',
-    'CodigoCondutor',
-    'TelefoneCondutor',
-    'TelefoneEntregador'
-  ];
 
   let rawRiderValues: string[] = [];
   for (const k of Object.keys(rawData)) {
-    const normalizedKey = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (
-      normalizedKey.includes('condutor') ||
-      normalizedKey.includes('entregador') ||
-      normalizedKey.includes('motorista') ||
-      normalizedKey.includes('dispositivo') ||
-      normalizedKey.includes('rider') ||
-      normalizedKey.includes('driver')
-    ) {
-      const val = (rawData[k] || '').trim().toLowerCase();
-      if (val) rawRiderValues.push(val);
+    const rawVal = rawData[k];
+    if (rawVal !== undefined && rawVal !== null) {
+      const normalizedKey = String(k).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (
+        normalizedKey.includes('condutor') ||
+        normalizedKey.includes('entregador') ||
+        normalizedKey.includes('motorista') ||
+        normalizedKey.includes('dispositivo') ||
+        normalizedKey.includes('rider') ||
+        normalizedKey.includes('driver')
+      ) {
+        const val = String(rawVal).trim().toLowerCase();
+        if (val) rawRiderValues.push(val);
+      }
     }
   }
 
@@ -283,19 +277,19 @@ export function isOrderMatchingRider(
 
   if (availableRiders && availableRiders.length > 0) {
     const targetRider = availableRiders.find(r => 
-      r.id.trim().toLowerCase() === cleanFilter || 
-      r.name.trim().toLowerCase() === cleanFilter ||
-      (r.phone && r.phone.replace(/\D/g, '') === filterDigits) ||
-      (r.deviceNumber && r.deviceNumber.replace(/\D/g, '') === filterDigits) ||
-      (r.cpfCnpj && r.cpfCnpj.replace(/\D/g, '') === filterDigits)
+      String(r.id || '').trim().toLowerCase() === cleanFilter || 
+      String(r.name || '').trim().toLowerCase() === cleanFilter ||
+      (r.phone && String(r.phone).replace(/\D/g, '') === filterDigits) ||
+      (r.deviceNumber && String(r.deviceNumber).replace(/\D/g, '') === filterDigits) ||
+      (r.cpfCnpj && String(r.cpfCnpj).replace(/\D/g, '') === filterDigits)
     );
 
     if (targetRider) {
-      const tId = targetRider.id.trim().toLowerCase();
-      const tName = targetRider.name.trim().toLowerCase();
-      const tPhoneDigits = (targetRider.phone || '').replace(/\D/g, '');
-      const tDeviceDigits = (targetRider.deviceNumber || '').replace(/\D/g, '');
-      const tCpfDigits = (targetRider.cpfCnpj || '').replace(/\D/g, '');
+      const tId = String(targetRider.id || '').trim().toLowerCase();
+      const tName = String(targetRider.name || '').trim().toLowerCase();
+      const tPhoneDigits = String(targetRider.phone || '').replace(/\D/g, '');
+      const tDeviceDigits = String(targetRider.deviceNumber || '').replace(/\D/g, '');
+      const tCpfDigits = String(targetRider.cpfCnpj || '').replace(/\D/g, '');
 
       // Check order.riderId against target rider attributes
       if (orderRiderId) {
@@ -318,18 +312,18 @@ export function isOrderMatchingRider(
     // Also check if the order's assigned riderId resolves to a known rider that matches cleanFilter
     if (orderRiderId) {
       const assignedRider = availableRiders.find(r =>
-        r.id.trim().toLowerCase() === orderRiderId ||
-        r.name.trim().toLowerCase() === orderRiderId ||
-        (r.phone && r.phone.replace(/\D/g, '') === orderRiderDigits) ||
-        (r.deviceNumber && r.deviceNumber.replace(/\D/g, '') === orderRiderDigits)
+        String(r.id || '').trim().toLowerCase() === orderRiderId ||
+        String(r.name || '').trim().toLowerCase() === orderRiderId ||
+        (r.phone && String(r.phone).replace(/\D/g, '') === orderRiderDigits) ||
+        (r.deviceNumber && String(r.deviceNumber).replace(/\D/g, '') === orderRiderDigits)
       );
 
       if (assignedRider) {
-        if (assignedRider.id.trim().toLowerCase() === cleanFilter) return true;
-        if (assignedRider.name.trim().toLowerCase() === cleanFilter) return true;
-        const aPhoneDigits = (assignedRider.phone || '').replace(/\D/g, '');
+        if (String(assignedRider.id || '').trim().toLowerCase() === cleanFilter) return true;
+        if (String(assignedRider.name || '').trim().toLowerCase() === cleanFilter) return true;
+        const aPhoneDigits = String(assignedRider.phone || '').replace(/\D/g, '');
         if (filterDigits.length >= 8 && aPhoneDigits === filterDigits) return true;
-        const aDeviceDigits = (assignedRider.deviceNumber || '').replace(/\D/g, '');
+        const aDeviceDigits = String(assignedRider.deviceNumber || '').replace(/\D/g, '');
         if (filterDigits.length >= 8 && aDeviceDigits === filterDigits) return true;
       }
     }

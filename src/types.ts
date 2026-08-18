@@ -100,13 +100,14 @@ export interface ClientPartner {
   cepRangesHistory?: CepTableHistoryItem[];
 }
 
-export function isMatchingClientCode(partnerIdOrCode: string | undefined, targetId: string, targetCodigo?: string): boolean {
-  if (!partnerIdOrCode) return false;
-  const p1 = partnerIdOrCode.trim().toLowerCase();
-  const tId = targetId.trim().toLowerCase();
-  const tCode = targetCodigo?.trim().toLowerCase() || '';
+export function isMatchingClientCode(partnerIdOrCode: any, targetId: any, targetCodigo?: any): boolean {
+  if (partnerIdOrCode === undefined || partnerIdOrCode === null) return false;
+  const p1 = String(partnerIdOrCode).trim().toLowerCase();
+  const tId = String(targetId || '').trim().toLowerCase();
+  const tCode = targetCodigo ? String(targetCodigo).trim().toLowerCase() : '';
   
-  if (p1 === tId || p1 === tCode) return true;
+  if (!p1 || !tId) return false;
+  if (p1 === tId || (tCode && p1 === tCode)) return true;
   
   const norm = (s: string) => s.replace(/[-_]/g, '');
   const nP1 = norm(p1);

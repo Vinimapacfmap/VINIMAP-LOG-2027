@@ -44,19 +44,19 @@ export function formatCepDisplay(rawCep: string | undefined | null): string {
 export function findClientPartnerForOrder(order: Order, clientPartners?: ClientPartner[]): ClientPartner | undefined {
   if (!order || !clientPartners || clientPartners.length === 0) return undefined;
 
-  const rawPartner = (order.partnerName || '').trim();
-  const rawClient = (order.clientName || '').trim();
-  const rawCode = (
-    order.rawData?.['CodigoCliente'] || 
-    order.rawData?.['codigocliente'] || 
-    order.rawData?.['Codigo_Cliente'] ||
-    order.rawData?.['Parceiro'] || 
-    order.rawData?.['parceiro'] || 
-    order.rawData?.['Cliente'] ||
-    order.rawData?.['cliente'] ||
-    order.rawData?.['NomeCliente'] ||
-    order.rawData?.['NomeParceiro'] ||
-    order.rawData?.['EMPRESA'] ||
+  const rawPartner = String(order.partnerName ?? '').trim();
+  const rawClient = String(order.clientName ?? '').trim();
+  const rawCode = String(
+    order.rawData?.['CodigoCliente'] ?? 
+    order.rawData?.['codigocliente'] ?? 
+    order.rawData?.['Codigo_Cliente'] ?? 
+    order.rawData?.['Parceiro'] ?? 
+    order.rawData?.['parceiro'] ?? 
+    order.rawData?.['Cliente'] ?? 
+    order.rawData?.['cliente'] ?? 
+    order.rawData?.['NomeCliente'] ?? 
+    order.rawData?.['NomeParceiro'] ?? 
+    order.rawData?.['EMPRESA'] ?? 
     ''
   ).trim();
 
@@ -67,11 +67,11 @@ export function findClientPartnerForOrder(order: Order, clientPartners?: ClientP
     const cLower = c.toLowerCase();
     const matched = clientPartners.find(cp => 
       isMatchingClientCode(c, cp.id, cp.codigoCliente) ||
-      cp.id?.toLowerCase() === cLower ||
-      (cp.codigoCliente && cp.codigoCliente.toLowerCase() === cLower) ||
-      cp.name?.toLowerCase() === cLower ||
-      (cp.fantasia && cp.fantasia.toLowerCase() === cLower) ||
-      (cp.razaoSocial && cp.razaoSocial.toLowerCase() === cLower)
+      String(cp.id || '').toLowerCase() === cLower ||
+      (cp.codigoCliente && String(cp.codigoCliente).toLowerCase() === cLower) ||
+      String(cp.name || '').toLowerCase() === cLower ||
+      (cp.fantasia && String(cp.fantasia).toLowerCase() === cLower) ||
+      (cp.razaoSocial && String(cp.razaoSocial).toLowerCase() === cLower)
     );
     if (matched) return matched;
   }
