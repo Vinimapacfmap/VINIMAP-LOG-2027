@@ -54,6 +54,9 @@ export interface Order {
   complement?: string; // Complemento do endereço
   city?: string;       // Cidade
   state?: string;      // UF / Estado
+  originalDate?: string; // Data de lançamento original do pedido
+  reallocatedDate?: string; // Data da última realocação/revalidação
+  reallocatedAt?: string; // Timestamp ISO da última realocação/revalidação
   updatedAt?: string;  // ISO timestamp of latest modification
 }
 

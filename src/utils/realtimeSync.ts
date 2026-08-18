@@ -18,7 +18,8 @@ export type RealtimeEventType =
   | 'RIDER_UPDATED'
   | 'RIDER_GPS_UPDATE'
   | 'ACTIVITY_LOG_ADDED'
-  | 'FORCE_SYNC_REQUEST';
+  | 'FORCE_SYNC_REQUEST'
+  | 'REQUEST_ORDERS_SYNC';
 
 export interface RealtimeMessage {
   type: RealtimeEventType;

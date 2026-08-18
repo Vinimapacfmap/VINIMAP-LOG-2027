@@ -12,6 +12,8 @@ import { isOrderMatchingRider } from '../utils/partnerUtils';
 import { realtimeSyncBus } from '../utils/realtimeSync';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 import { PwaInstallBanner } from './PwaInstallBanner';
 
@@ -830,6 +832,101 @@ export default function RiderAppSimulator({
       );
     } finally {
       setIsSyncingOfflineQueue(false);
+    }
+  };
+
+  // State for manual synchronization with system
+  const [isSyncingWithSystem, setIsSyncingWithSystem] = useState<boolean>(false);
+
+  // Synchronize orders in real-time from broadcast channel (for instant reallocation / new orders updates)
+  useEffect(() => {
+    const unsub = realtimeSyncBus.subscribe('*', (msg) => {
+      const { type, payload } = msg;
+
+      if (type === 'ORDERS_BATCH_UPDATED' && Array.isArray(payload) && onUpdateOrders) {
+        const batch: Order[] = payload;
+        const map = new Map(orders.map(o => [o.id, o]));
+        batch.forEach(o => map.set(o.id, { ...(map.get(o.id) || o), ...o }));
+        onUpdateOrders(Array.from(map.values()));
+      } else if ((type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED') && payload?.id && onUpdateOrders) {
+        const updatedOrder: Order = payload;
+        const exists = orders.some(o => o.id === updatedOrder.id);
+        if (exists) {
+          onUpdateOrders(orders.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
+        } else {
+          onUpdateOrders([updatedOrder, ...orders]);
+        }
+      } else if (type === 'ORDER_DELETED' && typeof payload === 'string' && onUpdateOrders) {
+        const deletedId = payload;
+        onUpdateOrders(orders.filter(o => o.id !== deletedId));
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [onUpdateOrders, orders]);
+
+  // Manual explicit synchronization of today's orders with system
+  const handleManualSyncTodayOrders = async () => {
+    if (isSyncingWithSystem) return;
+    setIsSyncingWithSystem(true);
+    playBeep(987.77, 0.1);
+
+    try {
+      // 1. If there's an offline queue, sync it first
+      if (offlineQueue.length > 0) {
+        await syncOfflineQueue();
+      }
+
+      // 2. Broadcast request to parent/peers to push latest orders
+      realtimeSyncBus.broadcast('REQUEST_ORDERS_SYNC', {
+        riderId: selectedRiderId || selectedRider?.id,
+        timestamp: Date.now()
+      });
+
+      // 3. Fetch directly from Firestore for guaranteed fresh data
+      let freshOrders: Order[] = [];
+      try {
+        const snap = await getDocs(collection(db, 'orders'));
+        snap.forEach(d => {
+          freshOrders.push(d.data() as Order);
+        });
+      } catch (e) {
+        console.warn("Direct Firestore read fallback:", e);
+      }
+
+      if (freshOrders.length > 0 && onUpdateOrders) {
+        onUpdateOrders(freshOrders);
+      }
+
+      // 4. Calculate active orders count for driver feedback
+      const currentList = freshOrders.length > 0 ? freshOrders : orders;
+      const activeCount = currentList.filter(isOrderActiveForDriver).length;
+
+      playChimeSuccess();
+      triggerPhoneNotification(
+        "🔄 Sincronização Concluída!",
+        `Sistema sincronizado com sucesso! ${activeCount} lançamento(s) do dia atualizados no seu dispositivo.`,
+        'success'
+      );
+
+      onSaveLogs([{
+        id: `log-sync-manual-${Date.now()}`,
+        time: getSaoPauloTime(),
+        type: 'success',
+        message: `App do Condutor (${selectedRider?.name || 'Condutor'}): Sincronização manual dos lançamentos do dia realizada com sucesso (${activeCount} pedidos ativos).`
+      }]);
+    } catch (error) {
+      console.error("Erro ao sincronizar lançamentos:", error);
+      playChimeFailure();
+      triggerPhoneNotification(
+        "Aviso de Sincronização",
+        "Sincronização concluída com base nos dados locais.",
+        'info'
+      );
+    } finally {
+      setIsSyncingWithSystem(false);
     }
   };
 
@@ -3513,6 +3610,18 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     </div>
 
                     <div className="flex items-center gap-1">
+                      {/* Quick Sync Button */}
+                      <button
+                        type="button"
+                        disabled={isSyncingWithSystem}
+                        onClick={handleManualSyncTodayOrders}
+                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 font-extrabold text-[9.5px] rounded-lg border border-sky-200 transition-all flex items-center gap-1 cursor-pointer"
+                        title="Sincronizar Lançamentos do Dia com o Sistema"
+                      >
+                        <RefreshCw size={11} className={`text-sky-600 ${isSyncingWithSystem ? "animate-spin" : ""}`} />
+                        <span>{isSyncingWithSystem ? 'Sinc...' : 'Sinc'}</span>
+                      </button>
+
                       {/* GPS Localização Button */}
                       <button
                         type="button"
@@ -3643,7 +3752,35 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           </div>
 
                           {/* Drawer Menu Navigation Items */}
-                          <div className="p-3 space-y-1 flex-1 overflow-y-auto">
+                          <div className="p-3 space-y-1.5 flex-1 overflow-y-auto">
+                            {/* Botão de Sincronizar Lançamentos do Dia */}
+                            <button
+                              type="button"
+                              disabled={isSyncingWithSystem}
+                              onClick={async () => {
+                                await handleManualSyncTodayOrders();
+                              }}
+                              className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-950/80 to-slate-900 border border-sky-500/40 text-sky-300 hover:border-sky-400 hover:bg-sky-900/30 transition-all cursor-pointer shadow-sm group mb-2"
+                              title="Sincronizar Lançamentos do Dia com o Sistema"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30 shrink-0">
+                                  <RefreshCw size={15} className={`${isSyncingWithSystem ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                                </div>
+                                <div className="flex flex-col text-left min-w-0">
+                                  <span className="font-black text-white text-[11px] truncate">Sincronizar com o Sistema</span>
+                                  <span className="text-[9px] font-medium text-sky-300/80 truncate">Atualizar Lançamentos do Dia</span>
+                                </div>
+                              </div>
+                              {isSyncingWithSystem ? (
+                                <span className="text-[9px] font-bold text-sky-400 animate-pulse shrink-0 ml-1">Sincronizando...</span>
+                              ) : (
+                                <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-sky-400/20 text-sky-300 border border-sky-400/30 shrink-0 ml-1">
+                                  {driverActiveOrders.length} do dia
+                                </span>
+                              )}
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => {

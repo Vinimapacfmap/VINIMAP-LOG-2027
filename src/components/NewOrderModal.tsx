@@ -49,6 +49,7 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
   // New Filterable fields
   const [date, setDate] = useState(getSaoPauloISODate());
   const [cep, setCep] = useState('');
+  const [isManualCep, setIsManualCep] = useState(false);
   const [partnerName, setPartnerName] = useState('');
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepError, setCepError] = useState('');
@@ -320,7 +321,7 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
                     value={address}
                     onChange={(val) => setAddress(val)}
                     onCepFound={(lookup) => {
-                      if (lookup.cep) {
+                      if (lookup.cep && (!isManualCep || !cep)) {
                         setCep(lookup.cep);
                       }
                       if (lookup.region) {
@@ -389,7 +390,10 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
                     <div>
                       <CepInput
                         value={cep}
-                        onChange={(formatted, raw) => setCep(formatted)}
+                        onChange={(formatted, raw) => {
+                          setCep(formatted);
+                          setIsManualCep(true);
+                        }}
                         onAddressFound={(data) => {
                           const logradouro = data.logradouro || '';
                           const bairro = data.bairro || '';

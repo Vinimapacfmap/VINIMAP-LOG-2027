@@ -439,7 +439,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     setSelectedOrderIds(newSet);
   };
 
-  // Execute reallocation of selected orders from Driver A to Driver B
+  // Execute reallocation of selected orders from Driver A to Driver B (or same driver)
   const handleExecuteReallocation = () => {
     if (!reallocateDriverAId) {
       alert('Por favor, selecione o Condutor de Origem (A).');
@@ -449,10 +449,6 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       alert('Por favor, selecione o Condutor de Destino (B).');
       return;
     }
-    if (reallocateDriverAId === reallocateDriverBId) {
-      alert('O Condutor de Destino (B) precisa ser diferente do Condutor de Origem (A).');
-      return;
-    }
     if (selectedReallocateOrderIds.size === 0) {
       alert('Nenhum pedido selecionado para realocação.');
       return;
@@ -460,25 +456,33 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
 
     const driverA = riders.find(r => r.id === reallocateDriverAId);
     const driverB = riders.find(r => r.id === reallocateDriverBId);
+    const isSameDriver = reallocateDriverAId === reallocateDriverBId;
 
     const countToMove = selectedReallocateOrderIds.size;
-    const isConfirmed = window.confirm(
-      `Confirma realocar ${countToMove} pedido(s) do condutor ${driverA?.name || 'A'} para o condutor ${driverB?.name || 'B'} no período ${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}?`
-    );
+    const confirmMessage = isSameDriver
+      ? `Confirma realocar/revalidar ${countToMove} pedido(s) na rota atual do condutor ${driverB?.name || 'B'} (mantendo o status atual) para visualização e execução na data de hoje?`
+      : `Confirma realocar ${countToMove} pedido(s) do condutor ${driverA?.name || 'A'} para o condutor ${driverB?.name || 'B'} no período ${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}?`;
 
+    const isConfirmed = window.confirm(confirmMessage);
     if (!isConfirmed) return;
 
     const isMidRouteB = driverB?.status === 'Em rota';
+    const todayIso = getSaoPauloISODate();
 
     const updatedOrders = orders.map(order => {
       if (selectedReallocateOrderIds.has(order.id)) {
-        const isCompleted = order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' || hasOrderCompletionEvidence(order);
-        const assignedStatus = isCompleted ? order.status : ('Não iniciado' as const);
+        // When reallocated to the same driver or new driver, keep current status unless explicitly modified
+        const assignedStatus = isSameDriver 
+          ? order.status 
+          : (order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' || hasOrderCompletionEvidence(order) ? order.status : ('Não iniciado' as const));
 
         const tempOrder: Order = {
           ...order,
           riderId: driverB?.id,
-          status: assignedStatus
+          status: assignedStatus,
+          originalDate: order.originalDate || order.date,
+          reallocatedDate: todayIso,
+          reallocatedAt: todayIso
         };
 
         const comm = calculateRiderCommissionForOrder(driverB, tempOrder, clientPartners || []);
@@ -491,6 +495,14 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
           updatedRaw[driverKey] = String(computedVal);
         }
 
+        const actionText = isSameDriver
+          ? `Realocação / Revalidação para o mesmo Condutor (${driverB?.name})`
+          : `Realocação entre Condutores (A ➔ B)`;
+
+        const detailsText = isSameDriver
+          ? `Pedido do dia anterior/período ${formatToBrazilianDate(order.date)} revalidado e realocado para a rota atual do condutor ${driverB?.name} com status mantido (${order.status}).`
+          : `Pedido realocado do Condutor ${driverA?.name || reallocateDriverAId} para o Condutor ${driverB?.name || reallocateDriverBId} no período ${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}.`;
+
         return {
           ...tempOrder,
           driverValue: computedVal,
@@ -499,9 +511,9 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
             ...(order.history || []),
             {
               timestamp: getSaoPauloDateTimeShort(),
-              action: `Realocação entre Condutores (A ➔ B)`,
+              action: actionText,
               user: 'Operador Central',
-              details: `Pedido realocado do Condutor ${driverA?.name || reallocateDriverAId} para o Condutor ${driverB?.name || reallocateDriverBId} no período ${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}.`
+              details: detailsText
             }
           ]
         };
@@ -517,7 +529,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
           currentOrderId: Array.from(selectedReallocateOrderIds)[0]
         };
       }
-      if (rider.id === driverA?.id) {
+      if (!isSameDriver && rider.id === driverA?.id) {
         const remainingForA = updatedOrders.filter(
           o => o.riderId === driverA.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
         );
@@ -532,10 +544,14 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     });
 
     const nowTime = getSaoPauloTime();
+    const logMsg = isSameDriver
+      ? `Realocação mantendo status: ${countToMove} pedido(s) revalidados na rota do condutor ${driverB?.name} para o dia atual.`
+      : `Realocação concluída: ${countToMove} pedido(s) do Condutor ${driverA?.name} transferidos para o Condutor ${driverB?.name} (${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}).`;
+
     const logsGenerated = [
       {
         time: nowTime,
-        message: `Realocação concluída: ${countToMove} pedido(s) do Condutor ${driverA?.name} transferidos para o Condutor ${driverB?.name} (${formatToBrazilianDate(reallocateDateFrom)} a ${formatToBrazilianDate(reallocateDateTo)}).`,
+        message: logMsg,
         type: 'success' as const
       },
       {
@@ -1397,9 +1413,10 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
               <option value="">-- Selecione o Condutor (B) --</option>
               {riders.map(r => {
                 const countActive = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                const isSame = r.id === reallocateDriverAId;
                 return (
-                  <option key={`b-${r.id}`} value={r.id} disabled={r.id === reallocateDriverAId}>
-                    {r.name} ({countActive} pedido(s) ativo(s) - {r.status})
+                  <option key={`b-${r.id}`} value={r.id}>
+                    {r.name} {isSame ? '(Mesmo Condutor - Revalidação/Manter Status)' : `(${countActive} pedido(s) ativo(s) - ${r.status})`}
                   </option>
                 );
               })}
@@ -1526,15 +1543,19 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
         <div className="pt-2 flex justify-end">
           <button
             onClick={handleExecuteReallocation}
-            disabled={!reallocateDriverAId || !reallocateDriverBId || selectedReallocateOrderIds.size === 0 || reallocateDriverAId === reallocateDriverBId}
+            disabled={!reallocateDriverAId || !reallocateDriverBId || selectedReallocateOrderIds.size === 0}
             className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
-              !reallocateDriverAId || !reallocateDriverBId || selectedReallocateOrderIds.size === 0 || reallocateDriverAId === reallocateDriverBId
+              !reallocateDriverAId || !reallocateDriverBId || selectedReallocateOrderIds.size === 0
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
                 : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-md shadow-indigo-200'
             }`}
           >
             <Users size={15} />
-            <span>Confirmar Realocação de {selectedReallocateOrderIds.size} Pedido(s) ({driverAObj?.name || 'A'} ➔ {driverBObj?.name || 'B'})</span>
+            <span>
+              {reallocateDriverAId === reallocateDriverBId
+                ? `Confirmar Revalidação de ${selectedReallocateOrderIds.size} Pedido(s) (${driverBObj?.name || 'Condutor'})`
+                : `Confirmar Realocação de ${selectedReallocateOrderIds.size} Pedido(s) (${driverAObj?.name || 'A'} ➔ ${driverBObj?.name || 'B'})`}
+            </span>
           </button>
         </div>
       </div>

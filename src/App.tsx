@@ -13,7 +13,7 @@ import {
 } from './data/mock';
 import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHistoryEntry, isMatchingClientCode, CepRange, CepTableHistoryItem, CompanyHub, BillingModelType } from './types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime } from './utils/dateUtils';
-import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider } from './utils/partnerUtils';
+import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider, setCachedClientPartners, setCachedDeliveryRiders } from './utils/partnerUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from './utils/addressUtils';
 import { isOrderMatchingGlobalSearch } from './utils/searchUtils';
 import { playNotificationAudioAlert } from './utils/notificationUtils';
@@ -248,6 +248,13 @@ export default function App() {
   const [selectedRiderId, setSelectedRiderId] = useState<string | null>(null);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
 
+  // Sync riders into global cache for resilient resolution across all components
+  useEffect(() => {
+    if (riders && riders.length > 0) {
+      setCachedDeliveryRiders(riders);
+    }
+  }, [riders]);
+
   // Standalone Rider App states
   const [isStandaloneRider, setIsStandaloneRider] = useState(false);
   const [isRealDeviceMode, setIsRealDeviceMode] = useState(false);
@@ -319,6 +326,13 @@ export default function App() {
 
   const [clientPartners, setClientPartners] = useState<ClientPartner[]>([]);
   const [companyHubs, setCompanyHubs] = useState<CompanyHub[]>(INITIAL_COMPANY_HUBS);
+
+  // Sync client partners into global cache for resilient resolution across all components
+  useEffect(() => {
+    if (clientPartners && clientPartners.length > 0) {
+      setCachedClientPartners(clientPartners);
+    }
+  }, [clientPartners]);
 
   // Dynamic PWA manifest and icons update with Headquarters (Hub) Logo
   useEffect(() => {

@@ -1,8 +1,45 @@
 import { ClientPartner, DeliveryRider, isMatchingClientCode } from '../types';
 
+// Global cache for client partners to ensure resolution across all components even when props are omitted
+let globalClientPartnersCache: ClientPartner[] = [];
+
+export function setCachedClientPartners(partners: ClientPartner[]) {
+  if (Array.isArray(partners)) {
+    globalClientPartnersCache = partners;
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vinimap_cached_client_partners', JSON.stringify(partners));
+      }
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function getCachedClientPartners(): ClientPartner[] {
+  if (globalClientPartnersCache.length > 0) {
+    return globalClientPartnersCache;
+  }
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('vinimap_cached_client_partners');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          globalClientPartnersCache = parsed;
+          return parsed;
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
 /**
  * Utility to resolve a friendly partner display name from a raw partner string or code.
- * Replaces raw codes (e.g. 'PAR-001', 'CL1-001') with full partner names (e.g. 'Ana Silva', 'Burger King').
+ * Replaces raw codes (e.g. 'PAR-001', 'CL1-001', 'CL1-014') with full partner names.
  */
 export function getPartnerDisplayName(
   rawNameOrCode: string | undefined | null,
@@ -14,22 +51,29 @@ export function getPartnerDisplayName(
 
   const trimmed = rawNameOrCode.trim();
 
-  // 1. Direct match in provided clientPartners list
-  if (clientPartners && clientPartners.length > 0) {
-    const matched = clientPartners.find(cp => 
+  // Combine provided clientPartners with cached partners if needed
+  const partnersList = (clientPartners && clientPartners.length > 0)
+    ? clientPartners
+    : getCachedClientPartners();
+
+  // 1. Direct match in clientPartners list
+  if (partnersList && partnersList.length > 0) {
+    const matched = partnersList.find(cp => 
       isMatchingClientCode(trimmed, cp.id, cp.codigoCliente) ||
-      cp.id?.toLowerCase() === trimmed.toLowerCase() ||
-      cp.codigoCliente?.toLowerCase() === trimmed.toLowerCase() ||
-      cp.name?.toLowerCase() === trimmed.toLowerCase() ||
-      cp.fantasia?.toLowerCase() === trimmed.toLowerCase() ||
-      cp.razaoSocial?.toLowerCase() === trimmed.toLowerCase()
+      cp.id?.trim().toLowerCase() === trimmed.toLowerCase() ||
+      cp.codigoCliente?.trim().toLowerCase() === trimmed.toLowerCase() ||
+      cp.name?.trim().toLowerCase() === trimmed.toLowerCase() ||
+      cp.fantasia?.trim().toLowerCase() === trimmed.toLowerCase() ||
+      cp.razaoSocial?.trim().toLowerCase() === trimmed.toLowerCase() ||
+      (cp.codigoCliente && trimmed.toLowerCase().includes(cp.codigoCliente.toLowerCase())) ||
+      (cp.id && trimmed.toLowerCase().includes(cp.id.toLowerCase()))
     );
     if (matched && matched.name) {
       return matched.name;
     }
   }
 
-  // 2. Fallback dictionary for standard codes
+  // 2. Fallback dictionary for standard known codes
   const defaultCodeMap: Record<string, string> = {
     'cl1-001': 'Ana Silva',
     'par-001': 'Ana Silva',
@@ -52,6 +96,9 @@ export function getPartnerDisplayName(
     'cl1-007': 'Lucas Mendes',
     'par-007': 'Lucas Mendes',
     'cli-007': 'Lucas Mendes',
+    'cl1-014': 'Cliente Parceiro 014',
+    'par-014': 'Cliente Parceiro 014',
+    'cli-014': 'Cliente Parceiro 014',
   };
 
   const lowerCode = trimmed.toLowerCase();
@@ -124,6 +171,43 @@ export function isOrderMatchingPartner(
   return false;
 }
 
+// Global cache for delivery riders to ensure consistent matching across all render ticks
+let globalDeliveryRidersCache: DeliveryRider[] = [];
+
+export function setCachedDeliveryRiders(riders: DeliveryRider[]) {
+  if (Array.isArray(riders) && riders.length > 0) {
+    globalDeliveryRidersCache = riders;
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vinimap_cached_delivery_riders', JSON.stringify(riders));
+      }
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function getCachedDeliveryRiders(): DeliveryRider[] {
+  if (globalDeliveryRidersCache.length > 0) {
+    return globalDeliveryRidersCache;
+  }
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('vinimap_cached_delivery_riders');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          globalDeliveryRidersCache = parsed;
+          return parsed;
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
 /**
  * Checks if an order matches a selected rider/driver filter value (by ID, name, phone, deviceNumber, CPF).
  */
@@ -140,39 +224,114 @@ export function isOrderMatchingRider(
   const filterDigits = cleanFilter.replace(/\D/g, '');
   const orderRiderId = (order.riderId || '').trim().toLowerCase();
   const orderRiderDigits = orderRiderId.replace(/\D/g, '');
-  const rawRider = (order.rawData?.['DispositivoCondutor'] || order.rawData?.['Entregador'] || order.rawData?.['Condutor'] || '').trim().toLowerCase();
-  const rawRiderDigits = rawRider.replace(/\D/g, '');
 
-  // 1. Exact ID or direct string / digit match
-  if (orderRiderId === cleanFilter || rawRider === cleanFilter) {
+  // Extract rider identification from any known rawData key
+  const rawData = order.rawData || {};
+  const rawRiderKeys = [
+    'DispositivoCondutor',
+    'Entregador',
+    'Condutor',
+    'Motorista',
+    'Dispositivo',
+    'Rider',
+    'Driver',
+    'NomeCondutor',
+    'NomeEntregador',
+    'IDCondutor',
+    'IdEntregador',
+    'CodigoEntregador',
+    'CodigoCondutor',
+    'TelefoneCondutor',
+    'TelefoneEntregador'
+  ];
+
+  let rawRiderValues: string[] = [];
+  for (const k of Object.keys(rawData)) {
+    const normalizedKey = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (
+      normalizedKey.includes('condutor') ||
+      normalizedKey.includes('entregador') ||
+      normalizedKey.includes('motorista') ||
+      normalizedKey.includes('dispositivo') ||
+      normalizedKey.includes('rider') ||
+      normalizedKey.includes('driver')
+    ) {
+      const val = (rawData[k] || '').trim().toLowerCase();
+      if (val) rawRiderValues.push(val);
+    }
+  }
+
+  // 1. Direct match on order.riderId
+  if (orderRiderId && orderRiderId === cleanFilter) {
     return true;
   }
-  if (filterDigits.length >= 8 && (orderRiderDigits === filterDigits || rawRiderDigits === filterDigits)) {
+  if (filterDigits.length >= 8 && orderRiderDigits.length >= 8 && orderRiderDigits === filterDigits) {
     return true;
   }
 
-  // 2. Rider object resolution
-  if (riders && riders.length > 0) {
-    const targetRider = riders.find(r => 
-      r.id.toLowerCase() === cleanFilter || 
-      r.name.toLowerCase() === cleanFilter ||
+  // 2. Direct match on rawData fields
+  for (const val of rawRiderValues) {
+    if (val === cleanFilter) return true;
+    const valDigits = val.replace(/\D/g, '');
+    if (filterDigits.length >= 8 && valDigits.length >= 8 && valDigits === filterDigits) {
+      return true;
+    }
+  }
+
+  // 3. Match using full list of riders (provided prop + persistent global cache fallback)
+  const availableRiders = (riders && riders.length > 0) ? riders : getCachedDeliveryRiders();
+
+  if (availableRiders && availableRiders.length > 0) {
+    const targetRider = availableRiders.find(r => 
+      r.id.trim().toLowerCase() === cleanFilter || 
+      r.name.trim().toLowerCase() === cleanFilter ||
       (r.phone && r.phone.replace(/\D/g, '') === filterDigits) ||
       (r.deviceNumber && r.deviceNumber.replace(/\D/g, '') === filterDigits) ||
       (r.cpfCnpj && r.cpfCnpj.replace(/\D/g, '') === filterDigits)
     );
 
     if (targetRider) {
-      const tId = targetRider.id.toLowerCase();
-      const tName = targetRider.name.toLowerCase();
+      const tId = targetRider.id.trim().toLowerCase();
+      const tName = targetRider.name.trim().toLowerCase();
       const tPhoneDigits = (targetRider.phone || '').replace(/\D/g, '');
       const tDeviceDigits = (targetRider.deviceNumber || '').replace(/\D/g, '');
       const tCpfDigits = (targetRider.cpfCnpj || '').replace(/\D/g, '');
 
-      if (orderRiderId === tId || orderRiderId === tName) return true;
-      if (rawRider === tId || rawRider === tName) return true;
-      if (tPhoneDigits && (orderRiderDigits === tPhoneDigits || rawRiderDigits === tPhoneDigits)) return true;
-      if (tDeviceDigits && (orderRiderDigits === tDeviceDigits || rawRiderDigits === tDeviceDigits)) return true;
-      if (tCpfDigits && (orderRiderDigits === tCpfDigits || rawRiderDigits === tCpfDigits)) return true;
+      // Check order.riderId against target rider attributes
+      if (orderRiderId) {
+        if (orderRiderId === tId || orderRiderId === tName) return true;
+        if (tPhoneDigits && orderRiderDigits === tPhoneDigits) return true;
+        if (tDeviceDigits && orderRiderDigits === tDeviceDigits) return true;
+        if (tCpfDigits && orderRiderDigits === tCpfDigits) return true;
+      }
+
+      // Check rawData values against target rider attributes
+      for (const val of rawRiderValues) {
+        if (val === tId || val === tName) return true;
+        const valDigits = val.replace(/\D/g, '');
+        if (tPhoneDigits && valDigits === tPhoneDigits) return true;
+        if (tDeviceDigits && valDigits === tDeviceDigits) return true;
+        if (tCpfDigits && valDigits === tCpfDigits) return true;
+      }
+    }
+
+    // Also check if the order's assigned riderId resolves to a known rider that matches cleanFilter
+    if (orderRiderId) {
+      const assignedRider = availableRiders.find(r =>
+        r.id.trim().toLowerCase() === orderRiderId ||
+        r.name.trim().toLowerCase() === orderRiderId ||
+        (r.phone && r.phone.replace(/\D/g, '') === orderRiderDigits) ||
+        (r.deviceNumber && r.deviceNumber.replace(/\D/g, '') === orderRiderDigits)
+      );
+
+      if (assignedRider) {
+        if (assignedRider.id.trim().toLowerCase() === cleanFilter) return true;
+        if (assignedRider.name.trim().toLowerCase() === cleanFilter) return true;
+        const aPhoneDigits = (assignedRider.phone || '').replace(/\D/g, '');
+        if (filterDigits.length >= 8 && aPhoneDigits === filterDigits) return true;
+        const aDeviceDigits = (assignedRider.deviceNumber || '').replace(/\D/g, '');
+        if (filterDigits.length >= 8 && aDeviceDigits === filterDigits) return true;
+      }
     }
   }
 

@@ -112,13 +112,6 @@ export default function CepInput({
   const rawDigits = (value || '').replace(/\D/g, '').slice(0, 8);
   const formattedValue = formatCep(rawDigits);
 
-  // Sync value formatting if caller gives unformatted value
-  useEffect(() => {
-    if (value && value !== formattedValue) {
-      onChange(formattedValue, rawDigits);
-    }
-  }, [value, formattedValue, rawDigits, onChange]);
-
   // Execute lookup when 8 digits are entered
   useEffect(() => {
     if (!autoLookup) return;
