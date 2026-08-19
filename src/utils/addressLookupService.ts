@@ -92,7 +92,7 @@ export function parseAddressQuery(input: string): {
   city: string;
   state: string;
 } {
-  const trimmed = (input || '').trim();
+  const trimmed = (input || '').toString().trim();
   
   // 1. Check if the string already contains a CEP (e.g. "01310-100", "01310100", "CEP: 05061-050")
   const cepMatch = trimmed.match(/\b(\d{5})[- ]?(\d{3})\b/);
@@ -166,7 +166,7 @@ export async function searchCepByAddress(
   preferredCity = 'São Paulo',
   preferredState = 'SP'
 ): Promise<AddressLookupResult | null> {
-  const trimmed = (addressInput || '').trim();
+  const trimmed = (addressInput || '').toString().trim();
   if (!trimmed || trimmed.length < 3) return null;
 
   const cacheKey = `${trimmed.toLowerCase()}_${preferredCity}_${preferredState}`;
@@ -362,7 +362,7 @@ export async function fetchAddressSuggestions(
   preferredCity = 'São Paulo',
   preferredState = 'SP'
 ): Promise<AddressSuggestionItem[]> {
-  const trimmed = (query || '').trim();
+  const trimmed = (query || '').toString().trim();
   if (trimmed.length < 3) return [];
 
   const cacheKey = `${trimmed.toLowerCase()}_${preferredCity}_${preferredState}`;

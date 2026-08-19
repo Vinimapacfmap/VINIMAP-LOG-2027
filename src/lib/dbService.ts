@@ -1052,12 +1052,25 @@ export async function clearLocalSystemCache() {
   try {
     if (typeof window !== 'undefined') {
       const isPurged = window.localStorage.getItem('system_purged');
+      const supabaseUrl = window.localStorage.getItem('SUPABASE_URL');
+      const supabaseAnonKey = window.localStorage.getItem('SUPABASE_ANON_KEY');
+      const activeHub = window.localStorage.getItem('vinimap_active_hub');
+
       // 1. Clear LocalStorage and SessionStorage
       try {
         window.localStorage.clear();
         window.sessionStorage.clear();
         if (isPurged) {
           window.localStorage.setItem('system_purged', isPurged);
+        }
+        if (supabaseUrl) {
+          window.localStorage.setItem('SUPABASE_URL', supabaseUrl);
+        }
+        if (supabaseAnonKey) {
+          window.localStorage.setItem('SUPABASE_ANON_KEY', supabaseAnonKey);
+        }
+        if (activeHub) {
+          window.localStorage.setItem('vinimap_active_hub', activeHub);
         }
       } catch (e) {
         console.warn('Could not clear localStorage/sessionStorage:', e);

@@ -62,11 +62,12 @@ export function normalizeAddressForSearch(text: string): string {
  * Returns true if the address matches the search query under normalized street prefixes and abbreviations.
  */
 export function matchesAddressQuery(address: string | undefined | null, searchQuery: string | undefined | null): boolean {
-  if (!searchQuery || !searchQuery.trim()) return true;
+  const cleanSearch = (searchQuery || '').toString().trim();
+  if (!cleanSearch) return true;
   if (!address) return false;
 
-  const rawQuery = searchQuery.trim().toLowerCase();
-  const rawAddress = address.trim().toLowerCase();
+  const rawQuery = cleanSearch.toLowerCase();
+  const rawAddress = (address || '').toString().trim().toLowerCase();
 
   // Quick raw check
   if (rawAddress.includes(rawQuery)) return true;

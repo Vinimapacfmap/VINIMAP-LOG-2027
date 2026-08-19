@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../supabase';
 import { 
   Order, 
+  OrderStatus,
   ClientPartner, 
   DeliveryRider, 
   ActivityLog, 
@@ -202,13 +203,39 @@ export function mapOrderFromDb(row: any): Order {
     || rawDataObj?.riderName 
     || undefined;
 
+  const rawStatusCandidate = (
+    row.status 
+    || rawDataObj?.status 
+    || rawDataObj?.Status 
+    || rawDataObj?.Situacao 
+    || rawDataObj?.situacao 
+    || rawDataObj?.STATUS 
+    || ''
+  ).toString().trim();
+
+  let resolvedStatus: OrderStatus = 'Não iniciado';
+  const cleanStatus = rawStatusCandidate.toLowerCase();
+  if (cleanStatus === 'concluído' || cleanStatus === 'concluido' || cleanStatus === 'entregue' || cleanStatus === 'finalizado' || cleanStatus === 'baixado' || protocolNumber || signatureUrl || deliveryPhotoUrl || dataConclusao) {
+    resolvedStatus = 'Concluído';
+  } else if (cleanStatus === 'ocorrência' || cleanStatus === 'ocorrencia' || cleanStatus === 'falha' || cleanStatus === 'devolvido' || occurrenceDate) {
+    resolvedStatus = 'Ocorrência';
+  } else if (cleanStatus === 'cancelado' || cleanStatus === 'cancelada') {
+    resolvedStatus = 'Cancelado';
+  } else if (cleanStatus === 'em trânsito' || cleanStatus === 'em transito' || cleanStatus === 'a caminho' || cleanStatus === 'em rota') {
+    resolvedStatus = 'Em rota';
+  } else if (cleanStatus === 'entregando') {
+    resolvedStatus = 'Entregando';
+  } else if (resolvedRiderId) {
+    resolvedStatus = 'Não iniciado';
+  }
+
   return {
     id: String(row.id),
     clientName: row.client_name || rawDataObj?.clientName || rawDataObj?.Cliente || rawDataObj?.cliente || 'Cliente',
     phone: row.phone || rawDataObj?.phone || rawDataObj?.Telefone || rawDataObj?.telefone || '',
     address: row.address || rawDataObj?.address || rawDataObj?.Endereco || rawDataObj?.endereco || '',
     region: row.region || rawDataObj?.region || rawDataObj?.Regiao || rawDataObj?.regiao || '',
-    status: row.status || rawDataObj?.status || 'Não iniciado',
+    status: resolvedStatus,
     priority: row.priority || rawDataObj?.priority || 'Normal',
     value: Number(row.value ?? rawDataObj?.value ?? rawDataObj?.ValorEntrega ?? 0),
     riderId: resolvedRiderId,
@@ -708,6 +735,14 @@ export interface SyncStats {
   txsCount: number;
 }
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 export async function syncAllStateToSupabase(data: {
   hubs: CompanyHub[];
   clients: ClientPartner[];
@@ -720,40 +755,49 @@ export async function syncAllStateToSupabase(data: {
     throw new Error('Supabase is not configured yet. Set credentials in env/secrets.');
   }
 
-  // 1. Sync Company Hubs
+  // 1. Sync Company Hubs in chunks
   if (data.hubs.length > 0) {
     const dbHubs = data.hubs.map(mapCompanyHubToDb);
-    const { error } = await supabase.from('company_hubs').upsert(dbHubs);
-    if (error) throw new Error(`Error syncing company hubs: ${error.message}`);
+    const hubChunks = chunkArray(dbHubs, 50);
+    for (const chunk of hubChunks) {
+      const { error } = await supabase.from('company_hubs').upsert(chunk);
+      if (error) throw new Error(`Error syncing company hubs: ${error.message}`);
+    }
   }
 
-  // 2. Sync Riders
+  // 2. Sync Riders in chunks
   if (data.riders.length > 0) {
     const dbRiders = data.riders.map(mapDeliveryRiderToDb);
-    const { error } = await supabase.from('delivery_riders').upsert(dbRiders);
-    if (error) throw new Error(`Error syncing riders: ${error.message}`);
+    const riderChunks = chunkArray(dbRiders, 50);
+    for (const chunk of riderChunks) {
+      const { error } = await supabase.from('delivery_riders').upsert(chunk);
+      if (error) throw new Error(`Error syncing riders: ${error.message}`);
+    }
   }
 
-  // 3. Sync Clients
+  // 3. Sync Clients in chunks
   if (data.clients.length > 0) {
     const dbClients = data.clients.map(mapClientPartnerToDb);
-    const { error } = await supabase.from('client_partners').upsert(dbClients);
-    if (error) {
-      if (error.message?.includes('enable_completion_notifications') || error.message?.includes('column') || error.code === 'PGRST204' || error.code === '42703') {
-        console.warn('[Supabase Sync] Missing column in client_partners schema cache, retrying without optional columns...');
-        const fallbackClients = dbClients.map(c => {
-          const { enable_completion_notifications, cep_ranges_history, ...rest } = c as any;
-          return rest;
-        });
-        const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackClients);
-        if (retryErr) throw new Error(`Error syncing client partners: ${retryErr.message}`);
-      } else {
-        throw new Error(`Error syncing client partners: ${error.message}`);
+    const clientChunks = chunkArray(dbClients, 50);
+    for (const chunk of clientChunks) {
+      const { error } = await supabase.from('client_partners').upsert(chunk);
+      if (error) {
+        if (error.message?.includes('enable_completion_notifications') || error.message?.includes('column') || error.code === 'PGRST204' || error.code === '42703') {
+          console.warn('[Supabase Sync] Missing column in client_partners schema cache, retrying chunk without optional columns...');
+          const fallbackChunk = chunk.map(c => {
+            const { enable_completion_notifications, cep_ranges_history, ...rest } = c as any;
+            return rest;
+          });
+          const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackChunk);
+          if (retryErr) throw new Error(`Error syncing client partners: ${retryErr.message}`);
+        } else {
+          throw new Error(`Error syncing client partners: ${error.message}`);
+        }
       }
     }
   }
 
-  // 4. Sync Orders
+  // 4. Sync Orders in chunks (small chunk size of 30 to avoid PostgreSQL statement timeouts and payload size limits)
   if (data.orders.length > 0) {
     const validRiderIds = new Set(data.riders.map(r => r.id));
     const dbOrders = data.orders.map(o => {
@@ -763,45 +807,55 @@ export async function syncAllStateToSupabase(data: {
       }
       return dbO;
     });
-    const { error } = await supabase.from('orders').upsert(dbOrders);
-    if (error) {
-      console.warn('[Supabase Sync] Full orders upsert failed, retrying with base columns fallback...', error.message);
-      const baseOrders = dbOrders.map(dbO => ({
-        id: dbO.id,
-        client_name: dbO.client_name,
-        phone: dbO.phone,
-        address: dbO.address,
-        region: dbO.region,
-        status: dbO.status,
-        priority: dbO.priority,
-        value: dbO.value,
-        rider_id: dbO.rider_id,
-        items_count: dbO.items_count,
-        date: dbO.date,
-        cep: dbO.cep,
-        partner_name: dbO.partner_name,
-        delivery_value: dbO.delivery_value,
-        driver_value: dbO.driver_value,
-        raw_data: dbO.raw_data,
-        history: dbO.history
-      }));
-      const { error: retryErr } = await supabase.from('orders').upsert(baseOrders);
-      if (retryErr) throw new Error(`Error syncing orders: ${retryErr.message}`);
+
+    const orderChunks = chunkArray(dbOrders, 30);
+    for (const chunk of orderChunks) {
+      const { error } = await supabase.from('orders').upsert(chunk);
+      if (error) {
+        console.warn('[Supabase Sync] Orders chunk upsert failed, retrying chunk with base columns fallback...', error.message);
+        const baseChunk = chunk.map(dbO => ({
+          id: dbO.id,
+          client_name: dbO.client_name,
+          phone: dbO.phone,
+          address: dbO.address,
+          region: dbO.region,
+          status: dbO.status,
+          priority: dbO.priority,
+          value: dbO.value,
+          rider_id: dbO.rider_id,
+          items_count: dbO.items_count,
+          date: dbO.date,
+          cep: dbO.cep,
+          partner_name: dbO.partner_name,
+          delivery_value: dbO.delivery_value,
+          driver_value: dbO.driver_value,
+          raw_data: dbO.raw_data,
+          history: dbO.history
+        }));
+        const { error: retryErr } = await supabase.from('orders').upsert(baseChunk);
+        if (retryErr) throw new Error(`Error syncing orders: ${retryErr.message}`);
+      }
     }
   }
 
-  // 5. Sync Activity Logs
+  // 5. Sync Activity Logs in chunks
   if (data.logs.length > 0) {
     const dbLogs = data.logs.map(mapActivityLogToDb);
-    const { error } = await supabase.from('activity_logs').upsert(dbLogs);
-    if (error) throw new Error(`Error syncing activity logs: ${error.message}`);
+    const logChunks = chunkArray(dbLogs, 50);
+    for (const chunk of logChunks) {
+      const { error } = await supabase.from('activity_logs').upsert(chunk);
+      if (error) throw new Error(`Error syncing activity logs: ${error.message}`);
+    }
   }
 
-  // 6. Sync Transactions
+  // 6. Sync Transactions in chunks
   if (data.txs.length > 0) {
     const dbTxs = data.txs.map(mapFinancialTransactionToDb);
-    const { error } = await supabase.from('financial_transactions').upsert(dbTxs);
-    if (error) throw new Error(`Error syncing transactions: ${error.message}`);
+    const txChunks = chunkArray(dbTxs, 50);
+    for (const chunk of txChunks) {
+      const { error } = await supabase.from('financial_transactions').upsert(chunk);
+      if (error) throw new Error(`Error syncing transactions: ${error.message}`);
+    }
   }
 
   return {

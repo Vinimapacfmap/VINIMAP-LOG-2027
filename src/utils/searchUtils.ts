@@ -61,48 +61,63 @@ function isOrderMatchingSingleToken(
     if (partnerDisplay.includes(cleanToken)) return true;
   }
 
-  // 7. Rider Matching (by ID, Name, Phone, Vehicle, Device, RawData, History)
-  const candidateRiderStrings: string[] = [
-    order.riderId ? String(order.riderId) : '',
-    order.rawData?.Condutor !== undefined ? String(order.rawData.Condutor) : '',
-    order.rawData?.condutor !== undefined ? String(order.rawData.condutor) : '',
-    order.rawData?.NomeCondutor !== undefined ? String(order.rawData.NomeCondutor) : '',
-    order.rawData?.nomeCondutor !== undefined ? String(order.rawData.nomeCondutor) : '',
-    order.rawData?.Entregador !== undefined ? String(order.rawData.Entregador) : '',
-    order.rawData?.entregador !== undefined ? String(order.rawData.entregador) : '',
-    order.rawData?.NomeEntregador !== undefined ? String(order.rawData.NomeEntregador) : '',
-    order.rawData?.Motorista !== undefined ? String(order.rawData.Motorista) : '',
-    order.rawData?.motorista !== undefined ? String(order.rawData.motorista) : '',
-    order.rawData?.DispositivoCondutor !== undefined ? String(order.rawData.DispositivoCondutor) : '',
-    order.rawData?.dispositivoCondutor !== undefined ? String(order.rawData.dispositivoCondutor) : '',
-    order.rawData?.riderName !== undefined ? String(order.rawData.riderName) : '',
-    order.rawData?.Rider !== undefined ? String(order.rawData.Rider) : ''
-  ].filter(Boolean);
+  // 7. Rider Matching (by ID, Name, Phone, Vehicle, Device, RawData)
+  const isAssigned = order.riderId && 
+    String(order.riderId).trim() !== '' && 
+    String(order.riderId).trim().toLowerCase() !== 'unassigned' && 
+    String(order.riderId).trim().toLowerCase() !== 'desalocar';
 
-  for (const rStr of candidateRiderStrings) {
-    if (rStr && rStr.toLowerCase().includes(cleanToken)) return true;
-  }
+  if (isAssigned) {
+    const oRiderId = String(order.riderId).trim().toLowerCase();
+    if (oRiderId.includes(cleanToken)) return true;
 
-  if (riders && riders.length > 0) {
-    // Find matching rider from riderId or rawData
-    const matchedRider = riders.find(r => 
-      String(r.id || '').toLowerCase() === String(order.riderId || '').toLowerCase() || 
-      (order.riderId && String(r.name || '').toLowerCase().includes(String(order.riderId).toLowerCase())) ||
-      candidateRiderStrings.some(cs => cs && String(r.name || '').toLowerCase().includes(cs.toLowerCase()))
-    );
+    if (riders && riders.length > 0) {
+      const activeRider = riders.find(r => 
+        String(r.id || '').toLowerCase() === oRiderId || 
+        String(r.name || '').toLowerCase() === oRiderId
+      );
 
-    if (matchedRider) {
-      if (String(matchedRider.name || '').toLowerCase().includes(cleanToken)) return true;
-      if (matchedRider.vehicle && String(matchedRider.vehicle).toLowerCase().includes(cleanToken)) return true;
-      if (matchedRider.phone && String(matchedRider.phone).replace(/\D/g, '').includes(digitsToken)) return true;
-      if (matchedRider.deviceNumber && String(matchedRider.deviceNumber).toLowerCase().includes(cleanToken)) return true;
+      if (activeRider) {
+        if (String(activeRider.name || '').toLowerCase().includes(cleanToken)) return true;
+        if (activeRider.vehicle && String(activeRider.vehicle).toLowerCase().includes(cleanToken)) return true;
+        if (activeRider.phone && String(activeRider.phone).replace(/\D/g, '').includes(digitsToken)) return true;
+        if (activeRider.deviceNumber && String(activeRider.deviceNumber).toLowerCase().includes(cleanToken)) return true;
+        if (activeRider.cpfCnpj && String(activeRider.cpfCnpj).replace(/\D/g, '').includes(digitsToken)) return true;
+      }
+    }
+  } else {
+    // Only check rawData if no active assigned rider
+    const candidateRiderStrings: string[] = [
+      order.rawData?.Condutor !== undefined ? String(order.rawData.Condutor) : '',
+      order.rawData?.condutor !== undefined ? String(order.rawData.condutor) : '',
+      order.rawData?.NomeCondutor !== undefined ? String(order.rawData.NomeCondutor) : '',
+      order.rawData?.nomeCondutor !== undefined ? String(order.rawData.nomeCondutor) : '',
+      order.rawData?.Entregador !== undefined ? String(order.rawData.Entregador) : '',
+      order.rawData?.entregador !== undefined ? String(order.rawData.entregador) : '',
+      order.rawData?.NomeEntregador !== undefined ? String(order.rawData.NomeEntregador) : '',
+      order.rawData?.Motorista !== undefined ? String(order.rawData.Motorista) : '',
+      order.rawData?.motorista !== undefined ? String(order.rawData.motorista) : '',
+      order.rawData?.DispositivoCondutor !== undefined ? String(order.rawData.DispositivoCondutor) : '',
+      order.rawData?.dispositivoCondutor !== undefined ? String(order.rawData.dispositivoCondutor) : '',
+      order.rawData?.riderName !== undefined ? String(order.rawData.riderName) : '',
+      order.rawData?.Rider !== undefined ? String(order.rawData.Rider) : ''
+    ].filter(Boolean);
+
+    for (const rStr of candidateRiderStrings) {
+      if (rStr && rStr.toLowerCase().includes(cleanToken)) return true;
     }
 
-    // Direct search matching any rider that matches this token if order references it
-    const tokenRider = riders.find(r => String(r.name || '').toLowerCase().includes(cleanToken) || String(r.id || '').toLowerCase() === cleanToken);
-    if (tokenRider) {
-      if (String(order.riderId || '').toLowerCase() === String(tokenRider.id || '').toLowerCase()) return true;
-      if (candidateRiderStrings.some(cs => cs && cs.toLowerCase().includes(String(tokenRider.name || '').toLowerCase()))) return true;
+    if (riders && riders.length > 0) {
+      const matchedRider = riders.find(r => 
+        candidateRiderStrings.some(cs => cs && String(r.name || '').toLowerCase().includes(cs.toLowerCase()))
+      );
+
+      if (matchedRider) {
+        if (String(matchedRider.name || '').toLowerCase().includes(cleanToken)) return true;
+        if (matchedRider.vehicle && String(matchedRider.vehicle).toLowerCase().includes(cleanToken)) return true;
+        if (matchedRider.phone && String(matchedRider.phone).replace(/\D/g, '').includes(digitsToken)) return true;
+        if (matchedRider.deviceNumber && String(matchedRider.deviceNumber).toLowerCase().includes(cleanToken)) return true;
+      }
     }
   }
 
@@ -186,11 +201,12 @@ export function isOrderMatchingGlobalSearch(
   riders?: DeliveryRider[],
   clientPartners?: ClientPartner[]
 ): boolean {
-  if (!searchQuery || !searchQuery.trim()) {
+  const cleanSearch = (searchQuery || '').toString().trim();
+  if (!cleanSearch) {
     return true;
   }
 
-  const rawQuery = searchQuery.trim().toLowerCase();
+  const rawQuery = cleanSearch.toLowerCase();
 
   // 1. Direct single-pass full query check first
   if (isOrderMatchingSingleToken(order, rawQuery, riders, clientPartners)) {

@@ -11,7 +11,7 @@ import { getSaoPauloISODate, extractISODateFromTimestamp } from './dateUtils';
  */
 export function normalizeToISODate(dateStr?: string): string {
   if (!dateStr) return '';
-  const clean = dateStr.trim();
+  const clean = (dateStr || '').toString().trim();
   const extracted = extractISODateFromTimestamp(clean);
   if (extracted) return extracted;
   return clean;
@@ -23,16 +23,16 @@ export function normalizeToISODate(dateStr?: string): string {
 export function hasOrderCompletionEvidence(order: Order): boolean {
   if (!order) return false;
 
-  const hasProtocol = Boolean(order.protocolNumber && order.protocolNumber.trim() !== '');
-  const hasSignature = Boolean(order.signatureUrl && order.signatureUrl.trim() !== '');
-  const hasPhoto = Boolean(order.deliveryPhotoUrl && order.deliveryPhotoUrl.trim() !== '');
+  const hasProtocol = Boolean(order.protocolNumber && (order.protocolNumber || '').toString().trim() !== '');
+  const hasSignature = Boolean(order.signatureUrl && (order.signatureUrl || '').toString().trim() !== '');
+  const hasPhoto = Boolean(order.deliveryPhotoUrl && (order.deliveryPhotoUrl || '').toString().trim() !== '');
   const hasRecipient = Boolean(
-    (order.recipientName && order.recipientName.trim() !== '') ||
-    (order.recipientDoc && order.recipientDoc.trim() !== '')
+    (order.recipientName && (order.recipientName || '').toString().trim() !== '') ||
+    (order.recipientDoc && (order.recipientDoc || '').toString().trim() !== '')
   );
   const hasCompletionDates = Boolean(
-    (order.dataConclusao && order.dataConclusao.trim() !== '') ||
-    (order.deliveryDate && order.deliveryDate.trim() !== '')
+    (order.dataConclusao && (order.dataConclusao || '').toString().trim() !== '') ||
+    (order.deliveryDate && (order.deliveryDate || '').toString().trim() !== '')
   );
 
   const hasCompletionHistory = Boolean(
@@ -88,7 +88,7 @@ export function sanitizeOrderConsistency(
   const updated = { ...order };
 
   // Normalize order date
-  if (!updated.date || updated.date.trim() === '') {
+  if (!updated.date || (updated.date || '').toString().trim() === '') {
     const fallbackDate = updated.deliveryDate 
       || updated.dataConclusao 
       || updated.occurrenceDate 
@@ -108,7 +108,7 @@ export function sanitizeOrderConsistency(
     }
   }
 
-  // Restore riderId from rawData if missing in root
+  // Restore riderId from rawData if missing in root ONLY if rawData contains a real rider identifier
   if (!updated.riderId) {
     const rawRider = updated.rawData?.riderId 
       || updated.rawData?.Condutor 
@@ -121,13 +121,55 @@ export function sanitizeOrderConsistency(
       || updated.rawData?.motorista 
       || updated.rawData?.DispositivoCondutor 
       || updated.rawData?.dispositivoCondutor;
+
     if (rawRider) {
-      updated.riderId = rawRider;
-      isModified = true;
+      const cleanRawRider = (rawRider || '').toString().trim().toLowerCase();
+      const isPlaceholder = cleanRawRider === '' || 
+        cleanRawRider === 'nao alocado' || 
+        cleanRawRider === 'não alocado' || 
+        cleanRawRider === 'nao vinculado' || 
+        cleanRawRider === 'não vinculado' || 
+        cleanRawRider === 'sem condutor' || 
+        cleanRawRider === 'desalocado' || 
+        cleanRawRider === 'unassigned' || 
+        cleanRawRider === 'undefined' || 
+        cleanRawRider === 'null';
+
+      if (!isPlaceholder) {
+        updated.riderId = (rawRider || '').toString().trim();
+        isModified = true;
+      }
     }
   }
 
   const orderIsoDate = normalizeToISODate(updated.date) || normalizeToISODate(updated.deliveryDate || updated.dataConclusao) || todayIso;
+
+  // Restore Concluído / Ocorrência / Cancelado status if order has completion evidence or raw status
+  if (updated.status !== 'Concluído' && updated.status !== 'Ocorrência' && updated.status !== 'Cancelado') {
+    const rawStatus = (
+      updated.rawData?.status ||
+      updated.rawData?.Status ||
+      updated.rawData?.Situacao ||
+      updated.rawData?.situacao ||
+      updated.rawData?.STATUS ||
+      ''
+    ).toString().trim().toLowerCase();
+
+    const isRawCompleted = rawStatus === 'concluído' || rawStatus === 'concluido' || rawStatus === 'entregue' || rawStatus === 'finalizado' || rawStatus === 'baixado';
+    const isRawOccurrence = rawStatus === 'ocorrência' || rawStatus === 'ocorrencia' || rawStatus === 'devolvido' || rawStatus === 'falha' || rawStatus === 'insucesso';
+    const isRawCancelled = rawStatus === 'cancelado' || rawStatus === 'cancelada';
+
+    if (isRawCompleted || hasOrderCompletionEvidence(updated)) {
+      updated.status = 'Concluído';
+      isModified = true;
+    } else if (isRawOccurrence) {
+      updated.status = 'Ocorrência';
+      isModified = true;
+    } else if (isRawCancelled) {
+      updated.status = 'Cancelado';
+      isModified = true;
+    }
+  }
 
   // Sync rawData status with authoritative order.status so that rawData does not have conflicting stale status
   if (updated.rawData && updated.status) {
@@ -136,6 +178,17 @@ export function sanitizeOrderConsistency(
       updated.rawData.Situacao = updated.status;
       updated.rawData.Status = updated.status;
       isModified = true;
+    }
+  }
+
+  // Sync rawData rider fields with authoritative order.riderId when assigned
+  if (updated.rawData && updated.riderId) {
+    const cleanRiderId = (updated.riderId || '').toString().trim();
+    if (cleanRiderId && cleanRiderId !== 'unassigned' && cleanRiderId !== 'desalocar') {
+      if (updated.rawData.riderId !== cleanRiderId) {
+        updated.rawData.riderId = cleanRiderId;
+        isModified = true;
+      }
     }
   }
 

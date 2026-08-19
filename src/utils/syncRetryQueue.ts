@@ -10,7 +10,7 @@
 import { Order } from '../types';
 import { sbSaveOrder, sbDeleteOrder } from '../lib/supabaseService';
 import { db } from '../firebase';
-import { getIsFirestoreQuotaExceeded } from '../lib/dbService';
+import { getIsFirestoreQuotaExceeded, isQuotaError, setIsFirestoreQuotaExceeded } from '../lib/dbService';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 export type QueuePriority = 'HIGH' | 'NORMAL' | 'LOW';
@@ -290,6 +290,9 @@ class SyncRetryQueueManager {
               await setDoc(doc(db, 'orders', orderId), cleaned);
             } catch (fsErr: any) {
               console.warn(`[SyncRetryQueue] Falha no salvamento do Firestore para #${orderId}:`, fsErr);
+              if (isQuotaError(fsErr)) {
+                setIsFirestoreQuotaExceeded(true);
+              }
               firestoreSuccess = false;
               if (!errorMsg) errorMsg = fsErr?.message || 'Falha Firestore';
             }
@@ -310,6 +313,10 @@ class SyncRetryQueueManager {
             try {
               await deleteDoc(doc(db, 'orders', orderId));
             } catch (fsErr: any) {
+              console.warn(`[SyncRetryQueue] Falha no delete do Firestore para #${orderId}:`, fsErr);
+              if (isQuotaError(fsErr)) {
+                setIsFirestoreQuotaExceeded(true);
+              }
               firestoreSuccess = false;
               if (!errorMsg) errorMsg = fsErr?.message || 'Falha Firestore Delete';
             }
@@ -317,7 +324,8 @@ class SyncRetryQueueManager {
         }
       }
 
-      const isAllSuccessful = supabaseSuccess && firestoreSuccess;
+      const isFirestoreExceeded = getIsFirestoreQuotaExceeded();
+      const isAllSuccessful = (supabaseSuccess && firestoreSuccess) || (supabaseSuccess && isFirestoreExceeded);
 
       if (isAllSuccessful) {
         // Success: Remove task from queue
@@ -406,6 +414,8 @@ class SyncRetryQueueManager {
         } else {
           failedCount++;
         }
+        // Small throttle delay between queued tasks to prevent overwhelming write streams
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     } catch (e) {
       console.warn('[SyncRetryQueue] Erro durante processamento da fila:', e);

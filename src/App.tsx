@@ -187,19 +187,6 @@ export default function App() {
     time: new Date().toISOString()
   });
 
-  const handleLogout = async () => {
-    localStorage.setItem('vinimap_logged_out', 'true');
-    localStorage.removeItem('vinimap_admin_session');
-    setIsAdminAuthenticated(false);
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.auth.signOut();
-      } catch (err) {
-        console.warn("Logout exception:", err);
-      }
-    }
-  };
-
   const [activeSection, setActiveSection] = useState('dashboard');
   const [isPhoneSimulatorOpen, setIsPhoneSimulatorOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -240,6 +227,15 @@ export default function App() {
   };
 
   const todayStr = getTodayDateString();
+
+  // Global filter states (pre-filtered to dynamic today's date by default)
+  const [filterDateFrom, setFilterDateFrom] = useState(todayStr);
+  const [filterDateTo, setFilterDateTo] = useState(todayStr);
+  const [filterPartner, setFilterPartner] = useState('');
+  const [filterRiderId, setFilterRiderId] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCep, setFilterCep] = useState('');
+  const [filterShowDelayed, setFilterShowDelayed] = useState(false);
 
   // Core App states with real-time Firebase integration
   const [orders, setOrders] = useState<Order[]>([]);
@@ -326,6 +322,49 @@ export default function App() {
 
   const [clientPartners, setClientPartners] = useState<ClientPartner[]>([]);
   const [companyHubs, setCompanyHubs] = useState<CompanyHub[]>(INITIAL_COMPANY_HUBS);
+
+  // Limpa todos os filtros e estados de consulta do painel
+  const clearAllPanelFilters = useCallback(() => {
+    const freshTodayStr = getTodayDateString();
+    setFilterDateFrom(freshTodayStr);
+    setFilterDateTo(freshTodayStr);
+    setFilterPartner('');
+    setFilterRiderId('');
+    setFilterStatus('');
+    setFilterCep('');
+    setFilterShowDelayed(false);
+    setSearchQuery('');
+    setActiveOrderTab('Todos');
+    setSearchClientQuery('');
+    setSearchRiderQuery('');
+    setSelectedClientType('Todos');
+    setUnifiedQueryCep('');
+    setSelectedRiderId(null);
+    setActiveSection('dashboard');
+    setAdminTab('financeiro');
+    setFinanceSubTab('resumo');
+    setBillingModalRiderId(null);
+    setBillingModalClientId(null);
+    setSelectedCepRangesClient(null);
+    setIsCepRangesModalOpen(false);
+    setIsNewOrderOpen(false);
+    setIsPhoneSimulatorOpen(false);
+    setIsExportDropdownOpen(false);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    clearAllPanelFilters();
+    localStorage.setItem('vinimap_logged_out', 'true');
+    localStorage.removeItem('vinimap_admin_session');
+    setIsAdminAuthenticated(false);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.warn("Logout exception:", err);
+      }
+    }
+  }, [clearAllPanelFilters, setIsAdminAuthenticated]);
 
   // Sync client partners into global cache for resilient resolution across all components
   useEffect(() => {
@@ -1269,7 +1308,42 @@ export default function App() {
     if (order.cep) {
       normalizedRawData[cepKey] = order.cep;
     }
-    normalizedRawData[condutorKey] = (assignedRider && !isUnassignedOrCancelled) ? assignedRider.name : 'Não vinculado';
+
+    if (assignedRider && !isUnassignedOrCancelled) {
+      normalizedRawData['Condutor'] = assignedRider.name;
+      normalizedRawData['NomeCondutor'] = assignedRider.name;
+      normalizedRawData['Entregador'] = assignedRider.name;
+      normalizedRawData['NomeEntregador'] = assignedRider.name;
+      normalizedRawData['DispositivoCondutor'] = assignedRider.deviceNumber ? String(assignedRider.deviceNumber) : assignedRider.name;
+      normalizedRawData['riderId'] = assignedRider.id;
+      for (const k of keys) {
+        const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (norm === 'condutor' || norm === 'nomecondutor' || norm === 'entregador' || norm === 'nomeentregador' || norm === 'motorista' || norm === 'nomemotorista' || norm === 'rider' || norm === 'ridername') {
+          normalizedRawData[k] = assignedRider.name;
+        } else if (norm === 'dispositivocondutor' || norm === 'dispositivo' || norm === 'dispositivoentregador') {
+          normalizedRawData[k] = assignedRider.deviceNumber ? String(assignedRider.deviceNumber) : assignedRider.name;
+        } else if (norm === 'idcondutor' || norm === 'identregador' || norm === 'codigocondutor' || norm === 'codigoentregador' || norm === 'riderid') {
+          normalizedRawData[k] = assignedRider.id;
+        }
+      }
+    } else {
+      normalizedRawData['Condutor'] = '';
+      normalizedRawData['NomeCondutor'] = '';
+      normalizedRawData['Entregador'] = '';
+      normalizedRawData['NomeEntregador'] = '';
+      normalizedRawData['DispositivoCondutor'] = 'Não vinculado';
+      normalizedRawData['riderId'] = '';
+      for (const k of keys) {
+        const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (norm === 'condutor' || norm === 'nomecondutor' || norm === 'entregador' || norm === 'nomeentregador' || norm === 'motorista' || norm === 'nomemotorista' || norm === 'rider' || norm === 'ridername') {
+          normalizedRawData[k] = '';
+        } else if (norm === 'dispositivocondutor' || norm === 'dispositivo' || norm === 'dispositivoentregador') {
+          normalizedRawData[k] = 'Não vinculado';
+        } else if (norm === 'idcondutor' || norm === 'identregador' || norm === 'codigocondutor' || norm === 'codigoentregador' || norm === 'riderid') {
+          normalizedRawData[k] = '';
+        }
+      }
+    }
 
     return {
       ...order,
@@ -1753,24 +1827,8 @@ export default function App() {
     }
   };
 
-  // Global filter states (pre-filtered to dynamic today's date by default)
-  const [filterDateFrom, setFilterDateFrom] = useState(todayStr);
-  const [filterDateTo, setFilterDateTo] = useState(todayStr);
-  const [filterPartner, setFilterPartner] = useState('');
-  const [filterRiderId, setFilterRiderId] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterCep, setFilterCep] = useState('');
-  const [filterShowDelayed, setFilterShowDelayed] = useState(false);
-
   const handleClearFilters = () => {
-    const freshTodayStr = getTodayDateString();
-    setFilterDateFrom(freshTodayStr);
-    setFilterDateTo(freshTodayStr);
-    setFilterPartner('');
-    setFilterRiderId('');
-    setFilterStatus('');
-    setFilterCep('');
-    setFilterShowDelayed(false);
+    clearAllPanelFilters();
   };
 
   // Instant Partner and Rider Selection Handlers (Independent of Status)

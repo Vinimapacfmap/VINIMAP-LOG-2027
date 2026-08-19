@@ -565,7 +565,7 @@ function OrdersTable({
     const coords = getCoordinates(signatureTargetOrder);
     const photo = signatureTargetOrder.deliveryPhotoUrl || generateStaticSvgMap(parseFloat(coords.lat) || -23.55052, parseFloat(coords.lng) || -46.633308, signatureTargetOrder.address);
     const protocolNum = signatureTargetOrder.protocolNumber || `PROT-${orderId.replace('ped-', '').toUpperCase()}`;
-    const name = recipientName.trim() || signatureTargetOrder.recipientName || signatureTargetOrder.clientName || 'Recebedor Titular';
+    const name = (recipientName || '').toString().trim() || signatureTargetOrder.recipientName || signatureTargetOrder.clientName || 'Recebedor Titular';
 
     // Pass canvas Data URL directly to onUpdateStatus to populate signatureUrl field
     onUpdateStatus(
@@ -763,7 +763,7 @@ function OrdersTable({
       if (order.rawData) {
         const keys = Object.keys(order.rawData);
         const nameKey = keys.find(k => k.toLowerCase() === 'nomefantasia');
-        if (nameKey && order.rawData[nameKey] && String(order.rawData[nameKey]).trim() !== order.partnerName) {
+        if (nameKey && order.rawData[nameKey] && (order.rawData[nameKey] || '').toString().trim() !== order.partnerName) {
           return String(order.rawData[nameKey]);
         }
       }
@@ -914,7 +914,7 @@ function OrdersTable({
 
   // Filter orders by active tab AND search query AND local dropdown filters
   const filteredOrders = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = (searchQuery || '').toString().trim().toLowerCase();
     const isSearching = query !== '';
 
     return orders.filter((order) => {
@@ -996,7 +996,7 @@ function OrdersTable({
         (isIsoDatePattern.test(valA) && isIsoDatePattern.test(valB))
       ) {
         const toComparableDate = (str: any, orderObj?: Order) => {
-          const clean = String(str || '').trim();
+          const clean = (str || '').toString().trim();
           let iso = extractISODateFromTimestamp(clean) || '';
           if (!iso) {
             if (/^\d{2}\/\d{2}\/\d{4}/.test(clean)) {
@@ -1029,7 +1029,7 @@ function OrdersTable({
       // 3. Robust numeric, currency, and alphanumeric prefix parsing
       const extractNumber = (str: string): number | null => {
         if (!str) return null;
-        let clean = String(str || '').trim();
+        let clean = (str || '').toString().trim();
 
         // Handle Brazilian currency, e.g., R$ 1.250,50 or R$ 12,50
         if (clean.includes('R$') || (clean.includes(',') && !clean.includes('/'))) {
@@ -3219,7 +3219,7 @@ function OrdersTable({
                                 )}
                                 {order.priority && (
                                   <span className={`text-[9px] px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5 border leading-none ${getPriorityColor(order.priority)}`}>
-                                    {order.priority.toLowerCase() === 'expresso' ? '🚨 Urgente' : order.priority}
+                                    {(order.priority || '').toString().toLowerCase() === 'expresso' ? '🚨 Urgente' : order.priority}
                                   </span>
                                 )}
                               </div>

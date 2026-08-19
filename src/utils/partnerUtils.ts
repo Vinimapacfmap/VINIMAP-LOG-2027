@@ -218,6 +218,7 @@ export function getCachedDeliveryRiders(): DeliveryRider[] {
 
 /**
  * Checks if an order matches a selected rider/driver filter value (by ID, name, phone, deviceNumber, CPF).
+ * When an order has an active `order.riderId`, that assignment is authoritative and exclusive.
  */
 export function isOrderMatchingRider(
   order: { riderId?: any; rawData?: Record<string, any> },
@@ -230,12 +231,74 @@ export function isOrderMatchingRider(
 
   const cleanFilter = String(filterRiderId).trim().toLowerCase();
   const filterDigits = cleanFilter.replace(/\D/g, '');
-  const orderRiderId = String(order.riderId ?? '').trim().toLowerCase();
+  const rawOrderRiderId = order.riderId !== undefined && order.riderId !== null ? String(order.riderId).trim() : '';
+  const orderRiderId = rawOrderRiderId.toLowerCase();
   const orderRiderDigits = orderRiderId.replace(/\D/g, '');
 
-  // Extract rider identification from any known rawData key
-  const rawData = order.rawData || {};
+  const availableRiders = (riders && riders.length > 0) ? riders : getCachedDeliveryRiders();
 
+  const isAssigned = rawOrderRiderId !== '' && 
+    orderRiderId !== 'unassigned' && 
+    orderRiderId !== 'desalocar' && 
+    orderRiderId !== 'undefined' && 
+    orderRiderId !== 'null';
+
+  // 1. If order has an active riderId assigned, evaluate ONLY against that assigned rider (Authoritative Single Source of Truth)
+  if (isAssigned) {
+    if (orderRiderId === cleanFilter) {
+      return true;
+    }
+    if (filterDigits.length >= 8 && orderRiderDigits.length >= 8 && orderRiderDigits === filterDigits) {
+      return true;
+    }
+
+    if (availableRiders && availableRiders.length > 0) {
+      // Find the filter target rider object
+      const targetRider = availableRiders.find(r => 
+        String(r.id || '').trim().toLowerCase() === cleanFilter || 
+        String(r.name || '').trim().toLowerCase() === cleanFilter ||
+        (r.phone && String(r.phone).replace(/\D/g, '') === filterDigits) ||
+        (r.deviceNumber && String(r.deviceNumber).replace(/\D/g, '') === filterDigits) ||
+        (r.cpfCnpj && String(r.cpfCnpj).replace(/\D/g, '') === filterDigits)
+      );
+
+      if (targetRider) {
+        const tId = String(targetRider.id || '').trim().toLowerCase();
+        const tName = String(targetRider.name || '').trim().toLowerCase();
+        const tPhoneDigits = String(targetRider.phone || '').replace(/\D/g, '');
+        const tDeviceDigits = String(targetRider.deviceNumber || '').replace(/\D/g, '');
+        const tCpfDigits = String(targetRider.cpfCnpj || '').replace(/\D/g, '');
+
+        if (orderRiderId === tId || orderRiderId === tName) return true;
+        if (tPhoneDigits && orderRiderDigits === tPhoneDigits) return true;
+        if (tDeviceDigits && orderRiderDigits === tDeviceDigits) return true;
+        if (tCpfDigits && orderRiderDigits === tCpfDigits) return true;
+      }
+
+      // Find the order's currently assigned rider object
+      const assignedRider = availableRiders.find(r =>
+        String(r.id || '').trim().toLowerCase() === orderRiderId ||
+        String(r.name || '').trim().toLowerCase() === orderRiderId ||
+        (r.phone && String(r.phone).replace(/\D/g, '') === orderRiderDigits) ||
+        (r.deviceNumber && String(r.deviceNumber).replace(/\D/g, '') === orderRiderDigits)
+      );
+
+      if (assignedRider) {
+        if (String(assignedRider.id || '').trim().toLowerCase() === cleanFilter) return true;
+        if (String(assignedRider.name || '').trim().toLowerCase() === cleanFilter) return true;
+        const aPhoneDigits = String(assignedRider.phone || '').replace(/\D/g, '');
+        if (filterDigits.length >= 8 && aPhoneDigits === filterDigits) return true;
+        const aDeviceDigits = String(assignedRider.deviceNumber || '').replace(/\D/g, '');
+        if (filterDigits.length >= 8 && aDeviceDigits === filterDigits) return true;
+      }
+    }
+
+    // Since the order is assigned to another specific rider, it must NOT match the filter
+    return false;
+  }
+
+  // 2. IF AND ONLY IF the order has NO active assigned riderId (unassigned order), check rawData fallback
+  const rawData = order.rawData || {};
   let rawRiderValues: string[] = [];
   for (const k of Object.keys(rawData)) {
     const rawVal = rawData[k];
@@ -250,20 +313,13 @@ export function isOrderMatchingRider(
         normalizedKey.includes('driver')
       ) {
         const val = String(rawVal).trim().toLowerCase();
-        if (val) rawRiderValues.push(val);
+        if (val && val !== 'nao alocado' && val !== 'não alocado' && val !== 'sem condutor' && val !== 'desalocado') {
+          rawRiderValues.push(val);
+        }
       }
     }
   }
 
-  // 1. Direct match on order.riderId
-  if (orderRiderId && orderRiderId === cleanFilter) {
-    return true;
-  }
-  if (filterDigits.length >= 8 && orderRiderDigits.length >= 8 && orderRiderDigits === filterDigits) {
-    return true;
-  }
-
-  // 2. Direct match on rawData fields
   for (const val of rawRiderValues) {
     if (val === cleanFilter) return true;
     const valDigits = val.replace(/\D/g, '');
@@ -271,9 +327,6 @@ export function isOrderMatchingRider(
       return true;
     }
   }
-
-  // 3. Match using full list of riders (provided prop + persistent global cache fallback)
-  const availableRiders = (riders && riders.length > 0) ? riders : getCachedDeliveryRiders();
 
   if (availableRiders && availableRiders.length > 0) {
     const targetRider = availableRiders.find(r => 
@@ -291,40 +344,12 @@ export function isOrderMatchingRider(
       const tDeviceDigits = String(targetRider.deviceNumber || '').replace(/\D/g, '');
       const tCpfDigits = String(targetRider.cpfCnpj || '').replace(/\D/g, '');
 
-      // Check order.riderId against target rider attributes
-      if (orderRiderId) {
-        if (orderRiderId === tId || orderRiderId === tName) return true;
-        if (tPhoneDigits && orderRiderDigits === tPhoneDigits) return true;
-        if (tDeviceDigits && orderRiderDigits === tDeviceDigits) return true;
-        if (tCpfDigits && orderRiderDigits === tCpfDigits) return true;
-      }
-
-      // Check rawData values against target rider attributes
       for (const val of rawRiderValues) {
         if (val === tId || val === tName) return true;
         const valDigits = val.replace(/\D/g, '');
         if (tPhoneDigits && valDigits === tPhoneDigits) return true;
         if (tDeviceDigits && valDigits === tDeviceDigits) return true;
         if (tCpfDigits && valDigits === tCpfDigits) return true;
-      }
-    }
-
-    // Also check if the order's assigned riderId resolves to a known rider that matches cleanFilter
-    if (orderRiderId) {
-      const assignedRider = availableRiders.find(r =>
-        String(r.id || '').trim().toLowerCase() === orderRiderId ||
-        String(r.name || '').trim().toLowerCase() === orderRiderId ||
-        (r.phone && String(r.phone).replace(/\D/g, '') === orderRiderDigits) ||
-        (r.deviceNumber && String(r.deviceNumber).replace(/\D/g, '') === orderRiderDigits)
-      );
-
-      if (assignedRider) {
-        if (String(assignedRider.id || '').trim().toLowerCase() === cleanFilter) return true;
-        if (String(assignedRider.name || '').trim().toLowerCase() === cleanFilter) return true;
-        const aPhoneDigits = String(assignedRider.phone || '').replace(/\D/g, '');
-        if (filterDigits.length >= 8 && aPhoneDigits === filterDigits) return true;
-        const aDeviceDigits = String(assignedRider.deviceNumber || '').replace(/\D/g, '');
-        if (filterDigits.length >= 8 && aDeviceDigits === filterDigits) return true;
       }
     }
   }

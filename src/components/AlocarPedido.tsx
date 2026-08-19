@@ -489,6 +489,25 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
         const computedVal = comm.total;
 
         const updatedRaw = { ...(order.rawData || {}) };
+        if (driverB) {
+          updatedRaw['Condutor'] = driverB.name;
+          updatedRaw['NomeCondutor'] = driverB.name;
+          updatedRaw['Entregador'] = driverB.name;
+          updatedRaw['NomeEntregador'] = driverB.name;
+          updatedRaw['DispositivoCondutor'] = driverB.deviceNumber ? String(driverB.deviceNumber) : driverB.name;
+          updatedRaw['riderId'] = driverB.id;
+          for (const k of Object.keys(updatedRaw)) {
+            const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (norm === 'condutor' || norm === 'nomecondutor' || norm === 'entregador' || norm === 'nomeentregador' || norm === 'motorista' || norm === 'nomemotorista' || norm === 'rider' || norm === 'ridername') {
+              updatedRaw[k] = driverB.name;
+            } else if (norm === 'dispositivocondutor' || norm === 'dispositivo' || norm === 'dispositivoentregador') {
+              updatedRaw[k] = driverB.deviceNumber ? String(driverB.deviceNumber) : driverB.name;
+            } else if (norm === 'idcondutor' || norm === 'identregador' || norm === 'codigocondutor' || norm === 'codigoentregador' || norm === 'riderid') {
+              updatedRaw[k] = driverB.id;
+            }
+          }
+        }
+
         if (computedVal !== undefined && computedVal !== null) {
           const keys = Object.keys(updatedRaw);
           const driverKey = keys.find(k => k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "") === 'valorcondutor') || 'ValorCondutor';
@@ -565,6 +584,8 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     realtimeSyncBus.broadcastOrdersBatch(finalOrders);
     updatedRiders.forEach(r => realtimeSyncBus.broadcastRiderUpdate(r));
     onAllocateSuccess(finalOrders, updatedRiders, logsGenerated);
+    setSelectedReallocateOrderIds(new Set());
+    setSelectedOrderIds(new Set());
     setIsReallocateModalOpen(false);
     alert(`Sucesso! ${countToMove} pedido(s) realocado(s) com sucesso de ${driverA?.name || 'Origem'} para ${driverB?.name}.`);
   };
@@ -612,6 +633,24 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
         const computedVal = comm.total;
 
         const updatedRaw = { ...(order.rawData || {}) };
+        if (driverB) {
+          updatedRaw['Condutor'] = driverB.name;
+          updatedRaw['NomeCondutor'] = driverB.name;
+          updatedRaw['Entregador'] = driverB.name;
+          updatedRaw['NomeEntregador'] = driverB.name;
+          updatedRaw['DispositivoCondutor'] = driverB.deviceNumber ? String(driverB.deviceNumber) : driverB.name;
+          updatedRaw['riderId'] = driverB.id;
+          for (const k of Object.keys(updatedRaw)) {
+            const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (norm === 'condutor' || norm === 'nomecondutor' || norm === 'entregador' || norm === 'nomeentregador' || norm === 'motorista' || norm === 'nomemotorista' || norm === 'rider' || norm === 'ridername') {
+              updatedRaw[k] = driverB.name;
+            } else if (norm === 'dispositivocondutor' || norm === 'dispositivo' || norm === 'dispositivoentregador') {
+              updatedRaw[k] = driverB.deviceNumber ? String(driverB.deviceNumber) : driverB.name;
+            } else if (norm === 'idcondutor' || norm === 'identregador' || norm === 'codigocondutor' || norm === 'codigoentregador' || norm === 'riderid') {
+              updatedRaw[k] = driverB.id;
+            }
+          }
+        }
         if (computedVal !== undefined && computedVal !== null) {
           const keys = Object.keys(updatedRaw);
           const driverKey = keys.find(k => k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "") === 'valorcondutor') || 'ValorCondutor';
@@ -1162,6 +1201,24 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
         const computedDriverVal = comm.total;
 
         const updatedRaw = { ...(order.rawData || {}) };
+        if (targetRider) {
+          updatedRaw['Condutor'] = targetRider.name;
+          updatedRaw['NomeCondutor'] = targetRider.name;
+          updatedRaw['Entregador'] = targetRider.name;
+          updatedRaw['NomeEntregador'] = targetRider.name;
+          updatedRaw['DispositivoCondutor'] = targetRider.deviceNumber ? String(targetRider.deviceNumber) : targetRider.name;
+          updatedRaw['riderId'] = targetRider.id;
+          for (const k of Object.keys(updatedRaw)) {
+            const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (norm === 'condutor' || norm === 'nomecondutor' || norm === 'entregador' || norm === 'nomeentregador' || norm === 'motorista' || norm === 'nomemotorista' || norm === 'rider' || norm === 'ridername') {
+              updatedRaw[k] = targetRider.name;
+            } else if (norm === 'dispositivocondutor' || norm === 'dispositivo' || norm === 'dispositivoentregador') {
+              updatedRaw[k] = targetRider.deviceNumber ? String(targetRider.deviceNumber) : targetRider.name;
+            } else if (norm === 'idcondutor' || norm === 'identregador' || norm === 'codigocondutor' || norm === 'codigoentregador' || norm === 'riderid') {
+              updatedRaw[k] = targetRider.id;
+            }
+          }
+        }
         if (computedDriverVal !== undefined && computedDriverVal !== null) {
           const keys = Object.keys(updatedRaw);
           const driverKey = keys.find(k => k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "") === 'valorcondutor') || 'ValorCondutor';
