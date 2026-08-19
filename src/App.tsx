@@ -15,7 +15,7 @@ import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHis
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime } from './utils/dateUtils';
 import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider, setCachedClientPartners, setCachedDeliveryRiders } from './utils/partnerUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from './utils/addressUtils';
-import { isOrderMatchingGlobalSearch } from './utils/searchUtils';
+import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from './utils/searchUtils';
 import { playNotificationAudioAlert } from './utils/notificationUtils';
 import { generateStaticSvgMap, geocodeAddressBackend, convertToGeoLat, convertToGeoLng } from './utils/locationUtils';
 import Sidebar from './components/Sidebar';
@@ -1891,14 +1891,15 @@ export default function App() {
 
   // Filtered orders to be used across the entire system (memoized for instantaneous UI response)
   const filteredOrders = useMemo(() => {
+    const isSearching = searchQuery.trim() !== '';
+
+    if (isSearching) {
+      // Universal search: matches IDs, names, addresses, CEP, partners, riders, dates (e.g. 14-08), DANFE, documents & status aliases
+      const matches = orders.filter((order) => isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners));
+      return sortOrdersByLexicographicSearch(matches, searchQuery, riders, clientPartners);
+    }
+
     return orders.filter((order) => {
-      const isSearching = searchQuery.trim() !== '';
-
-      if (isSearching) {
-        // Universal search: matches IDs, names, addresses, CEP, partners, riders, dates (e.g. 14-08), DANFE, documents & status aliases
-        return isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners);
-      }
-
       // Default filters when not searching
       if (filterShowDelayed) {
         const isDelayed = order.date < todayStr && order.status !== 'Concluído' && order.status !== 'Cancelado';

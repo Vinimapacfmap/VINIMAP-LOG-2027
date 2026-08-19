@@ -1,5 +1,5 @@
 import { Order, DeliveryRider, ClientPartner } from '../types';
-import { matchesAddressQuery } from './addressUtils';
+import { matchesAddressQuery, normalizeAddressForSearch } from './addressUtils';
 import { getPartnerDisplayName } from './partnerUtils';
 import { formatToBrazilianDate, extractISODateFromTimestamp } from './dateUtils';
 
@@ -10,7 +10,102 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
- * Checks if a single token matches any property of the order.
+ * Normalizes text for lexicographical matching:
+ * - Decomposes Unicode characters (NFD) and removes accents / diacritical marks.
+ * - Converts to lowercase.
+ * - Replaces punctuation and special symbols with spaces.
+ * - Collapses contiguous whitespace.
+ */
+export function normalizeLexicographical(text: string | number | undefined | null): string {
+  if (text === undefined || text === null) return '';
+  return String(text)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove accents (á, é, í, ó, ú, ã, õ, ç -> a, e, i, o, u, a, o, c)
+    .toLowerCase()
+    .replace(/[^\w\s\d]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Computes Levenshtein edit distance between two strings
+ */
+export function getLevenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const matrix: number[][] = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Checks if a target string matches a query token under lexicographical rules:
+ * - Direct normalized substring
+ * - Compact string check (ignoring whitespace for codes, CEPs, numbers)
+ * - Word boundary / prefix matching
+ * - Fuzzy tolerance for minor spelling variations
+ */
+export function isLexicographicallyMatching(target: string | number | undefined | null, queryToken: string): boolean {
+  if (target === undefined || target === null || !queryToken) return false;
+
+  const normTarget = normalizeLexicographical(target);
+  const normQuery = normalizeLexicographical(queryToken);
+
+  if (!normTarget || !normQuery) return false;
+
+  // 1. Direct normalized substring match
+  if (normTarget.includes(normQuery)) return true;
+
+  // 2. Compact string match (no whitespace)
+  const compactTarget = normTarget.replace(/\s+/g, '');
+  const compactQuery = normQuery.replace(/\s+/g, '');
+  if (compactTarget.includes(compactQuery)) return true;
+
+  // 3. Word token prefix & boundary match
+  const targetWords = normTarget.split(/\s+/).filter(Boolean);
+  for (const word of targetWords) {
+    if (word.startsWith(normQuery)) return true;
+    if (normQuery.startsWith(word) && word.length >= 3) return true;
+
+    // Fuzzy distance tolerance for longer terms (1 typo for >= 4 chars, 2 for >= 7 chars)
+    if (normQuery.length >= 4 && word.length >= 4) {
+      const maxDistance = normQuery.length >= 7 ? 2 : 1;
+      if (Math.abs(word.length - normQuery.length) <= maxDistance) {
+        if (getLevenshteinDistance(word, normQuery) <= maxDistance) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Checks if a single token matches any property of the order using lexicographical rules.
  */
 function isOrderMatchingSingleToken(
   order: Order,
@@ -19,46 +114,52 @@ function isOrderMatchingSingleToken(
   clientPartners?: ClientPartner[]
 ): boolean {
   if (!token) return true;
-  const cleanToken = token.toLowerCase();
+  const cleanToken = token.toLowerCase().trim();
+  const normToken = normalizeLexicographical(cleanToken);
   const digitsToken = cleanToken.replace(/\D/g, '');
 
-  // 1. Order ID & Sequence
-  if (order.id && order.id.toLowerCase().includes(cleanToken)) return true;
-  const rawIdNum = order.id.replace('ped-', '');
-  if (rawIdNum && rawIdNum.toLowerCase().includes(cleanToken)) return true;
+  // 1. Order ID & Sequence (numeric, prefixed, normalized)
+  if (order.id) {
+    if (isLexicographicallyMatching(order.id, cleanToken)) return true;
+    const rawIdNum = order.id.replace(/\D/g, '');
+    if (digitsToken && rawIdNum.includes(digitsToken)) return true;
+    const cleanId = order.id.replace(/^ped-/i, '');
+    if (isLexicographicallyMatching(cleanId, cleanToken)) return true;
+  }
 
-  // 2. Client & Recipient & Region
-  if (order.clientName && order.clientName.toLowerCase().includes(cleanToken)) return true;
-  if (order.recipientName && order.recipientName.toLowerCase().includes(cleanToken)) return true;
-  if (order.region && order.region.toLowerCase().includes(cleanToken)) return true;
+  // 2. Client & Recipient & Region (lexicographically normalized)
+  if (order.clientName && isLexicographicallyMatching(order.clientName, cleanToken)) return true;
+  if (order.recipientName && isLexicographicallyMatching(order.recipientName, cleanToken)) return true;
+  if (order.region && isLexicographicallyMatching(order.region, cleanToken)) return true;
 
-  // 3. Status & Status Aliases
-  if (order.status && order.status.toLowerCase().includes(cleanToken)) return true;
-  if ((cleanToken.includes('baixad') || cleanToken === 'baixado' || cleanToken === 'baixados' || cleanToken === 'concluido' || cleanToken === 'concluído') && order.status === 'Concluído') return true;
-  if ((cleanToken.includes('lancad') || cleanToken.includes('lançad') || cleanToken === 'aberto' || cleanToken === 'pendente') && 
+  // 3. Status & Status Aliases (normalized for accents and variations)
+  if (order.status && isLexicographicallyMatching(order.status, cleanToken)) return true;
+  if ((normToken.includes('baixad') || normToken === 'concluido' || normToken === 'entregue') && order.status === 'Concluído') return true;
+  if ((normToken.includes('lancad') || normToken === 'aberto' || normToken === 'pendente' || normToken === 'nao iniciado') && 
       (order.status === 'Não iniciado' || order.status === 'Em rota' || order.status === 'Entregando')) return true;
-  if ((cleanToken.includes('rota') || cleanToken.includes('transito') || cleanToken.includes('trânsito')) && (order.status === 'Em rota' || order.status === 'Entregando')) return true;
-  if ((cleanToken.includes('ocorrencia') || cleanToken.includes('ocorrência')) && order.status === 'Ocorrência') return true;
-  if ((cleanToken.includes('cancelad')) && order.status === 'Cancelado') return true;
+  if ((normToken.includes('rota') || normToken.includes('transito')) && (order.status === 'Em rota' || order.status === 'Entregando')) return true;
+  if ((normToken.includes('ocorrencia') || normToken === 'problema') && order.status === 'Ocorrência') return true;
+  if ((normToken.includes('cancelad')) && order.status === 'Cancelado') return true;
 
-  // 4. Address & Street Abbreviations
-  if (order.address && (order.address.toLowerCase().includes(cleanToken) || matchesAddressQuery(order.address, cleanToken))) {
-    return true;
+  // 4. Address & Street Abbreviations (normalized)
+  if (order.address) {
+    if (isLexicographicallyMatching(order.address, cleanToken) || matchesAddressQuery(order.address, cleanToken)) {
+      return true;
+    }
   }
 
   // 5. CEP (formatted & numeric)
   if (order.cep) {
-    const rawCep = order.cep.toLowerCase();
     const digitsCep = order.cep.replace(/\D/g, '');
-    if (rawCep.includes(cleanToken)) return true;
+    if (isLexicographicallyMatching(order.cep, cleanToken)) return true;
     if (digitsToken && digitsToken.length >= 2 && digitsCep.includes(digitsToken)) return true;
   }
 
-  // 6. Partner Name & Code
+  // 6. Partner Name & Code (lexicographical check)
   if (order.partnerName) {
-    if (order.partnerName.toLowerCase().includes(cleanToken)) return true;
-    const partnerDisplay = getPartnerDisplayName(order.partnerName, clientPartners).toLowerCase();
-    if (partnerDisplay.includes(cleanToken)) return true;
+    if (isLexicographicallyMatching(order.partnerName, cleanToken)) return true;
+    const partnerDisplay = getPartnerDisplayName(order.partnerName, clientPartners);
+    if (isLexicographicallyMatching(partnerDisplay, cleanToken)) return true;
   }
 
   // 7. Rider Matching (by ID, Name, Phone, Vehicle, Device, RawData)
@@ -68,25 +169,25 @@ function isOrderMatchingSingleToken(
     String(order.riderId).trim().toLowerCase() !== 'desalocar';
 
   if (isAssigned) {
-    const oRiderId = String(order.riderId).trim().toLowerCase();
-    if (oRiderId.includes(cleanToken)) return true;
+    const oRiderId = String(order.riderId).trim();
+    if (isLexicographicallyMatching(oRiderId, cleanToken)) return true;
 
     if (riders && riders.length > 0) {
       const activeRider = riders.find(r => 
-        String(r.id || '').toLowerCase() === oRiderId || 
-        String(r.name || '').toLowerCase() === oRiderId
+        String(r.id || '').toLowerCase() === oRiderId.toLowerCase() || 
+        String(r.name || '').toLowerCase() === oRiderId.toLowerCase()
       );
 
       if (activeRider) {
-        if (String(activeRider.name || '').toLowerCase().includes(cleanToken)) return true;
-        if (activeRider.vehicle && String(activeRider.vehicle).toLowerCase().includes(cleanToken)) return true;
+        if (activeRider.name && isLexicographicallyMatching(activeRider.name, cleanToken)) return true;
+        if (activeRider.vehicle && isLexicographicallyMatching(activeRider.vehicle, cleanToken)) return true;
         if (activeRider.phone && String(activeRider.phone).replace(/\D/g, '').includes(digitsToken)) return true;
-        if (activeRider.deviceNumber && String(activeRider.deviceNumber).toLowerCase().includes(cleanToken)) return true;
+        if (activeRider.deviceNumber && isLexicographicallyMatching(activeRider.deviceNumber, cleanToken)) return true;
         if (activeRider.cpfCnpj && String(activeRider.cpfCnpj).replace(/\D/g, '').includes(digitsToken)) return true;
       }
     }
   } else {
-    // Only check rawData if no active assigned rider
+    // Check rawData candidate strings
     const candidateRiderStrings: string[] = [
       order.rawData?.Condutor !== undefined ? String(order.rawData.Condutor) : '',
       order.rawData?.condutor !== undefined ? String(order.rawData.condutor) : '',
@@ -104,28 +205,28 @@ function isOrderMatchingSingleToken(
     ].filter(Boolean);
 
     for (const rStr of candidateRiderStrings) {
-      if (rStr && rStr.toLowerCase().includes(cleanToken)) return true;
+      if (rStr && isLexicographicallyMatching(rStr, cleanToken)) return true;
     }
 
     if (riders && riders.length > 0) {
       const matchedRider = riders.find(r => 
-        candidateRiderStrings.some(cs => cs && String(r.name || '').toLowerCase().includes(cs.toLowerCase()))
+        candidateRiderStrings.some(cs => cs && isLexicographicallyMatching(r.name, cs))
       );
 
       if (matchedRider) {
-        if (String(matchedRider.name || '').toLowerCase().includes(cleanToken)) return true;
-        if (matchedRider.vehicle && String(matchedRider.vehicle).toLowerCase().includes(cleanToken)) return true;
+        if (matchedRider.name && isLexicographicallyMatching(matchedRider.name, cleanToken)) return true;
+        if (matchedRider.vehicle && isLexicographicallyMatching(matchedRider.vehicle, cleanToken)) return true;
         if (matchedRider.phone && String(matchedRider.phone).replace(/\D/g, '').includes(digitsToken)) return true;
-        if (matchedRider.deviceNumber && String(matchedRider.deviceNumber).toLowerCase().includes(cleanToken)) return true;
+        if (matchedRider.deviceNumber && isLexicographicallyMatching(matchedRider.deviceNumber, cleanToken)) return true;
       }
     }
   }
 
-  // Check history for rider name mentions
+  // Check history for mentions
   if (order.history && order.history.length > 0) {
     for (const h of order.history) {
-      if (h.details && h.details.toLowerCase().includes(cleanToken)) return true;
-      if (h.action && h.action.toLowerCase().includes(cleanToken)) return true;
+      if (h.details && isLexicographicallyMatching(h.details, cleanToken)) return true;
+      if (h.action && isLexicographicallyMatching(h.action, cleanToken)) return true;
     }
   }
 
@@ -156,15 +257,9 @@ function isOrderMatchingSingleToken(
     if (lowerVal.includes(cleanToken) || lowerVal.includes(normalizedTokenDate)) return true;
 
     // Check Brazilian format (DD/MM/YYYY)
-    const brDate = formatToBrazilianDate(dateVal); // e.g. "14/08/2026"
-    const brDateDash = brDate.replace(/\//g, '-'); // e.g. "14-08-2026"
+    const brDate = formatToBrazilianDate(dateVal);
+    const brDateDash = brDate.replace(/\//g, '-');
     if (brDate.includes(cleanToken) || brDateDash.includes(normalizedTokenDate)) return true;
-
-    // Check partial day-month e.g. "14-08" or "14/08"
-    if (cleanToken.includes('14-08') || cleanToken.includes('14/08') || cleanToken.includes('14.08')) {
-      const iso = extractISODateFromTimestamp(dateVal);
-      if (iso && (iso === '2026-08-14' || iso.endsWith('-08-14') || lowerVal.includes('14/08') || lowerVal.includes('14-08'))) return true;
-    }
 
     // Match if token is full ISO or BR date
     const isoDate = extractISODateFromTimestamp(dateVal);
@@ -173,18 +268,17 @@ function isOrderMatchingSingleToken(
     }
   }
 
-  // 9. Protocols, Fiscal & Documents
-  if (order.protocolNumber && order.protocolNumber.toLowerCase().includes(cleanToken)) return true;
-  if (order.recipientDoc && (order.recipientDoc.toLowerCase().includes(cleanToken) || (digitsToken && order.recipientDoc.replace(/\D/g, '').includes(digitsToken)))) return true;
-  if (order.phone && (order.phone.toLowerCase().includes(cleanToken) || (digitsToken && order.phone.replace(/\D/g, '').includes(digitsToken)))) return true;
+  // 9. Protocols, Fiscal, DANFE, Documents
+  if (order.protocolNumber && isLexicographicallyMatching(order.protocolNumber, cleanToken)) return true;
+  if (order.recipientDoc && (isLexicographicallyMatching(order.recipientDoc, cleanToken) || (digitsToken && order.recipientDoc.replace(/\D/g, '').includes(digitsToken)))) return true;
+  if (order.phone && (isLexicographicallyMatching(order.phone, cleanToken) || (digitsToken && order.phone.replace(/\D/g, '').includes(digitsToken)))) return true;
 
   // 10. RawData inspection
   if (order.rawData && typeof order.rawData === 'object') {
     for (const [, val] of Object.entries(order.rawData)) {
       if (!val) continue;
-      const strVal = String(val).toLowerCase();
-      if (strVal.includes(cleanToken)) return true;
-      if (digitsToken && digitsToken.length >= 3 && strVal.replace(/\D/g, '').includes(digitsToken)) return true;
+      if (isLexicographicallyMatching(String(val), cleanToken)) return true;
+      if (digitsToken && digitsToken.length >= 3 && String(val).replace(/\D/g, '').includes(digitsToken)) return true;
     }
   }
 
@@ -192,8 +286,8 @@ function isOrderMatchingSingleToken(
 }
 
 /**
- * Universal search matcher for orders.
- * Supports multi-token searches (e.g. "Bruno 14-08-2026", "pedidos Bruno 14/08", "baixados dia 14").
+ * Universal search matcher for orders using full lexicographical analysis.
+ * Supports multi-token searches (e.g. "Bruno 14-08-2026", "São Paulo 101", "baixados centro").
  */
 export function isOrderMatchingGlobalSearch(
   order: Order,
@@ -213,7 +307,7 @@ export function isOrderMatchingGlobalSearch(
     return true;
   }
 
-  // 2. Tokenized multi-word search (split by spaces/commas)
+  // 2. Tokenized multi-word search (split by spaces/commas/punctuation)
   const rawTokens = rawQuery.split(/[\s,;]+/).filter(t => t.length > 0);
   if (rawTokens.length <= 1) {
     return false;
@@ -226,3 +320,113 @@ export function isOrderMatchingGlobalSearch(
   // Every token must match at least one attribute of the order
   return tokensToMatch.every(token => isOrderMatchingSingleToken(order, token, riders, clientPartners));
 }
+
+/**
+ * Calculates a lexicographical relevance score for an order given a search query.
+ * Higher score = more relevant match.
+ */
+export function getOrderLexicographicScore(
+  order: Order,
+  searchQuery: string | undefined | null,
+  riders?: DeliveryRider[],
+  clientPartners?: ClientPartner[]
+): number {
+  const cleanSearch = (searchQuery || '').toString().trim();
+  if (!cleanSearch) return 0;
+
+  const normQuery = normalizeLexicographical(cleanSearch);
+  const digitsQuery = cleanSearch.replace(/\D/g, '');
+
+  let score = 0;
+
+  // 1. Order ID match (highest priority)
+  const normId = normalizeLexicographical(order.id);
+  const rawIdNum = (order.id || '').replace(/\D/g, '');
+  if (normId === normQuery || (rawIdNum === digitsQuery && digitsQuery.length > 0)) {
+    score += 1000;
+  } else if (normId.startsWith(normQuery)) {
+    score += 600;
+  } else if (normId.includes(normQuery)) {
+    score += 350;
+  }
+
+  // 2. Client Name match
+  if (order.clientName) {
+    const normClient = normalizeLexicographical(order.clientName);
+    if (normClient === normQuery) {
+      score += 500;
+    } else if (normClient.startsWith(normQuery)) {
+      score += 300;
+    } else if (normClient.includes(normQuery)) {
+      score += 180;
+    }
+  }
+
+  // 3. Recipient Name match
+  if (order.recipientName) {
+    const normRecipient = normalizeLexicographical(order.recipientName);
+    if (normRecipient === normQuery) {
+      score += 400;
+    } else if (normRecipient.startsWith(normQuery)) {
+      score += 260;
+    } else if (normRecipient.includes(normQuery)) {
+      score += 150;
+    }
+  }
+
+  // 4. Tracking / Protocol / DANFE match
+  if (order.protocolNumber && normalizeLexicographical(order.protocolNumber).includes(normQuery)) {
+    score += 220;
+  }
+
+  // 5. Address / CEP match
+  if (order.cep && digitsQuery.length >= 4 && order.cep.replace(/\D/g, '').includes(digitsQuery)) {
+    score += 190;
+  }
+  if (order.address && normalizeLexicographical(order.address).includes(normQuery)) {
+    score += 130;
+  }
+
+  // 6. Rider Name match
+  if (order.riderId && riders) {
+    const rider = riders.find(r => r.id === order.riderId || r.name === order.riderId);
+    if (rider && normalizeLexicographical(rider.name).includes(normQuery)) {
+      score += 120;
+    }
+  }
+
+  // 7. Partner Name match
+  if (order.partnerName && normalizeLexicographical(order.partnerName).includes(normQuery)) {
+    score += 100;
+  }
+
+  return score;
+}
+
+/**
+ * Sorts orders lexicographically by search relevance and alphabetical order
+ */
+export function sortOrdersByLexicographicSearch(
+  orders: Order[],
+  searchQuery: string | undefined | null,
+  riders?: DeliveryRider[],
+  clientPartners?: ClientPartner[]
+): Order[] {
+  if (!searchQuery || !searchQuery.trim()) return orders;
+
+  return [...orders].sort((a, b) => {
+    const scoreA = getOrderLexicographicScore(a, searchQuery, riders, clientPartners);
+    const scoreB = getOrderLexicographicScore(b, searchQuery, riders, clientPartners);
+
+    if (scoreB !== scoreA) {
+      return scoreB - scoreA; // Highest relevance first
+    }
+
+    // Tie-breaker: Lexicographical order (alphabetical by client name, then ID)
+    const clientCompare = (a.clientName || '').localeCompare(b.clientName || '', 'pt-BR', { sensitivity: 'base' });
+    if (clientCompare !== 0) return clientCompare;
+
+    return (a.id || '').localeCompare(b.id || '', 'pt-BR', { numeric: true });
+  });
+}
+

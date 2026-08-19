@@ -30,7 +30,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyHub, Order, DeliveryRider, ClientPartner } from '../types';
 import { PwaInstallButton } from './PwaInstallButton';
-import { isOrderMatchingGlobalSearch } from '../utils/searchUtils';
+import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from '../utils/searchUtils';
 
 interface HeaderProps {
   onSearchChange: (search: string) => void;
@@ -109,10 +109,11 @@ export default function Header({
     return () => clearInterval(interval);
   }, []);
 
-  // Global search matching across all orders using universal search logic
+  // Global search matching across all orders using universal lexicographical search logic
   const matchingOrders = useMemo(() => {
     if (!orders || !searchQuery.trim()) return [];
-    return orders.filter(o => isOrderMatchingGlobalSearch(o, searchQuery, riders, clientPartners));
+    const matched = orders.filter(o => isOrderMatchingGlobalSearch(o, searchQuery, riders, clientPartners));
+    return sortOrdersByLexicographicSearch(matched, searchQuery, riders, clientPartners);
   }, [orders, searchQuery, riders, clientPartners]);
 
   const notifications = [

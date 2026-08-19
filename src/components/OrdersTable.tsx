@@ -10,7 +10,7 @@ import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBra
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { getPartnerDisplayName as getPartnerDisplayNameUtil, isOrderMatchingPartner, isOrderMatchingRider } from '../utils/partnerUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
-import { isOrderMatchingGlobalSearch } from '../utils/searchUtils';
+import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from '../utils/searchUtils';
 import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult } from '../utils/locationUtils';
 import CepInput, { ViaCepData } from './CepInput';
 import { 
@@ -934,9 +934,14 @@ function OrdersTable({
     });
   }, [orders, activeTab, searchQuery, localPartner, localRider, localRegion, riders, clientPartners]);
 
-  // Sort orders based on sortConfig
+  // Sort orders based on sortConfig or lexicographical search ranking
   const sortedOrders = useMemo(() => {
-    if (!sortConfig) return filteredOrders;
+    if (!sortConfig) {
+      if (searchQuery && searchQuery.trim().length > 0) {
+        return sortOrdersByLexicographicSearch(filteredOrders, searchQuery, riders, clientPartners);
+      }
+      return filteredOrders;
+    }
 
     return [...filteredOrders].sort((a, b) => {
       // Check if simplified or spreadsheet mode sorting
