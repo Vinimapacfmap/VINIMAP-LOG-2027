@@ -706,9 +706,19 @@ export default function App() {
         if (!existing) {
           map.set(inc.id, inc);
         } else {
-          // If existing order has a newer updatedAt timestamp than incoming, preserve the latest local edit
-          const existingTime = existing.updatedAt || (existing.history && existing.history.length > 0 ? existing.history[existing.history.length - 1]?.timestamp : undefined);
-          const incTime = inc.updatedAt || (inc.history && inc.history.length > 0 ? inc.history[inc.history.length - 1]?.timestamp : undefined);
+          // Administrator override takes absolute precedence
+          if (existing.adminOverride && !inc.adminOverride) {
+            map.set(inc.id, { ...inc, ...existing, status: existing.status, adminOverride: true });
+            return;
+          }
+          if (inc.adminOverride && !existing.adminOverride) {
+            map.set(inc.id, { ...existing, ...inc, status: inc.status, adminOverride: true });
+            return;
+          }
+
+          // If existing order has a newer updatedAt or statusUpdatedAt timestamp than incoming, preserve the latest edit
+          const existingTime = existing.statusUpdatedAt || existing.updatedAt || (existing.history && existing.history.length > 0 ? existing.history[existing.history.length - 1]?.timestamp : undefined);
+          const incTime = inc.statusUpdatedAt || inc.updatedAt || (inc.history && inc.history.length > 0 ? inc.history[inc.history.length - 1]?.timestamp : undefined);
 
           if (existingTime && incTime && existingTime > incTime) {
             map.set(inc.id, { ...inc, ...existing });
@@ -2133,9 +2143,11 @@ export default function App() {
           
           return {
             ...imported,
-            status: (!isImportedConcluido && isExistingActiveOrCompleted) ? existing.status : imported.status,
-            deliveryDate: existing.deliveryDate || imported.deliveryDate,
-            dataConclusao: existing.dataConclusao || imported.dataConclusao,
+            adminOverride: existing.adminOverride || imported.adminOverride,
+            statusUpdatedAt: existing.statusUpdatedAt || imported.statusUpdatedAt,
+            status: existing.adminOverride ? existing.status : ((!isImportedConcluido && isExistingActiveOrCompleted) ? existing.status : imported.status),
+            deliveryDate: existing.adminOverride && existing.status !== 'Concluído' ? undefined : (existing.deliveryDate || imported.deliveryDate),
+            dataConclusao: existing.adminOverride && existing.status !== 'Concluído' ? undefined : (existing.dataConclusao || imported.dataConclusao),
             deliveryTime: existing.deliveryTime || imported.deliveryTime,
             horarioFinal: existing.horarioFinal || imported.horarioFinal,
             signatureUrl: existing.signatureUrl || imported.signatureUrl,
@@ -2204,12 +2216,6 @@ export default function App() {
     try {
       const currentOrder = orders.find(o => o.id === orderId);
       if (!currentOrder) return;
-
-      // Restriction: Altering status of an already completed order is strictly restricted to Administrator
-      if (currentOrder.status === 'Concluído' && nextStatus !== 'Concluído' && !isAdminAuthenticated) {
-        alert('A alteração do status Concluído só pode ser efetuada pelo Administrador.');
-        return;
-      }
 
       let updatedRiderObj: DeliveryRider | null = null;
 
@@ -2286,8 +2292,13 @@ export default function App() {
         : (currentOrder.rawData?.Observacoes || currentOrder.rawData?.observacoes || currentOrder.rawData?.Observations || '');
 
       // Sync rawData spreadsheet fields with explicit protocol data
+      const nowIso = new Date().toISOString();
       const updatedRawData = { ...(currentOrder.rawData || {}) };
       updatedRawData['Situacao'] = nextStatus;
+      updatedRawData['status'] = nextStatus;
+      updatedRawData['Status'] = nextStatus;
+      updatedRawData['adminOverride'] = 'true';
+      updatedRawData['statusUpdatedAt'] = nowIso;
       if (finalProtocolNumber) updatedRawData['NumeroProtocolo'] = finalProtocolNumber;
       if (finalSignatureUrl) {
         updatedRawData['signatureUrl'] = finalSignatureUrl;
@@ -2313,18 +2324,18 @@ export default function App() {
         ? deliveryDate
         : (isConcluido
             ? (currentOrder.status !== 'Concluído' ? getSaoPauloISODate() : (currentOrder.deliveryDate || currentOrder.dataConclusao || getSaoPauloISODate()))
-            : currentOrder.deliveryDate);
+            : (deliveryDate || undefined));
 
       let calculatedDeliveryTime: string | undefined = (deliveryTime && deliveryTime.trim() !== '')
         ? deliveryTime
         : (isConcluido
             ? (currentOrder.status !== 'Concluído' ? getSaoPauloTime() : (currentOrder.deliveryTime || currentOrder.horarioFinal || getSaoPauloTime()))
-            : currentOrder.deliveryTime);
+            : (deliveryTime || undefined));
 
       const calculatedDataConclusao = isConcluido ? calculatedDeliveryDate : undefined;
       const rawOrderStartTime = currentOrder.horarioInicial || currentOrder.createdAt || currentOrder.rawData?.HorarioInicio || currentOrder.rawData?.horarioinicio;
       const calculatedHorarioInicial = formatOrderTime(rawOrderStartTime || getSaoPauloTime());
-      const calculatedHorarioFinal = isConcluido ? (calculatedDeliveryTime || getSaoPauloTime()) : currentOrder.horarioFinal;
+      const calculatedHorarioFinal = isConcluido ? (calculatedDeliveryTime || getSaoPauloTime()) : (deliveryTime || undefined);
 
       if (isConcluido && calculatedDataConclusao) {
         updatedRawData['DataConclusao'] = calculatedDataConclusao;
@@ -2359,7 +2370,7 @@ export default function App() {
 
       const hasManualDateOverride = deliveryDate && deliveryDate.trim() !== '';
       const hasManualTimeOverride = deliveryTime && deliveryTime.trim() !== '';
-      let historyDetails = `Movimentação no fluxo logístico para o status ${nextStatus}.`;
+      let historyDetails = `Movimentação no fluxo logístico para o status ${nextStatus} (Alteração de Administrador).`;
       if (hasManualDateOverride || hasManualTimeOverride) {
         historyDetails += ` (Ajuste manual de entrega: ${calculatedDeliveryDate || ''} ${calculatedDeliveryTime || ''})`.trim();
       }
@@ -2369,7 +2380,7 @@ export default function App() {
         {
           timestamp: getSaoPauloDateTimeShort(),
           action: `Status alterado para ${nextStatus}`,
-          user: 'Sistema / Operador',
+          user: 'Administrador / Operador',
           details: historyDetails
         }
       ];
@@ -2377,6 +2388,8 @@ export default function App() {
       const updatedOrderObj: Order = { 
         ...currentOrder, 
         status: nextStatus, 
+        adminOverride: true,
+        statusUpdatedAt: nowIso,
         riderId: nextStatus === 'Cancelado' ? undefined : currentOrder.riderId,
         history: updatedHistory,
         protocolNumber: finalProtocolNumber,
@@ -2391,7 +2404,7 @@ export default function App() {
         horarioInicial: calculatedHorarioInicial,
         horarioFinal: calculatedHorarioFinal,
         rawData: updatedRawData,
-        updatedAt: new Date().toISOString()
+        updatedAt: nowIso
       };
 
       // Execute Automatic Customer Notification Processing if Order is Completed
@@ -2846,11 +2859,6 @@ export default function App() {
       // Dynamic recalculation of freight whenever CEP or partnerName is modified
       const existingOrder = orders.find(o => o.id === finalOrder.id);
 
-      if (existingOrder && existingOrder.status === 'Concluído' && finalOrder.status !== 'Concluído' && !isAdminAuthenticated) {
-        alert('A alteração do status Concluído só pode ser efetuada pelo Administrador.');
-        return;
-      }
-
       // Verify if caller already appended a new history entry; if not, calculate diff and append entry with timestamp
       if (existingOrder) {
         const existingHistLen = (existingOrder.history || []).length;
@@ -2868,7 +2876,7 @@ export default function App() {
           if ((finalOrder.cep || '') !== (existingOrder.cep || '')) changes.push(`CEP: "${existingOrder.cep || ''}" ➔ "${finalOrder.cep || ''}"`);
           if ((finalOrder.partnerName || '') !== (existingOrder.partnerName || '')) changes.push(`Parceiro: "${existingOrder.partnerName || ''}" ➔ "${finalOrder.partnerName || ''}"`);
           if ((finalOrder.date || '') !== (existingOrder.date || '')) changes.push(`Data: "${existingOrder.date || ''}" ➔ "${finalOrder.date || ''}"`);
-          if (finalOrder.status !== existingOrder.status) changes.push(`Status: "${existingOrder.status}" ➔ "${finalOrder.status}"`);
+          if (finalOrder.status !== existingOrder.status) changes.push(`Status: "${existingOrder.status}" ➔ "${finalOrder.status}" (Administrador)`);
           if (finalOrder.deliveryValue !== existingOrder.deliveryValue) changes.push(`Valor Entrega: "R$ ${existingOrder.deliveryValue ?? 0}" ➔ "R$ ${finalOrder.deliveryValue ?? 0}"`);
           if (finalOrder.driverValue !== existingOrder.driverValue) changes.push(`Valor Condutor: "R$ ${existingOrder.driverValue ?? 0}" ➔ "R$ ${finalOrder.driverValue ?? 0}"`);
 
@@ -2879,7 +2887,7 @@ export default function App() {
               {
                 timestamp: editTimestamp,
                 action: 'Dados do Pedido Alterados',
-                user: 'Operador',
+                user: 'Administrador / Operador',
                 details: `Alteração registrada em ${editTimestamp}: ${changes.join('; ')}`
               }
             ];
@@ -2909,11 +2917,27 @@ export default function App() {
         finalOrder.riderId = undefined;
       }
 
-      finalOrder.updatedAt = new Date().toISOString();
+      const nowIso = new Date().toISOString();
+      finalOrder.updatedAt = nowIso;
+      finalOrder.adminOverride = true;
+      finalOrder.statusUpdatedAt = nowIso;
+
       if (finalOrder.rawData) {
         finalOrder.rawData.status = finalOrder.status;
         finalOrder.rawData.Situacao = finalOrder.status;
         finalOrder.rawData.Status = finalOrder.status;
+        finalOrder.rawData.adminOverride = 'true';
+        finalOrder.rawData.statusUpdatedAt = nowIso;
+
+        if (finalOrder.status !== 'Concluído') {
+          delete finalOrder.rawData.DataConclusao;
+          delete finalOrder.rawData.dataconclusao;
+          delete finalOrder.rawData.dataConclusao;
+        }
+      }
+
+      if (finalOrder.status !== 'Concluído') {
+        finalOrder.dataConclusao = undefined;
       }
 
       setOrders(prev => prev.map(o => o.id === finalOrder.id ? finalOrder : o));
@@ -2924,7 +2948,7 @@ export default function App() {
       const newLog: ActivityLog = {
         id: generateUniqueLogId('log-crud'),
         time: nowTime,
-        message: `Pedido #${finalOrder.id} de ${finalOrder.clientName} foi atualizado manualmente via painel.`,
+        message: `Pedido #${finalOrder.id} de ${finalOrder.clientName} foi atualizado pelo administrador (Status: ${finalOrder.status}).`,
         type: 'info',
         orderId: finalOrder.id
       };
@@ -2959,16 +2983,9 @@ export default function App() {
 
   const handleBulkUpdateStatus = async (orderIds: string[], nextStatus: OrderStatus) => {
     try {
-      if (!isAdminAuthenticated && nextStatus !== 'Concluído') {
-        const containsCompleted = orders.some(o => orderIds.includes(o.id) && o.status === 'Concluído');
-        if (containsCompleted) {
-          alert('A alteração do status Concluído só pode ser efetuada pelo Administrador.');
-          return;
-        }
-      }
-
       const updatedOrders: Order[] = [];
       const affectedRiderIds = new Set<string>();
+      const nowIso = new Date().toISOString();
 
       orders.forEach(order => {
         if (orderIds.includes(order.id)) {
@@ -2978,8 +2995,8 @@ export default function App() {
           const historyEntry = {
             timestamp: getSaoPauloDateTimeShort(),
             action: 'Status Alterado (Em Massa)',
-            user: 'Sistema (Painel)',
-            details: `Status alterado para ${nextStatus} em massa.`
+            user: 'Administrador / Operador',
+            details: `Status alterado para ${nextStatus} em massa (Alteração de Administrador).`
           };
 
           const isConcluido = nextStatus === 'Concluído';
@@ -3014,6 +3031,8 @@ export default function App() {
           updatedRawData['Situacao'] = nextStatus;
           updatedRawData['status'] = nextStatus;
           updatedRawData['Status'] = nextStatus;
+          updatedRawData['adminOverride'] = 'true';
+          updatedRawData['statusUpdatedAt'] = nowIso;
           if (finalProtocolNumber) updatedRawData['NumeroProtocolo'] = finalProtocolNumber;
           if (finalSignatureUrl) {
             updatedRawData['signatureUrl'] = finalSignatureUrl;
@@ -3031,11 +3050,11 @@ export default function App() {
 
           const calculatedDeliveryDate = isConcluido 
             ? (order.status !== 'Concluído' ? getSaoPauloISODate() : (order.deliveryDate || order.dataConclusao || getSaoPauloISODate())) 
-            : order.deliveryDate;
+            : (order.deliveryDate || undefined);
 
           const calculatedDeliveryTime = isConcluido 
             ? (order.status !== 'Concluído' ? getSaoPauloTime() : (order.deliveryTime || order.horarioFinal || getSaoPauloTime())) 
-            : order.deliveryTime;
+            : (order.deliveryTime || undefined);
 
           if (isConcluido && calculatedDeliveryDate) {
             updatedRawData['DataConclusao'] = calculatedDeliveryDate;
@@ -3049,6 +3068,8 @@ export default function App() {
           updatedOrders.push({
             ...order,
             status: nextStatus,
+            adminOverride: true,
+            statusUpdatedAt: nowIso,
             riderId: nextStatus === 'Cancelado' ? undefined : order.riderId,
             history: [...(order.history || []), historyEntry],
             protocolNumber: finalProtocolNumber,
@@ -3061,7 +3082,7 @@ export default function App() {
             dataConclusao: isConcluido ? calculatedDeliveryDate : undefined,
             horarioFinal: calculatedDeliveryTime,
             rawData: updatedRawData,
-            updatedAt: new Date().toISOString()
+            updatedAt: nowIso
           });
         }
       });

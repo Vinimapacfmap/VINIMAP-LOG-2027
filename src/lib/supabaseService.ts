@@ -213,11 +213,18 @@ export function mapOrderFromDb(row: any): Order {
     || ''
   ).toString().trim();
 
+  const hasAdminOverride = Boolean(
+    rawDataObj?.adminOverride === true || 
+    rawDataObj?.adminOverride === 'true' ||
+    rawDataObj?.adminOverride === '1'
+  );
+
   let resolvedStatus: OrderStatus = 'Não iniciado';
   const cleanStatus = rawStatusCandidate.toLowerCase();
-  if (cleanStatus === 'concluído' || cleanStatus === 'concluido' || cleanStatus === 'entregue' || cleanStatus === 'finalizado' || cleanStatus === 'baixado' || protocolNumber || signatureUrl || deliveryPhotoUrl || dataConclusao) {
+
+  if (cleanStatus === 'concluído' || cleanStatus === 'concluido' || cleanStatus === 'entregue' || cleanStatus === 'finalizado' || cleanStatus === 'baixado') {
     resolvedStatus = 'Concluído';
-  } else if (cleanStatus === 'ocorrência' || cleanStatus === 'ocorrencia' || cleanStatus === 'falha' || cleanStatus === 'devolvido' || occurrenceDate) {
+  } else if (cleanStatus === 'ocorrência' || cleanStatus === 'ocorrencia' || cleanStatus === 'falha' || cleanStatus === 'devolvido') {
     resolvedStatus = 'Ocorrência';
   } else if (cleanStatus === 'cancelado' || cleanStatus === 'cancelada') {
     resolvedStatus = 'Cancelado';
@@ -225,6 +232,13 @@ export function mapOrderFromDb(row: any): Order {
     resolvedStatus = 'Em rota';
   } else if (cleanStatus === 'entregando') {
     resolvedStatus = 'Entregando';
+  } else if (cleanStatus === 'não iniciado' || cleanStatus === 'nao iniciado' || cleanStatus === 'pendente') {
+    resolvedStatus = 'Não iniciado';
+  } else if (!hasAdminOverride && (protocolNumber || signatureUrl || deliveryPhotoUrl || dataConclusao)) {
+    // Only infer Concluído if there is NO explicit status set in DB/rawData and not admin-overridden
+    resolvedStatus = 'Concluído';
+  } else if (!hasAdminOverride && occurrenceDate) {
+    resolvedStatus = 'Ocorrência';
   } else if (resolvedRiderId) {
     resolvedStatus = 'Não iniciado';
   }
@@ -236,6 +250,9 @@ export function mapOrderFromDb(row: any): Order {
     address: row.address || rawDataObj?.address || rawDataObj?.Endereco || rawDataObj?.endereco || '',
     region: row.region || rawDataObj?.region || rawDataObj?.Regiao || rawDataObj?.regiao || '',
     status: resolvedStatus,
+    adminOverride: hasAdminOverride,
+    statusUpdatedAt: rawDataObj?.statusUpdatedAt || row.updated_at || undefined,
+    updatedAt: row.updated_at || rawDataObj?.updatedAt || undefined,
     priority: row.priority || rawDataObj?.priority || 'Normal',
     value: Number(row.value ?? rawDataObj?.value ?? rawDataObj?.ValorEntrega ?? 0),
     riderId: resolvedRiderId,

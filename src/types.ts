@@ -57,6 +57,8 @@ export interface Order {
   originalDate?: string; // Data de lançamento original do pedido
   reallocatedDate?: string; // Data da última realocação/revalidação
   reallocatedAt?: string; // Timestamp ISO da última realocação/revalidação
+  adminOverride?: boolean; // Se o status foi alterado ou confirmado manualmente pelo administrador
+  statusUpdatedAt?: string; // Timestamp ISO da última alteração de status
   updatedAt?: string;  // ISO timestamp of latest modification
 }
 

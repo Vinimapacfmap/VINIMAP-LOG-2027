@@ -23,6 +23,11 @@ export function normalizeToISODate(dateStr?: string): string {
 export function hasOrderCompletionEvidence(order: Order): boolean {
   if (!order) return false;
 
+  // If the admin or user explicitly set the status to something other than Concluído, completion evidence should NOT override it
+  if ((order.adminOverride || order.rawData?.adminOverride === 'true') && order.status !== 'Concluído') {
+    return false;
+  }
+
   const hasProtocol = Boolean(order.protocolNumber && (order.protocolNumber || '').toString().trim() !== '');
   const hasSignature = Boolean(order.signatureUrl && (order.signatureUrl || '').toString().trim() !== '');
   const hasPhoto = Boolean(order.deliveryPhotoUrl && (order.deliveryPhotoUrl || '').toString().trim() !== '');
@@ -144,8 +149,19 @@ export function sanitizeOrderConsistency(
 
   const orderIsoDate = normalizeToISODate(updated.date) || normalizeToISODate(updated.deliveryDate || updated.dataConclusao) || todayIso;
 
-  // Restore Concluído / Ocorrência / Cancelado status if order has completion evidence or raw status
-  if (updated.status !== 'Concluído' && updated.status !== 'Ocorrência' && updated.status !== 'Cancelado') {
+  // IMPORTANT: Administrator Overrides and Explicit Statuses Take Absolute Precedence!
+  // If an administrator or user explicitly set the status (e.g. 'Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Cancelado', 'Ocorrência'),
+  // or if adminOverride / statusOverride is flagged, NEVER revert or overwrite the status automatically!
+  const hasAdminOverride = Boolean(
+    updated.adminOverride || 
+    (updated.rawData && (updated.rawData.adminOverride === 'true' || updated.rawData.adminOverride === '1'))
+  );
+
+  const VALID_STATUSES: OrderStatus[] = ['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Cancelado', 'Ocorrência'];
+  const hasValidExplicitStatus = Boolean(updated.status && VALID_STATUSES.includes(updated.status));
+
+  // Only infer status from raw data or completion evidence if the order has NO valid status set
+  if (!hasAdminOverride && !hasValidExplicitStatus) {
     const rawStatus = (
       updated.rawData?.status ||
       updated.rawData?.Status ||
@@ -158,6 +174,8 @@ export function sanitizeOrderConsistency(
     const isRawCompleted = rawStatus === 'concluído' || rawStatus === 'concluido' || rawStatus === 'entregue' || rawStatus === 'finalizado' || rawStatus === 'baixado';
     const isRawOccurrence = rawStatus === 'ocorrência' || rawStatus === 'ocorrencia' || rawStatus === 'devolvido' || rawStatus === 'falha' || rawStatus === 'insucesso';
     const isRawCancelled = rawStatus === 'cancelado' || rawStatus === 'cancelada';
+    const isRawEmRota = rawStatus === 'em rota' || rawStatus === 'em trânsito' || rawStatus === 'em transito';
+    const isRawEntregando = rawStatus === 'entregando';
 
     if (isRawCompleted || hasOrderCompletionEvidence(updated)) {
       updated.status = 'Concluído';
@@ -168,6 +186,15 @@ export function sanitizeOrderConsistency(
     } else if (isRawCancelled) {
       updated.status = 'Cancelado';
       isModified = true;
+    } else if (isRawEmRota) {
+      updated.status = 'Em rota';
+      isModified = true;
+    } else if (isRawEntregando) {
+      updated.status = 'Entregando';
+      isModified = true;
+    } else {
+      updated.status = 'Não iniciado';
+      isModified = true;
     }
   }
 
@@ -177,6 +204,10 @@ export function sanitizeOrderConsistency(
       updated.rawData.status = updated.status;
       updated.rawData.Situacao = updated.status;
       updated.rawData.Status = updated.status;
+      isModified = true;
+    }
+    if (hasAdminOverride && updated.rawData.adminOverride !== 'true') {
+      updated.rawData.adminOverride = 'true';
       isModified = true;
     }
   }
