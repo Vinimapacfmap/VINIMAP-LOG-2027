@@ -1924,13 +1924,11 @@ function OrdersTable({
     doc.line(12, sec2Y + 2, 102, sec2Y + 2);
 
     const datesY = sec2Y + 7;
-    drawRow('Data Emissao:', formatToBrazilianDate(protocolOrderDate), 12, datesY);
-    drawRow('Horario Abertura:', formatOrderTime(protocolOrderTime), 12, datesY + 4.5);
-    drawRow('Data Liquidacao:', protocolDeliveryDate ? formatToBrazilianDate(protocolDeliveryDate) : 'Aguardando Entrega', 12, datesY + 9);
-    drawRow('Horario Conclusao:', protocolDeliveryTime ? formatOrderTime(protocolDeliveryTime) : 'Aguardando Entrega', 12, datesY + 13.5);
+    drawRow('Data Liquidacao:', protocolDeliveryDate ? formatToBrazilianDate(protocolDeliveryDate) : 'Aguardando Entrega', 12, datesY);
+    drawRow('Horario Conclusao:', protocolDeliveryTime ? formatOrderTime(protocolDeliveryTime) : 'Aguardando Entrega', 12, datesY + 4.5);
 
     // Section 3: Responsável pelo Recebimento
-    const sec3Y = datesY + 20.5;
+    const sec3Y = datesY + 11.5;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(30, 41, 59);
@@ -1939,8 +1937,7 @@ function OrdersTable({
 
     const recY = sec3Y + 7;
     drawRow('Nome do Recebedor:', protocolRecipientName || 'Nao Informado', 12, recY);
-    drawRow('Documento (RG/CPF):', protocolRecipientDoc || 'Nao Informado', 12, recY + 4.5);
-    drawRow('Status de Liquidacao:', hubOrder.status.toUpperCase(), 12, recY + 9);
+    drawRow('Status de Liquidacao:', hubOrder.status.toUpperCase(), 12, recY + 4.5);
 
     // Section 4: Comprovação Fotográfica
     doc.setFont('helvetica', 'bold');
@@ -4394,37 +4391,6 @@ function OrdersTable({
                               </h5>
 
                               <div className="grid grid-cols-2 gap-3">
-                                {/* Order Date */}
-                                <div className="space-y-0.5">
-                                  <label className="text-[9px] font-bold text-slate-400 uppercase">Data de Emissão</label>
-                                  {isEditingProtocol ? (
-                                    <input
-                                      type="date"
-                                      value={protocolOrderDate}
-                                      onChange={(e) => setProtocolOrderDate(e.target.value)}
-                                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:bg-white"
-                                    />
-                                  ) : (
-                                    <p className="text-xs font-bold text-slate-700">{formatToBrazilianDate(protocolOrderDate)}</p>
-                                  )}
-                                </div>
-
-                                {/* Order Time */}
-                                <div className="space-y-0.5">
-                                  <label className="text-[9px] font-bold text-slate-400 uppercase">Horário de Abertura</label>
-                                  {isEditingProtocol ? (
-                                    <input
-                                      type="text"
-                                      value={protocolOrderTime}
-                                      onChange={(e) => setProtocolOrderTime(e.target.value)}
-                                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:bg-white"
-                                      placeholder="Ex: 11:15"
-                                    />
-                                  ) : (
-                                    <p className="text-xs font-bold text-slate-700">{protocolOrderTime}</p>
-                                  )}
-                                </div>
-
                                 {/* Delivery Date */}
                                 <div className="space-y-0.5">
                                   <label className="text-[9px] font-bold text-slate-400 uppercase">Data de Entrega</label>
@@ -4485,22 +4451,6 @@ function OrdersTable({
                                     />
                                   ) : (
                                     <p className="text-xs font-bold text-slate-700">{protocolRecipientName || 'Não Informado'}</p>
-                                  )}
-                                </div>
-
-                                {/* Doc */}
-                                <div className="space-y-0.5">
-                                  <label className="text-[9px] font-bold text-slate-400 uppercase block">Documento de Identificação (RG/CPF)</label>
-                                  {isEditingProtocol ? (
-                                    <input
-                                      type="text"
-                                      value={protocolRecipientDoc}
-                                      onChange={(e) => setProtocolRecipientDoc(e.target.value)}
-                                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none"
-                                      placeholder="RG ou CPF"
-                                    />
-                                  ) : (
-                                    <p className="text-xs font-bold text-slate-700">{protocolRecipientDoc || 'Não Informado'}</p>
                                   )}
                                 </div>
                               </div>
