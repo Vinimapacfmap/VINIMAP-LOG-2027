@@ -31,6 +31,7 @@ import { motion, AnimatePresence } from 'motion/react';
 // Retrieve Leaflet L from the window context safely inside component/effects to avoid race conditions.
 
 import { getCoordinatesFromCep } from '../utils/locationUtils';
+import OrderQuickViewTooltip from './OrderQuickViewTooltip';
 
 interface OtimizadorRotasInteligenteProps {
   riders: DeliveryRider[];
@@ -767,50 +768,51 @@ export default function OtimizadorRotasInteligente({
                     prevCoord = orderCoord;
 
                     return (
-                      <div 
-                        key={order.id} 
-                        className={`flex gap-3 p-3 rounded-xl border transition-all ${
-                          showOptimized 
-                            ? 'bg-emerald-50/20 border-emerald-100/50 hover:bg-emerald-50/45' 
-                            : 'bg-slate-50/40 border-slate-100 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex flex-col items-center shrink-0">
-                          <span className={`w-5 h-5 rounded-full flex items-center justify-center font-extrabold text-[10px] ${
-                            showOptimized ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-white'
-                          }`}>
-                            {idx + 1}
-                          </span>
-                          {idx < currentSequenceIds.length - 1 && (
-                            <div className={`w-0.5 h-10 border-l ${showOptimized ? 'border-emerald-300' : 'border-slate-300'} border-dashed mt-1`} />
-                          )}
-                        </div>
+                      <OrderQuickViewTooltip key={order.id} order={order} rider={selectedRider} className="w-full">
+                        <div 
+                          className={`flex gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                            showOptimized 
+                              ? 'bg-emerald-50/20 border-emerald-100/50 hover:bg-emerald-50/45' 
+                              : 'bg-slate-50/40 border-slate-100 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex flex-col items-center shrink-0">
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center font-extrabold text-[10px] ${
+                              showOptimized ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-white'
+                            }`}>
+                              {idx + 1}
+                            </span>
+                            {idx < currentSequenceIds.length - 1 && (
+                              <div className={`w-0.5 h-10 border-l ${showOptimized ? 'border-emerald-300' : 'border-slate-300'} border-dashed mt-1`} />
+                            )}
+                          </div>
 
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-slate-800 text-[11px] truncate">{order.clientName}</span>
-                            <span className="font-mono text-[10px] text-slate-400">{order.id}</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 truncate">{order.address}</p>
-                          <div className="flex items-center justify-between gap-2 pt-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase">{order.region}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
-                                order.priority === 'Alta' 
-                                  ? 'bg-rose-50 text-rose-600' 
-                                  : order.priority === 'Média' 
-                                  ? 'bg-amber-50 text-amber-600' 
-                                  : 'bg-slate-100 text-slate-500'
-                              }`}>{order.priority}</span>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-slate-800 text-[11px] truncate">{order.clientName}</span>
+                              <span className="font-mono text-[10px] text-slate-400">{order.id}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-[9px] font-mono text-slate-500 shrink-0">
-                              <span className="text-emerald-700 font-bold" title="Distância até este ponto">+ {distFromPrev.toFixed(1)} km</span>
-                              <span className="text-slate-300">•</span>
-                              <span title="Distância direta da Base ViniMap">Base ViniMap: {distFromHub.toFixed(1)} km</span>
+                            <p className="text-[10px] text-slate-500 truncate">{order.address}</p>
+                            <div className="flex items-center justify-between gap-2 pt-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase">{order.region}</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                  order.priority === 'Alta' 
+                                    ? 'bg-rose-50 text-rose-600' 
+                                    : order.priority === 'Média' 
+                                    ? 'bg-amber-50 text-amber-600' 
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}>{order.priority}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-[9px] font-mono text-slate-500 shrink-0">
+                                <span className="text-emerald-700 font-bold" title="Distância até este ponto">+ {distFromPrev.toFixed(1)} km</span>
+                                <span className="text-slate-300">•</span>
+                                <span title="Distância direta da Base ViniMap">Base ViniMap: {distFromHub.toFixed(1)} km</span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </OrderQuickViewTooltip>
                     );
                   });
                 })()

@@ -547,6 +547,47 @@ export async function sbDeleteOrder(orderId: string) {
   }
 }
 
+export async function sbBulkSaveOrders(orders: Order[]): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase || !orders || orders.length === 0) return false;
+  try {
+    const chunks = chunkArray(orders, 30);
+    for (const chunk of chunks) {
+      const dbOrders = chunk.map(mapOrderToDb);
+      const { error } = await supabase.from('orders').upsert(dbOrders);
+      if (error) {
+        // Fallback with base columns
+        const baseOrders = dbOrders.map(dbOrder => ({
+          id: dbOrder.id,
+          client_name: dbOrder.client_name,
+          phone: dbOrder.phone,
+          address: dbOrder.address,
+          region: dbOrder.region,
+          status: dbOrder.status,
+          priority: dbOrder.priority,
+          value: dbOrder.value,
+          rider_id: dbOrder.rider_id,
+          items_count: dbOrder.items_count,
+          date: dbOrder.date,
+          cep: dbOrder.cep,
+          partner_name: dbOrder.partner_name,
+          delivery_value: dbOrder.delivery_value,
+          driver_value: dbOrder.driver_value,
+          raw_data: dbOrder.raw_data,
+          history: dbOrder.history
+        }));
+        const { error: fallbackErr } = await supabase.from('orders').upsert(baseOrders);
+        if (fallbackErr) {
+          console.warn('[Supabase sbBulkSaveOrders] Fallback error saving orders chunk:', fallbackErr.message);
+        }
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase sbBulkSaveOrders] Exception saving orders in bulk:', err);
+    return false;
+  }
+}
+
 export async function sbSaveClientPartner(client: ClientPartner) {
   if (!isSupabaseConfigured || !supabase) {
     console.log('[Supabase sbSaveClientPartner] Supabase not configured. Skipping remote write.');

@@ -35,6 +35,7 @@ import SafeMapWrapper from './SafeMapWrapper';
 import { getCoordinatesFromCep, getRegionGeoCoords, convertToGeoLat, convertToGeoLng, getRiderGeoCoords } from '../utils/locationUtils';
 import { saveMapCache, getMapCache, MapCachePayload } from '../utils/mapCacheService';
 import { fetchOsrmRoute, OsrmRouteResult } from '../utils/osrmService';
+import OrderQuickViewTooltip from './OrderQuickViewTooltip';
 
 interface MapContainerProps {
   riders: DeliveryRider[];
@@ -1196,36 +1197,37 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
                       </span>
                       <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         {sortedActiveRiderOrders.map((order, idx) => (
-                          <div 
-                            key={order.id}
-                            className={`p-2 rounded-xl border text-[11px] flex items-center justify-between gap-2 transition-all ${
-                              order.id === selectedRiderOrder?.id 
-                                ? 'bg-blue-50/60 border-blue-200' 
-                                : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-extrabold text-[10px] text-blue-600 font-mono">
-                                  {idx + 1}º
-                                </span>
-                                <span className="font-bold text-slate-700 truncate">
-                                  #{order.id}
-                                </span>
-                                <span className={`text-[8px] px-1.5 py-0.2 rounded font-extrabold uppercase border shrink-0 ${
-                                  order.status === 'Não iniciado' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                  order.status === 'Em rota' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                  order.status === 'Entregando' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                                  'bg-slate-50 text-slate-600 border-slate-200'
-                                }`}>
-                                  {order.status}
-                                </span>
-                              </div>
-                              <div className="text-slate-500 font-medium truncate mt-0.5 leading-tight">
-                                {order.clientName} • {order.address}
+                          <OrderQuickViewTooltip key={order.id} order={order} rider={selectedRider} className="w-full">
+                            <div 
+                              className={`p-2 rounded-xl border text-[11px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                                order.id === selectedRiderOrder?.id 
+                                  ? 'bg-blue-50/60 border-blue-200' 
+                                  : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-extrabold text-[10px] text-blue-600 font-mono">
+                                    {idx + 1}º
+                                  </span>
+                                  <span className="font-bold text-slate-700 truncate">
+                                    #{order.id}
+                                  </span>
+                                  <span className={`text-[8px] px-1.5 py-0.2 rounded font-extrabold uppercase border shrink-0 ${
+                                    order.status === 'Não iniciado' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                    order.status === 'Em rota' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                    order.status === 'Entregando' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                    'bg-slate-50 text-slate-600 border-slate-200'
+                                  }`}>
+                                    {order.status}
+                                  </span>
+                                </div>
+                                <div className="text-slate-500 font-medium truncate mt-0.5 leading-tight">
+                                  {order.clientName} • {order.address}
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </OrderQuickViewTooltip>
                         ))}
                       </div>
                     </div>

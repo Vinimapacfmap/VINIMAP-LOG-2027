@@ -203,6 +203,16 @@ class SyncRetryQueueManager {
 
     this.saveTasks(tasks);
 
+    // If explicit priority is LOW, let the background queue process it asynchronously without blocking or flooding
+    if (explicitPriority === 'LOW') {
+      setTimeout(() => {
+        if (!this.isProcessing && this.isOnline) {
+          this.processQueue(false);
+        }
+      }, 100);
+      return true;
+    }
+
     // If online, attempt immediate execution
     if (this.isOnline) {
       return await this.executeTask(task);
@@ -240,6 +250,15 @@ class SyncRetryQueueManager {
     }
 
     this.saveTasks(tasks);
+
+    if (explicitPriority === 'LOW') {
+      setTimeout(() => {
+        if (!this.isProcessing && this.isOnline) {
+          this.processQueue(false);
+        }
+      }, 100);
+      return true;
+    }
 
     if (this.isOnline) {
       return await this.executeTask(task);

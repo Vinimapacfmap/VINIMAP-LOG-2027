@@ -49,6 +49,7 @@ import { hasOrderCompletionEvidence } from '../utils/orderConsistency';
 import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from '../utils/addressUtils';
 import { realtimeSyncBus } from '../utils/realtimeSync';
+import OrderQuickViewTooltip from './OrderQuickViewTooltip';
 
 const getStatusClasses = (status: string) => {
   switch (status) {
@@ -2408,55 +2409,56 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                               const isChecked = selectedOrderIds.has(order.id);
                               const cp = clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente));
                               return (
-                                <div
-                                  key={`dra-ord-${order.id}`}
-                                  onClick={() => {
-                                    const newSet = new Set(selectedOrderIds);
-                                    if (isChecked) {
-                                      newSet.delete(order.id);
-                                    } else {
-                                      newSet.add(order.id);
-                                    }
-                                    setSelectedOrderIds(newSet);
-                                  }}
-                                  className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 text-xs ${
-                                    isChecked
-                                      ? 'bg-indigo-950/80 border-indigo-500/80 text-white shadow-xs'
-                                      : 'bg-slate-800/50 border-slate-700/60 text-slate-300 hover:bg-slate-800'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="shrink-0 text-indigo-400">
-                                      {isChecked ? <CheckSquare size={16} className="text-indigo-400" /> : <Square size={16} className="text-slate-500" />}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <div className="font-extrabold text-slate-100 flex items-center gap-2 truncate">
-                                        <span>#{order.id.slice(0, 8)}</span>
-                                        {order.protocolNumber && (
-                                          <span className="text-[9px] bg-slate-700/80 text-slate-300 px-1.5 py-0.2 rounded font-mono">
-                                            Prot: {order.protocolNumber}
+                                <OrderQuickViewTooltip key={`dra-ord-${order.id}`} order={order} rider={riders.find(r => r.id === order.riderId)} className="w-full">
+                                  <div
+                                    onClick={() => {
+                                      const newSet = new Set(selectedOrderIds);
+                                      if (isChecked) {
+                                        newSet.delete(order.id);
+                                      } else {
+                                        newSet.add(order.id);
+                                      }
+                                      setSelectedOrderIds(newSet);
+                                    }}
+                                    className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 text-xs ${
+                                      isChecked
+                                        ? 'bg-indigo-950/80 border-indigo-500/80 text-white shadow-xs'
+                                        : 'bg-slate-800/50 border-slate-700/60 text-slate-300 hover:bg-slate-800'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div className="shrink-0 text-indigo-400">
+                                        {isChecked ? <CheckSquare size={16} className="text-indigo-400" /> : <Square size={16} className="text-slate-500" />}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="font-extrabold text-slate-100 flex items-center gap-2 truncate">
+                                          <span>#{order.id.slice(0, 8)}</span>
+                                          {order.protocolNumber && (
+                                            <span className="text-[9px] bg-slate-700/80 text-slate-300 px-1.5 py-0.2 rounded font-mono">
+                                              Prot: {order.protocolNumber}
+                                            </span>
+                                          )}
+                                          <span className="text-[10px] text-indigo-300 font-normal truncate">
+                                            • {cp?.name || order.partnerName || 'Cliente Direto'}
                                           </span>
-                                        )}
-                                        <span className="text-[10px] text-indigo-300 font-normal truncate">
-                                          • {cp?.name || order.partnerName || 'Cliente Direto'}
-                                        </span>
-                                      </div>
-                                      <div className="text-[10px] text-slate-400 truncate">
-                                        {order.address} {order.region ? `(${order.region})` : ''}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 truncate">
+                                          {order.address} {order.region ? `(${order.region})` : ''}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
 
-                                  <div className="shrink-0 flex items-center gap-2">
-                                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                                      order.status === 'Concluído' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-                                      order.status === 'Em rota' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
-                                      'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                    }`}>
-                                      {order.status}
-                                    </span>
+                                    <div className="shrink-0 flex items-center gap-2">
+                                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                                        order.status === 'Concluído' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                        order.status === 'Em rota' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+                                        'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                      }`}>
+                                        {order.status}
+                                      </span>
+                                    </div>
                                   </div>
-                                </div>
+                                </OrderQuickViewTooltip>
                               );
                             })
                           )}

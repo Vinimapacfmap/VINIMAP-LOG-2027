@@ -87,6 +87,7 @@ import BulkEditModal from './BulkEditModal';
 import ExportConfigModal from './ExportConfigModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { SignatureCanvasModal } from './SignatureCanvasModal';
+import OrderQuickViewTooltip from './OrderQuickViewTooltip';
 
 interface OrdersTableProps {
   orders: Order[];
@@ -3200,14 +3201,20 @@ function OrdersTable({
                           {/* Order Code / ID */}
                           {(visibleColumns.has('Pedido') || visibleColumns.has('Código')) && (
                             <td className="px-2.5 py-1.5 font-mono font-black text-slate-900 text-xs">
-                              {order.id}
+                              <OrderQuickViewTooltip order={order} rider={rider}>
+                                <span className="hover:text-blue-600 hover:underline cursor-pointer inline-flex items-center gap-1">
+                                  {order.id}
+                                </span>
+                              </OrderQuickViewTooltip>
                             </td>
                           )}
 
                           {/* Client information */}
                           {(visibleColumns.has('ProcurarPor') || visibleColumns.has('CodigoCliente')) && (
                             <td className="px-2.5 py-1.5">
-                              <span className="block font-black text-slate-900 leading-tight text-xs">{order.clientName}</span>
+                              <OrderQuickViewTooltip order={order} rider={rider}>
+                                <span className="block font-black text-slate-900 leading-tight text-xs hover:text-blue-600 cursor-pointer">{order.clientName}</span>
+                              </OrderQuickViewTooltip>
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded font-extrabold uppercase inline-block leading-none">
                                   {order.region}
@@ -3229,7 +3236,9 @@ function OrdersTable({
                           {/* Destination Address */}
                           {visibleColumns.has('Endereco') && (
                             <td className="px-2.5 py-1.5 max-w-[220px]" title={order.address}>
-                              <span className="block text-slate-800 leading-tight text-xs font-semibold truncate max-w-[210px]">{order.address}</span>
+                              <OrderQuickViewTooltip order={order} rider={rider}>
+                                <span className="block text-slate-800 leading-tight text-xs font-semibold truncate max-w-[210px] hover:text-blue-600 cursor-pointer">{order.address}</span>
+                              </OrderQuickViewTooltip>
                               <div className="flex flex-wrap items-center gap-1 mt-0.5">
                                 <button
                                   onClick={(e) => handleCopyAddressAndRoute(order, e)}
@@ -3386,6 +3395,30 @@ function OrdersTable({
                             );
                           }
 
+                          if (col === 'Pedido') {
+                            return (
+                              <td key={col} className="px-1.5 py-1 border-r border-slate-100 font-mono font-black text-slate-900 text-[10px]">
+                                <OrderQuickViewTooltip order={order} rider={rider}>
+                                  <span className="hover:text-blue-600 hover:underline cursor-pointer">
+                                    {cellVal}
+                                  </span>
+                                </OrderQuickViewTooltip>
+                              </td>
+                            );
+                          }
+
+                          if (col === 'ProcurarPor' || col === 'CodigoCliente') {
+                            return (
+                              <td key={col} className="px-1.5 py-1 border-r border-slate-100 font-black text-slate-900 text-[10px] truncate max-w-[130px]" title={cellVal}>
+                                <OrderQuickViewTooltip order={order} rider={rider}>
+                                  <span className="hover:text-blue-600 cursor-pointer">
+                                    {cellVal}
+                                  </span>
+                                </OrderQuickViewTooltip>
+                              </td>
+                            );
+                          }
+
                           if (col === 'Endereco') {
                             return (
                               <td 
@@ -3394,7 +3427,9 @@ function OrdersTable({
                                 title={cellVal}
                               >
                                 <div className="flex items-center justify-between gap-1 min-w-0">
-                                  <span className="truncate flex-1 font-semibold text-slate-900 text-[10px]">{cellVal}</span>
+                                  <OrderQuickViewTooltip order={order} rider={rider} className="truncate flex-1">
+                                    <span className="truncate block font-semibold text-slate-900 text-[10px] hover:text-blue-600 cursor-pointer">{cellVal}</span>
+                                  </OrderQuickViewTooltip>
                                   <button
                                     onClick={(e) => handleCopyAddressAndRoute(order, e)}
                                     className={`opacity-0 group-hover:opacity-100 focus:opacity-100 inline-flex items-center justify-center p-0.5 rounded border shadow-2xs transition-all shrink-0 cursor-pointer ${

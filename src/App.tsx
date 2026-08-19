@@ -862,9 +862,9 @@ export default function App() {
           if (prev.length === 0) return sanitizedDocs;
           return mergeOrders(prev, sanitizedDocs);
         });
-        if (hasModified && modifiedOrders.length > 0) {
-          console.log(`[Order Consistency] Persistindo correção de status para ${modifiedOrders.length} pedido(s) concluído(s) no Firestore.`);
-          dbBulkSaveOrders(modifiedOrders).catch(() => {});
+        if (hasModified && modifiedOrders.length > 0 && !getIsFirestoreQuotaExceeded()) {
+          console.log(`[Order Consistency] Persistindo correção de status para ${modifiedOrders.length} pedido(s) concluído(s) em lote.`);
+          dbBulkSaveOrders(modifiedOrders, 'LOW').catch(() => {});
         }
       }, (error) => handleListenerError(error, 'orders'))
     );

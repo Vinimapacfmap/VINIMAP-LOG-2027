@@ -17,6 +17,7 @@ import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 import {
   sbSaveOrder,
   sbDeleteOrder,
+  sbBulkSaveOrders,
   sbSaveClientPartner,
   sbDeleteClientPartner,
   sbSaveDeliveryRider,
@@ -568,24 +569,30 @@ export async function dbDeleteOrder(orderId: string, explicitPriority: QueuePrio
   return await syncRetryQueue.enqueueDelete(orderId, explicitPriority);
 }
 
-export async function dbBulkSaveOrders(orders: Order[], explicitPriority?: QueuePriority) {
-  // Audit rider allocation changes in bulk save
-  if (!getIsFirestoreQuotaExceeded()) {
-    for (const order of orders) {
-      try {
-        const existingSnap = await getDoc(doc(db, 'orders', order.id));
-        let prevRiderId: string | undefined = undefined;
-        if (existingSnap.exists()) {
-          const data = existingSnap.data();
-          prevRiderId = data?.riderId || data?.driverId || undefined;
-        }
-        await recordRiderAllocationAuditLog(order.id, prevRiderId, order.riderId);
-      } catch (e) {
-        console.warn(`[dbBulkSaveOrders Audit] Não foi possível auditar pedido #${order.id}:`, e);
+export async function dbBulkSaveOrders(orders: Order[], explicitPriority: QueuePriority = 'LOW') {
+  if (!orders || orders.length === 0) return [];
+
+  // 1. Update local contingency storage immediately in a single fast map update
+  try {
+    const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+    if (rawBackup) {
+      const parsed = JSON.parse(rawBackup);
+      if (parsed.orders && Array.isArray(parsed.orders)) {
+        const map = new Map<string, Order>();
+        parsed.orders.forEach((o: Order) => map.set(o.id, o));
+        orders.forEach((o: Order) => map.set(o.id, o));
+        parsed.orders = Array.from(map.values());
+        localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
       }
     }
-  }
+  } catch (_) {}
 
+  // 2. Direct chunked save to Supabase
+  sbBulkSaveOrders(orders).catch(err => {
+    console.warn('[dbBulkSaveOrders] Erro no salvamento em lote no Supabase:', err);
+  });
+
+  // 3. Enqueue to retry queue with LOW priority (processed sequentially by background worker)
   const results = [];
   for (const order of orders) {
     results.push(await syncRetryQueue.enqueueSave(order, explicitPriority));
