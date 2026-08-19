@@ -46,6 +46,7 @@ interface GlobalFiltersProps {
   onSelectPartner?: (val: string) => void;
   onSelectRider?: (val: string) => void;
   totalFilteredOrdersCount?: number;
+  onNavigateToOrders?: () => void;
 }
 
 export default function GlobalFilters({
@@ -70,6 +71,7 @@ export default function GlobalFilters({
   onSelectPartner,
   onSelectRider,
   totalFilteredOrdersCount,
+  onNavigateToOrders
 }: GlobalFiltersProps) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -304,7 +306,18 @@ export default function GlobalFilters({
                   data-form-type="other"
                   placeholder="Nº Pedido, Cliente, Destinatário, CEP, DANFE..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (setSearchQuery) setSearchQuery(val);
+                    if (val.trim().length > 0 && onNavigateToOrders) {
+                      onNavigateToOrders();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && onNavigateToOrders) {
+                      onNavigateToOrders();
+                    }
+                  }}
                   className="w-full pl-8 pr-7 py-1.5 bg-blue-50/40 border border-blue-200 rounded-xl text-xs font-bold text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
                 />
                 {searchQuery && (

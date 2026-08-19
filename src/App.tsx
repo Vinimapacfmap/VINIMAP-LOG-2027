@@ -3979,6 +3979,8 @@ export default function App() {
           lastSupabaseSyncTime={lastSupabaseSyncTime}
           supabaseSyncStatus={supabaseSyncStatus}
           orders={orders}
+          riders={riders}
+          clientPartners={clientPartners}
           onNavigateToOrders={() => setActiveSection('pedidos')}
           onNavigateToSection={setActiveSection}
         />
@@ -4096,6 +4098,8 @@ export default function App() {
 
                 {/* Global Filters bar at the top of Dashboard */}
                 <GlobalFilters
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
                   filterDateFrom={filterDateFrom}
                   setFilterDateFrom={setFilterDateFrom}
                   filterDateTo={filterDateTo}
@@ -4115,6 +4119,7 @@ export default function App() {
                   onClearFilters={handleClearFilters}
                   onSelectPartner={handleSelectPartner}
                   onSelectRider={handleSelectRider}
+                  onNavigateToOrders={() => setActiveSection('pedidos')}
                 />
 
                 {/* 6 Key Performance Indicators Section */}
@@ -4199,6 +4204,7 @@ export default function App() {
                   onClearFilters={handleClearFilters}
                   onSelectPartner={handleSelectPartner}
                   onSelectRider={handleSelectRider}
+                  onNavigateToOrders={() => setActiveSection('pedidos')}
                 />
 
                 {/* Delayed Orders / Previous Days Alert Card */}

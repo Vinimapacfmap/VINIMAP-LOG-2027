@@ -28,8 +28,9 @@ import {
   FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CompanyHub, Order } from '../types';
+import { CompanyHub, Order, DeliveryRider, ClientPartner } from '../types';
 import { PwaInstallButton } from './PwaInstallButton';
+import { isOrderMatchingGlobalSearch } from '../utils/searchUtils';
 
 interface HeaderProps {
   onSearchChange: (search: string) => void;
@@ -44,6 +45,8 @@ interface HeaderProps {
   lastSupabaseSyncTime?: string;
   supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
   orders?: Order[];
+  riders?: DeliveryRider[];
+  clientPartners?: ClientPartner[];
   onNavigateToOrders?: () => void;
   onNavigateToSection?: (section: string) => void;
 }
@@ -61,6 +64,8 @@ export default function Header({
   lastSupabaseSyncTime,
   supabaseSyncStatus = 'idle',
   orders = [],
+  riders = [],
+  clientPartners = [],
   onNavigateToOrders,
   onNavigateToSection
 }: HeaderProps) {
@@ -104,24 +109,11 @@ export default function Header({
     return () => clearInterval(interval);
   }, []);
 
-  // Global search matching across all orders
+  // Global search matching across all orders using universal search logic
   const matchingOrders = useMemo(() => {
     if (!orders || !searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase().trim();
-    return orders.filter(o => {
-      const city = o.rawData?.CidadeMunicipio || o.rawData?.Cidade || o.region || '';
-      const tracking = o.rawData?.DANFE || o.rawData?.Chamado || '';
-      const rider = o.rawData?.DispositivoCondutor || o.riderId || '';
-
-      const codeMatch = o.id.toLowerCase().includes(q) || (o.rawData?.Pedido && String(o.rawData.Pedido).toLowerCase().includes(q));
-      const clientMatch = o.clientName.toLowerCase().includes(q) || (o.rawData?.CodigoCliente && String(o.rawData.CodigoCliente).toLowerCase().includes(q));
-      const recipientMatch = (o.recipientName || '').toLowerCase().includes(q) || (o.rawData?.ProcurarPor && String(o.rawData.ProcurarPor).toLowerCase().includes(q));
-      const addressMatch = (o.address || '').toLowerCase().includes(q) || city.toLowerCase().includes(q) || (o.cep || '').toLowerCase().includes(q);
-      const trackingMatch = tracking.toLowerCase().includes(q);
-      const riderMatch = rider.toLowerCase().includes(q);
-      return codeMatch || clientMatch || recipientMatch || addressMatch || trackingMatch || riderMatch;
-    });
-  }, [orders, searchQuery]);
+    return orders.filter(o => isOrderMatchingGlobalSearch(o, searchQuery, riders, clientPartners));
+  }, [orders, searchQuery, riders, clientPartners]);
 
   const notifications = [
     {
@@ -162,7 +154,7 @@ export default function Header({
   };
 
   const handleSelectOrderResult = (orderId: string) => {
-    onSearchChange(orderId.replace('ped-', ''));
+    onSearchChange(orderId.replace(/^ped-/i, ''));
     if (onNavigateToOrders) {
       onNavigateToOrders();
     }
@@ -191,8 +183,12 @@ export default function Header({
             value={searchQuery}
             onFocus={() => setIsSearchFocused(true)}
             onChange={(e) => {
-              onSearchChange(e.target.value);
+              const val = e.target.value;
+              onSearchChange(val);
               setIsSearchFocused(true);
+              if (val.trim().length > 0 && onNavigateToOrders) {
+                onNavigateToOrders();
+              }
             }}
             onKeyDown={handleSearchKeyDown}
             className="w-full pl-10 pr-10 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all shadow-2xs"
