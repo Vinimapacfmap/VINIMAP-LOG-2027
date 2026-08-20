@@ -24,7 +24,6 @@ export default function KPISection({ orders, onCardClick, activeTab = 'Todos', f
   const total = orders.length;
   const notStarted = orders.filter((o) => o.status === 'Não iniciado').length;
   const inRoute = orders.filter((o) => o.status === 'Em rota').length;
-  const delivering = orders.filter((o) => o.status === 'Entregando').length;
   const completed = orders.filter((o) => o.status === 'Concluído').length;
   const occurrence = orders.filter((o) => o.status === 'Ocorrência').length;
   const canceled = orders.filter((o) => o.status === 'Cancelado').length;
@@ -72,17 +71,6 @@ export default function KPISection({ orders, onCardClick, activeTab = 'Todos', f
       icon: Truck,
       color: 'sky',
       sparkline: 'M 0 25 Q 15 20, 30 25 T 60 15 T 90 18 T 120 8',
-    },
-    {
-      id: 'kpi-delivering',
-      statusValue: 'Entregando' as const,
-      title: 'Entregando',
-      value: delivering,
-      sub: 'Ações de entrega',
-      isTrendUp: true,
-      icon: Truck,
-      color: 'indigo',
-      sparkline: 'M 0 25 Q 15 10, 30 30 T 60 15 T 90 22 T 120 5',
     },
     {
       id: 'kpi-completed',
@@ -189,7 +177,7 @@ export default function KPISection({ orders, onCardClick, activeTab = 'Todos', f
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4" id="kpi-grid-container">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4" id="kpi-grid-container">
       {cards.map((card) => {
         const Icon = card.icon;
         const styles = getColorClasses(card.color);

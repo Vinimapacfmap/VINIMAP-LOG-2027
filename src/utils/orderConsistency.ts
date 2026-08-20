@@ -157,7 +157,11 @@ export function sanitizeOrderConsistency(
     (updated.rawData && (updated.rawData.adminOverride === 'true' || updated.rawData.adminOverride === '1'))
   );
 
-  const VALID_STATUSES: OrderStatus[] = ['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Cancelado', 'Ocorrência'];
+  const VALID_STATUSES: OrderStatus[] = ['Não iniciado', 'Em rota', 'Concluído', 'Cancelado', 'Ocorrência'];
+  if ((updated.status as string) === 'Entregando') {
+    updated.status = 'Em rota';
+    isModified = true;
+  }
   const hasValidExplicitStatus = Boolean(updated.status && VALID_STATUSES.includes(updated.status));
 
   // Only infer status from raw data or completion evidence if the order has NO valid status set
@@ -174,8 +178,7 @@ export function sanitizeOrderConsistency(
     const isRawCompleted = rawStatus === 'concluído' || rawStatus === 'concluido' || rawStatus === 'entregue' || rawStatus === 'finalizado' || rawStatus === 'baixado';
     const isRawOccurrence = rawStatus === 'ocorrência' || rawStatus === 'ocorrencia' || rawStatus === 'devolvido' || rawStatus === 'falha' || rawStatus === 'insucesso';
     const isRawCancelled = rawStatus === 'cancelado' || rawStatus === 'cancelada';
-    const isRawEmRota = rawStatus === 'em rota' || rawStatus === 'em trânsito' || rawStatus === 'em transito';
-    const isRawEntregando = rawStatus === 'entregando';
+    const isRawEmRota = rawStatus === 'em rota' || rawStatus === 'em trânsito' || rawStatus === 'em transito' || rawStatus === 'entregando';
 
     if (isRawCompleted || hasOrderCompletionEvidence(updated)) {
       updated.status = 'Concluído';
@@ -188,9 +191,6 @@ export function sanitizeOrderConsistency(
       isModified = true;
     } else if (isRawEmRota) {
       updated.status = 'Em rota';
-      isModified = true;
-    } else if (isRawEntregando) {
-      updated.status = 'Entregando';
       isModified = true;
     } else {
       updated.status = 'Não iniciado';

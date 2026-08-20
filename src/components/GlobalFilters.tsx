@@ -164,7 +164,6 @@ export default function GlobalFilters({
   const statuses: { value: OrderStatus; label: string }[] = [
     { value: 'Não iniciado', label: 'Não iniciado' },
     { value: 'Em rota', label: 'Em Rota' },
-    { value: 'Entregando', label: 'Entregando' },
     { value: 'Concluído', label: 'Concluído' },
     { value: 'Ocorrência', label: 'Ocorrência' },
     { value: 'Cancelado', label: 'Cancelado' }

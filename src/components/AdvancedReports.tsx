@@ -241,10 +241,8 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
         const matchingRider = ridersList.find(rd => rd.id === order.riderId);
         const commResult = calculateRiderCommissionForOrder(matchingRider, order, clientPartners);
         rData.commission += commResult.total;
-      } else if (order.status === 'Em rota') {
+      } else if (order.status === 'Em rota' || (order.status as string) === 'Entregando') {
         rData.inRoute += 1;
-      } else if (order.status === 'Entregando') {
-        rData.delivering += 1;
       } else if (order.status === 'Ocorrência') {
         rData.occurrences += 1;
       } else if (order.status === 'Cancelado') {

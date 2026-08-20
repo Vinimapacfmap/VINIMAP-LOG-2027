@@ -78,7 +78,7 @@ export default function LiveHealthScore({ orders, riders }: LiveHealthScoreProps
       // In progress order (Não iniciado, Em rota, Entregando, Ocorrência)
       // Estimated delivery time: standard elapsed (e.g. 15 mins) + remaining time
       const timeRem = order.timeRemaining !== undefined ? order.timeRemaining : 20;
-      const baseElapsed = order.status === 'Não iniciado' ? 5 : order.status === 'Entregando' ? 25 : 15;
+      const baseElapsed = order.status === 'Não iniciado' ? 5 : (order.status as string) === 'Entregando' ? 25 : 15;
       actualOrEstimated = baseElapsed + timeRem;
       isOnTime = timeRem >= 0 && actualOrEstimated <= predicted;
     }

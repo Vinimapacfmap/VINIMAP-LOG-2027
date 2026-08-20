@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DeliveryRider, Order, OrderStatus, ActivityLog, ClientPartner, isMatchingClientCode, CompanyHub } from '../types';
 import { getSaoPauloISODate, getSaoPauloDate, getSaoPauloTime, extractISODateFromTimestamp } from '../utils/dateUtils';
@@ -14,6 +14,7 @@ import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { verifyAndSanitizeRiderOrders, queueOfflineGpsCoord, queueOfflineOrderAction, flushIndexedDbSyncQueue } from '../utils/indexedDbSync';
 
 import { PwaInstallBanner } from './PwaInstallBanner';
 
@@ -188,6 +189,7 @@ interface RiderAppSimulatorProps {
   isStandalone?: boolean;
   isRealDevice?: boolean;
   activeHub?: CompanyHub;
+  onExitToAdmin?: () => void;
 }
 
 export interface PhotoQueueTask {
@@ -230,7 +232,8 @@ export default function RiderAppSimulator({
   onUpdateOrders,
   isStandalone = false,
   isRealDevice = false,
-  activeHub
+  activeHub,
+  onExitToAdmin
 }: RiderAppSimulatorProps) {
   const effectiveLogo = activeHub?.logoUrl || vinimapLogo;
   const [isUserFullScreen, setIsUserFullScreen] = useState(false);
@@ -1255,6 +1258,15 @@ export default function RiderAppSimulator({
             lastGpsUpdate: nowTime,
             isGpsRealActive: true
           });
+          queueOfflineGpsCoord({
+            riderId: selectedRider.id,
+            lat: clampedLat,
+            lng: clampedLng,
+            realGeoLat: latitude,
+            realGeoLng: longitude,
+            accuracy: accuracy || 0,
+            timestamp: nowTime
+          }).catch(() => {});
         }
 
         // Move phone Leaflet map marker if visible
@@ -1458,16 +1470,6 @@ export default function RiderAppSimulator({
         message: `App do Condutor: Pedido #${focusedOrder.id} marcado como "Em Rota" por ${selectedRider?.name || 'Condutor'}.`,
         orderId: focusedOrder.id
       }]);
-    } else if (targetStatus === 'Entregando') {
-      handleUpdateOrderStatus(focusedOrder.id, 'Entregando');
-      triggerPhoneNotification('Iniciado!', `Entrega do pedido #${focusedOrder.id} iniciada.`, 'info');
-      onSaveLogs([{
-        id: `log-sim-deliv-${Date.now()}`,
-        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        type: 'info',
-        message: `App do Condutor: Pedido #${focusedOrder.id} marcado como "Entregando" por ${selectedRider?.name || 'Condutor'}.`,
-        orderId: focusedOrder.id
-      }]);
     } else if (targetStatus === 'Concluído') {
       // Open the receiver confirmation subform
       setShowReceiverInputId(focusedOrder.id);
@@ -1516,7 +1518,12 @@ export default function RiderAppSimulator({
     return false;
   };
 
-  const driverActiveOrders = orders.filter(isOrderActiveForDriver).sort((a, b) => {
+  // Pre-render consistency verification to ensure orders data is clean and valid
+  const sanitizedOrdersForRider = useMemo(() => {
+    return verifyAndSanitizeRiderOrders(orders, selectedRiderId, riders);
+  }, [orders, selectedRiderId, riders]);
+
+  const driverActiveOrders = sanitizedOrdersForRider.filter(isOrderActiveForDriver).sort((a, b) => {
     return compareOrdersByCep(a, b);
   });
 
@@ -1534,10 +1541,7 @@ export default function RiderAppSimulator({
     ? driverActiveOrders.filter(o => o.status === 'Não iniciado').length
     : 0;
   const emRotaCount = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status === 'Em rota').length
-    : 0;
-  const entregandoCount = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status === 'Entregando').length
+    ? driverActiveOrders.filter(o => o.status === 'Em rota' || (o.status as string) === 'Entregando').length
     : 0;
   const totalAssignedCount = selectedRiderId
     ? driverActiveOrders.length
@@ -1677,8 +1681,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
           // Badge styling
           let badgeColor = "bg-slate-100 text-slate-600";
           if (order.status === 'Não iniciado') badgeColor = "bg-amber-100 text-amber-800 border-amber-200";
-          else if (order.status === 'Em rota') badgeColor = "bg-indigo-100 text-indigo-800 border-indigo-200";
-          else if (order.status === 'Entregando') badgeColor = "bg-blue-100 text-blue-800 border-blue-200";
+          else if (order.status === 'Em rota' || (order.status as string) === 'Entregando') badgeColor = "bg-indigo-100 text-indigo-800 border-indigo-200";
           else if (order.status === 'Concluído') badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
           else if (order.status === 'Ocorrência') badgeColor = "bg-rose-100 text-rose-800 border-rose-200";
           else if (order.status === 'Cancelado') badgeColor = "bg-slate-100 text-slate-800 border-slate-200";
@@ -1859,56 +1862,33 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           <div className="grid grid-cols-2 gap-2">
                           
                           {/* OPTION 1: COLOCAR EM ROTA */}
-                          <button
-                            type="button"
-                            disabled={(order.status as string) === 'Em rota' || (order.status as string) === 'Entregando' || (order.status as string) === 'Concluído'}
-                            onClick={() => {
-                              handleUpdateOrderStatus(order.id, 'Em rota');
-                              triggerPhoneNotification('Pedido em Rota!', `Pedido #${order.id} foi colocado em rota.`, 'info');
-                              onSaveLogs([{
-                                id: `log-sim-route-${Date.now()}`,
-                                time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                                type: 'info',
-                                message: `App do Condutor: Pedido #${order.id} marcado como "Em Rota" por ${selectedRider?.name}.`,
-                                orderId: order.id
-                              }]);
-                            }}
-                            className={`py-2 px-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-all shadow-3xs cursor-pointer ${
-                              order.status === 'Não iniciado'
-                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                            }`}
-                          >
-                            <Truck size={12} />
-                            <span>Colocar em Rota</span>
-                          </button>
+                          {order.status === 'Não iniciado' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleUpdateOrderStatus(order.id, 'Em rota');
+                                triggerPhoneNotification('Pedido em Rota!', `Pedido #${order.id} foi colocado em rota.`, 'info');
+                                onSaveLogs([{
+                                  id: `log-sim-route-${Date.now()}`,
+                                  time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                                  type: 'info',
+                                  message: `App do Condutor: Pedido #${order.id} marcado como "Em Rota" por ${selectedRider?.name}.`,
+                                  orderId: order.id
+                                }]);
+                              }}
+                              className="col-span-2 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm cursor-pointer"
+                            >
+                              <Truck size={14} />
+                              <span>Colocar em Rota</span>
+                            </button>
+                          ) : (
+                            <div className="col-span-2 flex items-center gap-2 px-3 py-1.5 bg-sky-50 border border-sky-100 rounded-xl text-sky-700 text-[11px] font-bold">
+                              <Truck size={13} className="shrink-0 animate-bounce" />
+                              <span>Pedido em Rota / Trânsito</span>
+                            </div>
+                          )}
 
-                          {/* OPTION 2: ENTREGANDO */}
-                          <button
-                            type="button"
-                            disabled={(order.status as string) === 'Entregando' || (order.status as string) === 'Concluído'}
-                            onClick={() => {
-                              handleUpdateOrderStatus(order.id, 'Entregando');
-                              triggerPhoneNotification('Iniciado!', `Entrega do pedido #${order.id} iniciada.`, 'info');
-                              onSaveLogs([{
-                                id: `log-sim-deliv-${Date.now()}`,
-                                time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                                type: 'info',
-                                message: `App do Condutor: Pedido #${order.id} marcado como "Entregando" por ${selectedRider?.name}.`,
-                                orderId: order.id
-                              }]);
-                            }}
-                            className={`py-2 px-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-all shadow-3xs cursor-pointer ${
-                              order.status === 'Não iniciado' || order.status === 'Em rota'
-                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                            }`}
-                          >
-                            <Navigation size={12} />
-                            <span>Entregando</span>
-                          </button>
-
-                          {/* OPTION 3: CONCLUÍDO (dar baixa) */}
+                          {/* OPTION 2: CONCLUÍDO (dar baixa) */}
                           <button
                             type="button"
                             disabled={(order.status as string) === 'Concluído'}
@@ -1934,10 +1914,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             }`}
                           >
                             <CheckCircle2 size={12} className="text-emerald-600" />
-                            <span>Dar Baixa (Concluído)</span>
+                            <span>Dar Baixa (Concluir)</span>
                           </button>
 
-                          {/* OPTION 4: OCORRÊNCIA */}
+                          {/* OPTION 3: OCORRÊNCIA */}
                           <button
                             type="button"
                             disabled={(order.status as string) === 'Concluído'}
@@ -3578,9 +3558,25 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     </div>
                   )}
 
-                  {/* Footer Terms */}
-                  <div className="text-center text-[8.5px] text-blue-300/80 pt-1 pb-1">
-                    Ao conectar, você aceita os termos operacionais do Vinimap OS.
+                  {/* Footer Terms & Admin Switcher */}
+                  <div className="space-y-2 pt-1 pb-1 text-center">
+                    {onExitToAdmin && (
+                      <div className="pt-2 border-t border-white/15">
+                        <button
+                          type="button"
+                          onClick={onExitToAdmin}
+                          className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-900/80 via-slate-800 to-indigo-950/80 hover:from-blue-800 hover:to-indigo-900 text-blue-200 hover:text-white border border-blue-400/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg group"
+                        >
+                          <Shield size={15} className="text-blue-400 group-hover:scale-110 transition-transform" />
+                          <span>Ir para o Painel do Administrador (Login)</span>
+                        </button>
+                        <p className="text-[9px] text-blue-300/70 mt-1">Área restrita de operadores e administradores</p>
+                      </div>
+                    )}
+
+                    <div className="text-[8.5px] text-blue-300/80">
+                      Ao conectar, você aceita os termos operacionais do Vinimap OS.
+                    </div>
                   </div>
 
                   </div>
@@ -3883,6 +3879,20 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               <LogOut size={15} />
                               <span>Sair do Aplicativo</span>
                             </button>
+
+                            {onExitToAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsDrawerMenuOpen(false);
+                                  onExitToAdmin();
+                                }}
+                                className="w-full py-2.5 bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 hover:text-white border border-blue-600/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer mt-2"
+                              >
+                                <Shield size={14} className="text-blue-400" />
+                                <span>Painel do Administrador</span>
+                              </button>
+                            )}
                           </div>
                         </motion.div>
                       </motion.div>
@@ -4007,21 +4017,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 </button>
                               )}
 
-                              {fullScreenOrder.status === 'Em rota' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleUpdateOrderStatus(fullScreenOrder.id, 'Entregando');
-                                    setFullScreenOrder({ ...fullScreenOrder, status: 'Entregando' });
-                                  }}
-                                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
-                                >
-                                  <Navigation size={16} />
-                                  <span>Marcar "Cheguei ao Destino"</span>
-                                </button>
-                              )}
-
-                              {(fullScreenOrder.status === 'Em rota' || fullScreenOrder.status === 'Entregando') && (
+                              {((fullScreenOrder.status as string) === 'Em rota' || (fullScreenOrder.status as string) === 'Entregando') && (
                                 <div className="grid grid-cols-2 gap-2">
                                   <button
                                     type="button"
@@ -4046,7 +4042,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                     className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
                                   >
                                     <CheckCircle2 size={14} />
-                                    <span>Dar Baixa</span>
+                                    <span>Dar Baixa (Concluir)</span>
                                   </button>
                                 </div>
                               )}
@@ -4135,51 +4131,51 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               </div>
                             </button>
 
+                            {/* Não iniciado */}
+                            <button
+                              type="button"
+                              onClick={() => handleCardStatusClick('Não iniciado')}
+                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
+                                focusedOrder
+                                  ? 'bg-amber-50/80 border-amber-300 hover:border-amber-500 hover:bg-amber-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  : 'bg-amber-50/40 border-amber-100/60 cursor-default'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1 w-full">
+                                <div className="w-5 h-5 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center">
+                                  <Clock size={11} />
+                                </div>
+                                {focusedOrder && (
+                                  <span className="text-[7px] font-bold text-amber-500 uppercase">Toque</span>
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-[8px] font-bold text-amber-600 uppercase block truncate">Não Iniciado</span>
+                                <span className="text-sm font-black text-amber-800 font-mono">{naoIniciadoCount}</span>
+                              </div>
+                            </button>
+
                             {/* Em Rota */}
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Em rota')}
                               className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-indigo-50/80 border-indigo-300 hover:border-indigo-500 hover:bg-indigo-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
-                                  : 'bg-indigo-50/40 border-indigo-100/60 cursor-default'
+                                  ? 'bg-sky-50/80 border-sky-300 hover:border-sky-500 hover:bg-sky-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  : 'bg-sky-50/40 border-sky-100/60 cursor-default'
                               }`}
                             >
                               <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <div className="w-5 h-5 rounded-md bg-sky-100 text-sky-600 flex items-center justify-center">
                                   <Truck size={11} />
                                 </div>
                                 {focusedOrder && (
-                                  <span className="text-[7px] font-bold text-indigo-400 uppercase">Toque</span>
+                                  <span className="text-[7px] font-bold text-sky-400 uppercase">Toque</span>
                                 )}
                               </div>
                               <div>
-                                <span className="text-[8px] font-bold text-indigo-500 uppercase block truncate">Em Rota</span>
-                                <span className="text-sm font-black text-indigo-800 font-mono">{emRotaCount}</span>
-                              </div>
-                            </button>
-
-                            {/* Entregando */}
-                            <button
-                              type="button"
-                              onClick={() => handleCardStatusClick('Entregando')}
-                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
-                                focusedOrder
-                                  ? 'bg-blue-50/80 border-blue-300 hover:border-blue-500 hover:bg-blue-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
-                                  : 'bg-blue-50/40 border-blue-100/60 cursor-default'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
-                                  <Navigation size={11} />
-                                </div>
-                                {focusedOrder && (
-                                  <span className="text-[7px] font-bold text-blue-400 uppercase">Toque</span>
-                                )}
-                              </div>
-                              <div>
-                                <span className="text-[8px] font-bold text-blue-500 uppercase block truncate">Entregando</span>
-                                <span className="text-sm font-black text-blue-800 font-mono">{entregandoCount}</span>
+                                <span className="text-[8px] font-bold text-sky-600 uppercase block truncate">Em Rota</span>
+                                <span className="text-sm font-black text-sky-800 font-mono">{emRotaCount}</span>
                               </div>
                             </button>
 
@@ -4187,55 +4183,52 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Concluído')}
-                              className={`col-span-2 text-left border rounded-xl p-2 flex items-center justify-between shadow-3xs transition-all ${
+                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-emerald-50/80 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100/50 cursor-pointer hover:scale-[1.01] active:scale-[0.99]'
+                                  ? 'bg-emerald-50/80 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
                                   : 'bg-emerald-50/40 border-emerald-100/60 cursor-default'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                                  <CheckCircle2 size={13} />
+                              <div className="flex items-center justify-between mb-1 w-full">
+                                <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                  <CheckCircle2 size={11} />
                                 </div>
-                                <div>
-                                  <span className="text-[8px] font-bold text-emerald-600 uppercase block">Concluído (Hoje)</span>
-                                  <span className="text-[7.5px] font-semibold text-slate-400 leading-none block uppercase">
-                                    {focusedOrder ? 'Clique p/ Dar Baixa' : 'Total do Dia'}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="text-right pr-1 flex items-center gap-1.5">
                                 {focusedOrder && (
                                   <span className="text-[7px] font-bold text-emerald-500 uppercase">Toque</span>
                                 )}
-                                <span className="text-base font-black text-emerald-800 font-mono">{completedCount}</span>
-                              </div>
-                            </button>
-
-                            {/* Ocorrência */}
-                            <button
-                              type="button"
-                              onClick={() => handleCardStatusClick('Ocorrência')}
-                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
-                                focusedOrder
-                                  ? 'bg-rose-50/80 border-rose-300 hover:border-rose-500 hover:bg-rose-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
-                                  : 'bg-rose-50/40 border-rose-100/60 cursor-default'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-rose-50 text-rose-600 flex items-center justify-center">
-                                  <AlertTriangle size={11} />
-                                </div>
-                                {focusedOrder && (
-                                  <span className="text-[7px] font-bold text-rose-400 uppercase">Toque</span>
-                                )}
                               </div>
                               <div>
-                                <span className="text-[8px] font-bold text-rose-500 uppercase block truncate">Ocorrência</span>
-                                <span className="text-sm font-black text-rose-800 font-mono">{occurrenceCount}</span>
+                                <span className="text-[8px] font-bold text-emerald-600 uppercase block truncate">Concluído</span>
+                                <span className="text-sm font-black text-emerald-800 font-mono">{completedCount}</span>
                               </div>
                             </button>
                           </div>
+
+                          {/* Secondary Row: Ocorrência */}
+                          {occurrenceCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleCardStatusClick('Ocorrência')}
+                              className={`w-full text-left border rounded-xl p-2 flex items-center justify-between shadow-3xs transition-all ${
+                                focusedOrder
+                                  ? 'bg-rose-50/80 border-rose-300 hover:border-rose-500 hover:bg-rose-100/50 cursor-pointer hover:scale-[1.01] active:scale-[0.99]'
+                                  : 'bg-rose-50/40 border-rose-100/60 cursor-default'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-md bg-rose-100 text-rose-600 flex items-center justify-center">
+                                  <AlertTriangle size={11} />
+                                </div>
+                                <div>
+                                  <span className="text-[8px] font-bold text-rose-600 uppercase block">Ocorrências Registradas</span>
+                                  <span className="text-[7.5px] font-semibold text-rose-400 leading-none block">
+                                    Pedidos com insucesso ou devolução
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="text-sm font-black text-rose-800 font-mono pr-1">{occurrenceCount}</span>
+                            </button>
+                          )}
                         </div>
 
                         {/* HIGHLY VISIBLE INTERACTIVE SELECTION HINT BANNER */}
@@ -4467,32 +4460,12 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
                             >
                               <Play size={14} />
-                              <span>Iniciar Viagem (Retirar e Entregar)</span>
-                            </button>
-                          )}
-
-                          {/* If in route but not active delivering yet */}
-                          {selectedOrder.status === 'Em rota' && (
-                            <button
-                              onClick={() => {
-                                handleUpdateOrderStatus(selectedOrder.id, 'Entregando');
-                                onSaveLogs([{
-                                  id: `log-sim-arr-prep-${Date.now()}`,
-                                  time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                                  type: 'info',
-                                  message: `App do Condutor: Condutor iniciou a entrega direta no endereço do cliente #${selectedOrder.id}.`,
-                                  orderId: selectedOrder.id
-                                }]);
-                              }}
-                              className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
-                            >
-                              <Navigation size={14} className="animate-pulse" />
-                              <span>Marcar "Cheguei ao Destino"</span>
+                              <span>Iniciar Viagem (Colocar em Rota)</span>
                             </button>
                           )}
 
                           {/* Final actions (Complete / Fail) */}
-                          {(selectedOrder.status === 'Em rota' || selectedOrder.status === 'Entregando') && (
+                          {((selectedOrder.status as string) === 'Em rota' || (selectedOrder.status as string) === 'Entregando') && (
                             <div className="grid grid-cols-2 gap-3">
                               <button
                                 onClick={() => setShowFailureModal(true)}

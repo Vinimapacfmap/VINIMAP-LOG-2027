@@ -728,10 +728,17 @@ const handleGithubCallback = async (req: express.Request, res: express.Response)
 app.get('/auth/github/callback', handleGithubCallback);
 app.get('/auth/github/callback/', handleGithubCallback);
 
+// Helper to sanitize GitHub token
+function sanitizeGithubToken(token?: string): string {
+  if (!token) return '';
+  return token.trim().replace(/^["']|["']$/g, '');
+}
+
 // POST GitHub user profile
 app.post('/api/github/user', async (req, res) => {
   try {
-    const token = req.body.token || req.headers.authorization?.replace('Bearer ', '') || process.env.GITHUB_TOKEN;
+    const rawToken = req.body.token || req.headers.authorization?.replace('Bearer ', '') || process.env.GITHUB_TOKEN;
+    const token = sanitizeGithubToken(rawToken);
     if (!token) {
       return res.status(401).json({ success: false, error: 'Token do GitHub não fornecido' });
     }
@@ -739,17 +746,24 @@ app.post('/api/github/user', async (req, res) => {
     const response = await fetch('https://api.github.com/user', {
       headers: {
         'Authorization': `Bearer ${token}`,
-        'User-Agent': 'ViniMap-Logistics-OS'
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'ViniMap-Logistics-OS',
+        'X-GitHub-Api-Version': '2022-11-28'
       }
     });
 
     if (!response.ok) {
-      const errData = await response.json();
-      return res.status(response.status).json({ success: false, error: errData.message || 'Falha ao autenticar no GitHub' });
+      const errData = await response.json().catch(() => ({}));
+      return res.status(response.status).json({ 
+        success: false, 
+        error: errData.message || 'Falha ao autenticar no GitHub com o token fornecido.',
+        scopes: response.headers.get('x-oauth-scopes') || ''
+      });
     }
 
     const user = await response.json();
-    return res.json({ success: true, user });
+    const scopes = response.headers.get('x-oauth-scopes') || '';
+    return res.json({ success: true, user, scopes });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -758,7 +772,8 @@ app.post('/api/github/user', async (req, res) => {
 // POST List repositories
 app.post('/api/github/repos/list', async (req, res) => {
   try {
-    const token = req.body.token || req.headers.authorization?.replace('Bearer ', '') || process.env.GITHUB_TOKEN;
+    const rawToken = req.body.token || req.headers.authorization?.replace('Bearer ', '') || process.env.GITHUB_TOKEN;
+    const token = sanitizeGithubToken(rawToken);
     if (!token) {
       return res.status(401).json({ success: false, error: 'Token do GitHub não fornecido' });
     }
@@ -766,12 +781,15 @@ app.post('/api/github/repos/list', async (req, res) => {
     const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
       headers: {
         'Authorization': `Bearer ${token}`,
-        'User-Agent': 'ViniMap-Logistics-OS'
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'ViniMap-Logistics-OS',
+        'X-GitHub-Api-Version': '2022-11-28'
       }
     });
 
     if (!response.ok) {
-      return res.status(response.status).json({ success: false, error: 'Erro ao buscar repositórios do GitHub' });
+      const errData = await response.json().catch(() => ({}));
+      return res.status(response.status).json({ success: false, error: errData.message || 'Erro ao buscar repositórios do GitHub' });
     }
 
     const repos = await response.json();
@@ -785,7 +803,8 @@ app.post('/api/github/repos/list', async (req, res) => {
 app.post('/api/github/repos/create', async (req, res) => {
   try {
     const { token, name, description, isPrivate, autoInit } = req.body;
-    const authToken = token || process.env.GITHUB_TOKEN;
+    const rawToken = token || process.env.GITHUB_TOKEN;
+    const authToken = sanitizeGithubToken(rawToken);
     if (!authToken) {
       return res.status(401).json({ success: false, error: 'Token de autenticação do GitHub é necessário' });
     }
@@ -797,8 +816,10 @@ app.post('/api/github/repos/create', async (req, res) => {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${authToken}`,
+        'Accept': 'application/vnd.github+json',
         'Content-Type': 'application/json',
-        'User-Agent': 'ViniMap-Logistics-OS'
+        'User-Agent': 'ViniMap-Logistics-OS',
+        'X-GitHub-Api-Version': '2022-11-28'
       },
       body: JSON.stringify({
         name: name.trim(),
@@ -823,7 +844,8 @@ app.post('/api/github/repos/create', async (req, res) => {
 app.post('/api/github/sync', async (req, res) => {
   try {
     const { token, repoFullName, commitMessage, branch = 'main' } = req.body;
-    const authToken = token || process.env.GITHUB_TOKEN;
+    const rawToken = token || process.env.GITHUB_TOKEN;
+    const authToken = sanitizeGithubToken(rawToken);
     
     if (!authToken) {
       return res.status(401).json({ success: false, error: 'Token de autenticação do GitHub é necessário' });
@@ -834,8 +856,10 @@ app.post('/api/github/sync', async (req, res) => {
 
     const headers = {
       'Authorization': `Bearer ${authToken}`,
+      'Accept': 'application/vnd.github+json',
       'Content-Type': 'application/json',
-      'User-Agent': 'ViniMap-Logistics-OS'
+      'User-Agent': 'ViniMap-Logistics-OS',
+      'X-GitHub-Api-Version': '2022-11-28'
     };
 
     // 1. Get Repo Details & default branch

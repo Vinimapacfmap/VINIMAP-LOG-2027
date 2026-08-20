@@ -308,7 +308,6 @@ export default function BulkEditModal({
                   >
                     <option value="Não iniciado">Não iniciado</option>
                     <option value="Em rota">Em rota</option>
-                    <option value="Entregando">Entregando</option>
                     <option value="Concluído">Concluído</option>
                     <option value="Ocorrência">Ocorrência</option>
                     <option value="Cancelado">Cancelado</option>

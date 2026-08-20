@@ -89,27 +89,18 @@ export const OrderQuickViewTooltip: React.FC<OrderQuickViewTooltipProps> = ({
 
     const minutesRemaining = order.timeRemaining !== undefined && order.timeRemaining > 0 
       ? order.timeRemaining 
-      : order.status === 'Em rota' ? 25 : order.status === 'Entregando' ? 10 : 45;
+      : order.status === 'Em rota' ? 25 : 45;
 
     const now = new Date();
     const etaDate = new Date(now.getTime() + minutesRemaining * 60000);
     const etaFormatted = etaDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-    if (order.status === 'Entregando') {
-      return {
-        label: 'Chegada Iminente',
-        timeText: `~${minutesRemaining} min (Previsão: ${etaFormatted})`,
-        statusType: 'urgent' as const,
-        description: 'Entregador no local ou nas imediações'
-      };
-    }
-
     if (order.status === 'Em rota') {
       return {
         label: 'Previsão de Chegada (ETA)',
         timeText: `~${minutesRemaining} min (${etaFormatted})`,
-        statusType: 'info' as const,
-        description: 'Em deslocamento para o destino'
+        statusType: 'in-transit' as const,
+        description: 'Condutor em deslocamento para o destino'
       };
     }
 
@@ -224,8 +215,6 @@ export const OrderQuickViewTooltip: React.FC<OrderQuickViewTooltipProps> = ({
                       ? 'bg-emerald-950/90 text-emerald-300 border-emerald-700'
                       : order.status === 'Em rota'
                       ? 'bg-blue-950/90 text-blue-300 border-blue-700'
-                      : order.status === 'Entregando'
-                      ? 'bg-purple-950/90 text-purple-300 border-purple-700'
                       : order.status === 'Ocorrência'
                       ? 'bg-amber-950/90 text-amber-300 border-amber-700'
                       : 'bg-slate-800 text-slate-300 border-slate-700'
@@ -266,19 +255,19 @@ export const OrderQuickViewTooltip: React.FC<OrderQuickViewTooltipProps> = ({
 
               {/* ETA / Arrival Time Section */}
               <div className={`p-2.5 rounded-xl border mb-2.5 flex items-start gap-2.5 ${
-                eta.statusType === 'urgent'
-                  ? 'bg-purple-950/50 border-purple-800/80 text-purple-200'
+                eta.statusType === 'in-transit'
+                  ? 'bg-blue-950/50 border-blue-800/80 text-blue-200'
                   : eta.statusType === 'success'
                   ? 'bg-emerald-950/50 border-emerald-800/80 text-emerald-200'
                   : eta.statusType === 'warning'
                   ? 'bg-amber-950/50 border-amber-800/80 text-amber-200'
-                  : 'bg-blue-950/50 border-blue-800/80 text-blue-200'
+                  : 'bg-slate-900/50 border-slate-800/80 text-slate-200'
               }`}>
                 <div className="mt-0.5 shrink-0">
                   <Clock size={15} className={
-                    eta.statusType === 'urgent' ? 'text-purple-400 animate-pulse' :
+                    eta.statusType === 'in-transit' ? 'text-blue-400 animate-pulse' :
                     eta.statusType === 'success' ? 'text-emerald-400' :
-                    eta.statusType === 'warning' ? 'text-amber-400' : 'text-blue-400'
+                    eta.statusType === 'warning' ? 'text-amber-400' : 'text-slate-400'
                   } />
                 </div>
                 <div className="flex-1 min-w-0">

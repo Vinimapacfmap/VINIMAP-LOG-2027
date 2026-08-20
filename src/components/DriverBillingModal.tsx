@@ -162,7 +162,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
   const stats = useMemo(() => {
     const total = filteredOrders.length;
     const completed = filteredOrders.filter(o => o.status === 'Concluído');
-    const inRoute = filteredOrders.filter(o => o.status === 'Em rota' || o.status === 'Entregando');
+    const inRoute = filteredOrders.filter(o => o.status === 'Em rota' || (o.status as string) === 'Entregando');
     const occurrences = filteredOrders.filter(o => o.status === 'Ocorrência');
     const pending = filteredOrders.filter(o => o.status === 'Não iniciado');
     const cancelled = filteredOrders.filter(o => o.status === 'Cancelado');
@@ -216,7 +216,6 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
       case 'Concluído':
         return 'bg-emerald-50 text-emerald-700 border-emerald-100';
       case 'Em rota':
-      case 'Entregando':
         return 'bg-blue-50 text-blue-700 border-blue-150';
       case 'Ocorrência':
         return 'bg-rose-50 text-rose-700 border-rose-100';

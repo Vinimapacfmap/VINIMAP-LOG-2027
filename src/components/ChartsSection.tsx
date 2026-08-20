@@ -79,7 +79,7 @@ export default function ChartsSection({
   const totalRegionOrders = regionOrders.length;
   const totalRegionValue = regionOrders.reduce((sum, o) => sum + (o.status !== 'Cancelado' ? o.value : 0), 0);
   const completedCount = regionOrders.filter(o => o.status === 'Concluído').length;
-  const inRouteCount = regionOrders.filter(o => o.status === 'Em rota' || o.status === 'Entregando').length;
+  const inRouteCount = regionOrders.filter(o => o.status === 'Em rota').length;
   const occurrenceCount = regionOrders.filter(o => o.status === 'Ocorrência').length;
 
   const getStatusBadge = (status: OrderStatus) => {
@@ -88,8 +88,6 @@ export default function ChartsSection({
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><CheckCircle2 size={11}/> Concluído</span>;
       case 'Em rota':
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200"><Truck size={11}/> Em Rota</span>;
-      case 'Entregando':
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"><Truck size={11}/> Entregando</span>;
       case 'Não iniciado':
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"><Clock size={11}/> Não Iniciado</span>;
       case 'Ocorrência':
@@ -348,7 +346,7 @@ export default function ChartsSection({
                   {/* Status Pills */}
                   <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none shrink-0">
                     <Filter size={13} className="text-slate-400 mr-1 hidden lg:block" />
-                    {(['Todos', 'Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as const).map(status => {
+                    {(['Todos', 'Não iniciado', 'Em rota', 'Concluído', 'Ocorrência', 'Cancelado'] as const).map(status => {
                       const isActive = inlineStatusFilter === status;
                       return (
                         <button

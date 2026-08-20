@@ -21,7 +21,13 @@ import {
   ArrowRight,
   Code2,
   Lock,
-  Globe
+  Globe,
+  Eye,
+  EyeOff,
+  Trash2,
+  HelpCircle,
+  Sparkles,
+  Info
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -48,6 +54,9 @@ interface GithubRepo {
 
 export default function GithubPanel() {
   const [token, setToken] = useState<string>(() => localStorage.getItem('GITHUB_TOKEN') || '');
+  const [showToken, setShowToken] = useState<boolean>(false);
+  const [tokenScopes, setTokenScopes] = useState<string>('');
+  const [showHelpGuide, setShowHelpGuide] = useState<boolean>(false);
   const [user, setUser] = useState<GithubUser | null>(null);
   const [repos, setRepos] = useState<GithubRepo[]>([]);
   const [loadingUser, setLoadingUser] = useState<boolean>(false);
@@ -98,31 +107,77 @@ export default function GithubPanel() {
       .catch(err => console.warn('Erro ao verificar OAuth GitHub:', err));
   }, []);
 
-  // Fetch user if token present
-  const fetchGithubUser = async (authToken: string) => {
-    if (!authToken) return;
+  // Clean token helper
+  const cleanGithubToken = (raw: string) => raw.trim().replace(/^["']|["']$/g, '');
+
+  // Fetch user if token present with server + direct client fallback
+  const fetchGithubUser = async (authToken: string, isSilent = false) => {
+    const cleanToken = cleanGithubToken(authToken);
+    if (!cleanToken) {
+      if (!isSilent) {
+        setErrorMsg('Insira um token de acesso pessoal (PAT) válido antes de salvar.');
+      }
+      return;
+    }
+
     setLoadingUser(true);
-    setErrorMsg(null);
+    if (!isSilent) {
+      setErrorMsg(null);
+      setSuccessMsg(null);
+    }
 
     try {
+      // 1. Try server proxy first
+      let userData: GithubUser | null = null;
+      let detectedScopes = '';
+
       const res = await fetch('/api/github/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: authToken })
+        body: JSON.stringify({ token: cleanToken })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      if (data.success && data.user) {
-        setUser(data.user);
-        localStorage.setItem('GITHUB_TOKEN', authToken);
-        setSuccessMsg(`Conectado com sucesso como @${data.user.login}`);
-        fetchUserRepos(authToken);
+      if (res.ok && data.success && data.user) {
+        userData = data.user;
+        detectedScopes = data.scopes || '';
       } else {
-        setErrorMsg(data.error || 'Token do GitHub inválido ou expirado.');
-        setUser(null);
+        // 2. Direct browser fetch fallback to GitHub API in case proxy had issues
+        try {
+          const directRes = await fetch('https://api.github.com/user', {
+            headers: {
+              'Authorization': `Bearer ${cleanToken}`,
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28'
+            }
+          });
+
+          if (directRes.ok) {
+            userData = await directRes.json();
+            detectedScopes = directRes.headers.get('x-oauth-scopes') || '';
+          } else if (directRes.status === 401) {
+            throw new Error('Token rejeitado pelo GitHub (Bad credentials). O token é inválido, expirou ou foi revogado.');
+          } else {
+            const errBody = await directRes.json().catch(() => ({}));
+            throw new Error(errBody.message || data.error || `Erro HTTP ${directRes.status} no GitHub.`);
+          }
+        } catch (directErr: any) {
+          throw new Error(data.error || directErr.message || 'Token inválido ou sem permissões suficientes.');
+        }
+      }
+
+      if (userData) {
+        setUser(userData);
+        setToken(cleanToken);
+        setTokenScopes(detectedScopes);
+        localStorage.setItem('GITHUB_TOKEN', cleanToken);
+        setSuccessMsg(`Token validado com sucesso! Conectado como @${userData.login}${detectedScopes ? ` (Escopos: ${detectedScopes})` : ''}`);
+        fetchUserRepos(cleanToken);
       }
     } catch (err: any) {
-      setErrorMsg('Erro de conexão ao validar usuário no GitHub.');
+      console.warn('Erro ao validar token do GitHub:', err);
+      const errMsg = err.message || 'Falha ao validar o token com a API do GitHub.';
+      setErrorMsg(`${errMsg} Verifique se o token possui os escopos 'repo' e 'user' ou gere um novo.`);
       setUser(null);
     } finally {
       setLoadingUser(false);
@@ -131,22 +186,42 @@ export default function GithubPanel() {
 
   // Fetch repositories list
   const fetchUserRepos = async (authToken: string) => {
-    if (!authToken) return;
+    const cleanToken = cleanGithubToken(authToken);
+    if (!cleanToken) return;
     setLoadingRepos(true);
 
     try {
+      // 1. Try server proxy
       const res = await fetch('/api/github/repos/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: authToken })
+        body: JSON.stringify({ token: cleanToken })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      if (data.success && Array.isArray(data.repos)) {
-        setRepos(data.repos);
-        if (data.repos.length > 0 && !selectedRepo) {
-          const matchVini = data.repos.find((r: GithubRepo) => r.name.toLowerCase().includes('vinimap'));
-          setSelectedRepo(matchVini ? matchVini.full_name : data.repos[0].full_name);
+      let repoList: GithubRepo[] = [];
+
+      if (res.ok && data.success && Array.isArray(data.repos)) {
+        repoList = data.repos;
+      } else {
+        // 2. Direct fallback from browser
+        const directRes = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
+          headers: {
+            'Authorization': `Bearer ${cleanToken}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
+        });
+        if (directRes.ok) {
+          repoList = await directRes.json();
+        }
+      }
+
+      if (Array.isArray(repoList) && repoList.length > 0) {
+        setRepos(repoList);
+        if (!selectedRepo) {
+          const matchVini = repoList.find((r: GithubRepo) => r.name.toLowerCase().includes('vinimap'));
+          setSelectedRepo(matchVini ? matchVini.full_name : repoList[0].full_name);
         }
       }
     } catch (err) {
@@ -158,7 +233,7 @@ export default function GithubPanel() {
 
   useEffect(() => {
     if (token) {
-      fetchGithubUser(token);
+      fetchGithubUser(token, true);
     }
   }, []);
 
@@ -166,7 +241,7 @@ export default function GithubPanel() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'GITHUB_AUTH_SUCCESS') {
-        const receivedToken = event.data.token;
+        const receivedToken = cleanGithubToken(event.data.token || '');
         if (receivedToken) {
           setToken(receivedToken);
           localStorage.setItem('GITHUB_TOKEN', receivedToken);
@@ -197,7 +272,7 @@ export default function GithubPanel() {
       }
 
       if (!urlToOpen) {
-        setErrorMsg('GitHub Client ID não configurado no servidor. Insira as credenciais GITHUB_CLIENT_ID e GITHUB_CLIENT_SECRET nas variáveis de ambiente ou utilize o Token de Acesso Pessoal (PAT) abaixo.');
+        setErrorMsg('GitHub Client ID não configurado no servidor. Utilize o Token de Acesso Pessoal (PAT) abaixo para sincronização.');
         return;
       }
 
@@ -212,14 +287,27 @@ export default function GithubPanel() {
 
   // Handle Manual Token Save
   const handleSaveToken = () => {
-    if (!token.trim()) {
+    const cleanToken = cleanGithubToken(token);
+    if (!cleanToken) {
       localStorage.removeItem('GITHUB_TOKEN');
       setUser(null);
       setRepos([]);
       setSuccessMsg('Token do GitHub removido.');
       return;
     }
-    fetchGithubUser(token.trim());
+    fetchGithubUser(cleanToken);
+  };
+
+  // Force Save Token without validation
+  const handleForceSave = () => {
+    const cleanToken = cleanGithubToken(token);
+    if (!cleanToken) {
+      setErrorMsg('Digite um token antes de salvar.');
+      return;
+    }
+    localStorage.setItem('GITHUB_TOKEN', cleanToken);
+    setToken(cleanToken);
+    setSuccessMsg('Token salvo localmente no navegador.');
   };
 
   // Handle Disconnect
@@ -227,8 +315,9 @@ export default function GithubPanel() {
     setToken('');
     setUser(null);
     setRepos([]);
+    setTokenScopes('');
     localStorage.removeItem('GITHUB_TOKEN');
-    setSuccessMsg('Conta do GitHub desconectada.');
+    setSuccessMsg('Conta e token do GitHub desconectados.');
   };
 
   // Handle Create Repository
@@ -448,36 +537,153 @@ export default function GithubPanel() {
             </div>
 
             {/* PAT Token Fallback */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3">
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Key className="w-4 h-4 text-slate-700" />
-                  <span className="font-bold text-xs text-slate-800">Token de Acesso Pessoal (PAT)</span>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-slate-700" />
+                    <span className="font-bold text-xs text-slate-800">Token de Acesso Pessoal (PAT)</span>
+                  </div>
+                  <a
+                    href="https://github.com/settings/tokens/new?scopes=repo,read:user,user:email&description=ViniMap+OS+Logistics"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-1 hover:underline"
+                    title="Abrir GitHub para gerar token com escopos pré-selecionados"
+                  >
+                    <Sparkles size={12} />
+                    <span>Gerar PAT no GitHub</span>
+                    <ExternalLink size={10} />
+                  </a>
                 </div>
-                <p className="text-[11px] text-slate-600 leading-relaxed mb-2">
-                  Ou insira diretamente seu token pessoal do GitHub com escopos <code className="bg-slate-200 px-1 rounded text-slate-800">repo</code> e <code className="bg-slate-200 px-1 rounded text-slate-800">user</code>.
+                <p className="text-[11px] text-slate-600 leading-relaxed mb-2.5">
+                  Insira seu token pessoal do GitHub com escopos <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-800 font-mono font-bold">repo</code> e <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-800 font-mono font-bold">user</code>.
                 </p>
-                <input
-                  type="password"
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-mono mb-3"
-                  id="github-token-input"
-                />
+
+                {/* Token Input with Show/Hide and Clear */}
+                <div className="relative mb-2">
+                  <input
+                    type={showToken ? "text" : "password"}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx ou github_pat_..."
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    className="w-full pl-3 pr-16 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-mono"
+                    id="github-token-input"
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                    {token && (
+                      <button
+                        type="button"
+                        onClick={() => setToken('')}
+                        className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
+                        title="Limpar campo de token"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowToken(!showToken)}
+                      className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
+                      title={showToken ? "Ocultar token" : "Exibir token em texto"}
+                    >
+                      {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Token Format Detection */}
+                {token.trim() && (
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mb-2 px-1">
+                    <span>
+                      {token.trim().startsWith('ghp_') 
+                        ? '🟢 Token Clássico (ghp_)' 
+                        : token.trim().startsWith('github_pat_') 
+                          ? '🔵 Token Fine-Grained' 
+                          : '🟡 Token personalizado'}
+                    </span>
+                    <span>{token.trim().length} caracteres</span>
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={handleSaveToken}
-                disabled={loadingUser}
-                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                id="github-save-token-btn"
-              >
-                {loadingUser ? <RefreshCw className="animate-spin w-4 h-4" /> : <CheckCircle2 size={16} />}
-                Validar e Salvar Token
-              </button>
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveToken}
+                    disabled={loadingUser || !token.trim()}
+                    className="py-2 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    id="github-save-token-btn"
+                  >
+                    {loadingUser ? <RefreshCw className="animate-spin w-3.5 h-3.5" /> : <CheckCircle2 size={14} />}
+                    <span>Validar e Salvar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleForceSave}
+                    disabled={!token.trim()}
+                    className="py-2 px-3 bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-700 font-semibold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Salvar token diretamente no navegador sem validação de rede"
+                  >
+                    <Check size={14} />
+                    <span>Salvar Direto</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowHelpGuide(!showHelpGuide)}
+                  className="w-full text-center text-[10.5px] text-slate-500 hover:text-blue-600 flex items-center justify-center gap-1 transition-colors cursor-pointer py-1"
+                >
+                  <HelpCircle size={12} />
+                  <span>{showHelpGuide ? 'Ocultar guia de solução de problemas' : 'Não consegue atualizar o token? Ver causas e soluções'}</span>
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Interactive Diagnostic Troubleshooting Guide */}
+          {showHelpGuide && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 text-xs text-slate-700 space-y-2.5"
+            >
+              <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                <Info size={15} className="text-amber-600 shrink-0" />
+                <span>Principais motivos para falha ao atualizar o Token PAT:</span>
+              </div>
+              <ul className="space-y-1.5 text-[11px] list-disc list-inside text-slate-600">
+                <li>
+                  <strong className="text-slate-800">1. Escopos Ausentes:</strong> Ao gerar o PAT no GitHub, certifique-se de marcar a opção <code className="bg-amber-100 px-1 rounded font-bold text-amber-900">repo</code> (Acesso total a repositórios privados/públicos) e <code className="bg-amber-100 px-1 rounded font-bold text-amber-900">read:user</code>.
+                </li>
+                <li>
+                  <strong className="text-slate-800">2. Token Expirado:</strong> O GitHub define data de expiração (Ex: 30, 60, 90 dias). Tokens expirados retornam erro <em>"Bad credentials"</em> imediatamente.
+                </li>
+                <li>
+                  <strong className="text-slate-800">3. Token Fine-Grained:</strong> Se você criou um Fine-Grained PAT, configure em <em>Repository Access</em> a opção <strong>"All repositories"</strong> e em <em>Permissions &gt; Repository permissions</em> marque <strong>Contents: Read and write</strong>.
+                </li>
+                <li>
+                  <strong className="text-slate-800">4. Espaços ao copiar:</strong> Se você copiou com espaços ou aspas no início/fim, nosso sistema agora remove isso automaticamente para você.
+                </li>
+              </ul>
+              <div className="pt-1 flex items-center justify-between border-t border-amber-200/60">
+                <span className="text-[10px] text-amber-800">Precisa de um token novo pronto para uso?</span>
+                <a
+                  href="https://github.com/settings/tokens/new?scopes=repo,read:user,user:email&description=ViniMap+Logistics+OS"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                >
+                  <Sparkles size={11} />
+                  <span>Gerar PAT com 1 Clique no GitHub</span>
+                </a>
+              </div>
+            </motion.div>
+          )}
         </div>
 
         {/* OAuth Configuration Info */}

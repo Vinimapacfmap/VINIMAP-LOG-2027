@@ -116,6 +116,7 @@ import {
   FileText,
   FileSpreadsheet,
   ChevronDown,
+  Shield,
   ShieldCheck,
   Truck,
   BarChart3,
@@ -146,7 +147,9 @@ import {
   MessageSquare,
   ExternalLink,
   GitBranch,
-  Volume2
+  Volume2,
+  WifiOff,
+  CloudOff
 } from 'lucide-react';
 import NotificationSettingsManager from './components/NotificationSettingsManager';
 import { 
@@ -259,31 +262,60 @@ export default function App() {
   const [customBaseUrl, setCustomBaseUrl] = useState<string>('');
   const [copiedInstallLink, setCopiedInstallLink] = useState(false);
 
+  const handleExitToAdmin = useCallback(() => {
+    localStorage.removeItem('vinimap_is_driver_app');
+    localStorage.removeItem('vinimap_driver_id');
+    setIsStandaloneRider(false);
+    setIsRealDeviceMode(false);
+    setActiveSection('dashboard');
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('riderId');
+      url.searchParams.delete('view');
+      url.searchParams.delete('mode');
+      url.searchParams.delete('mobile');
+      window.history.replaceState({}, '', url.pathname);
+    } catch (e) {
+      console.warn('Error clearing URL params:', e);
+    }
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const isPwaDisplay = 
-      window.matchMedia('(display-mode: standalone)').matches || 
-      (navigator as any).standalone === true ||
-      document.referrer.includes('android-app://');
-
     const urlRiderId = params.get('riderId');
-    const storedRiderId = localStorage.getItem('vinimap_driver_id');
+    const urlAdmin = params.get('admin');
+    const urlView = params.get('view');
+    const urlMode = params.get('mode');
+
+    // If explicit admin requested in URL
+    if (urlAdmin === '1' || urlView === 'admin' || urlMode === 'admin') {
+      localStorage.removeItem('vinimap_is_driver_app');
+      localStorage.removeItem('vinimap_driver_id');
+      setIsStandaloneRider(false);
+      setIsRealDeviceMode(false);
+      return;
+    }
 
     if (urlRiderId) {
       localStorage.setItem('vinimap_driver_id', urlRiderId);
       localStorage.setItem('vinimap_is_driver_app', 'true');
     }
 
-    const isDriverApp = 
-      isPwaDisplay ||
-      localStorage.getItem('vinimap_is_driver_app') === 'true' ||
-      params.get('view') === 'rider' ||
-      params.get('view') === 'driver_mobile' ||
-      params.get('mode') === 'rider' ||
-      Boolean(urlRiderId) ||
-      params.get('mobile') === '1';
+    const isExplicitRiderParam = 
+      urlView === 'rider' ||
+      urlView === 'driver_mobile' ||
+      urlMode === 'rider' ||
+      Boolean(urlRiderId);
 
-    if (isDriverApp) {
+    const isPwaDisplay = 
+      window.matchMedia('(display-mode: standalone)').matches || 
+      (navigator as any).standalone === true ||
+      document.referrer.includes('android-app://');
+
+    const storedRiderId = localStorage.getItem('vinimap_driver_id');
+    const isPwaWithRider = isPwaDisplay && localStorage.getItem('vinimap_is_driver_app') === 'true' && Boolean(storedRiderId);
+
+    if (isExplicitRiderParam || isPwaWithRider) {
       setIsStandaloneRider(true);
       setIsRealDeviceMode(true);
       setActiveSection('dispositivo_condutor');
@@ -292,6 +324,10 @@ export default function App() {
       if (effectiveRiderId) {
         setSelectedRiderId(effectiveRiderId);
       }
+    } else {
+      // Clean standard state: do not lock user out of Admin Login / Admin Dashboard
+      setIsStandaloneRider(false);
+      localStorage.removeItem('vinimap_is_driver_app');
     }
   }, []);
 
@@ -322,6 +358,8 @@ export default function App() {
 
   const [clientPartners, setClientPartners] = useState<ClientPartner[]>([]);
   const [companyHubs, setCompanyHubs] = useState<CompanyHub[]>(INITIAL_COMPANY_HUBS);
+  const [isOfflineFallbackActive, setIsOfflineFallbackActive] = useState<boolean>(false);
+  const [offlineFallbackReason, setOfflineFallbackReason] = useState<string>('');
 
   // Limpa todos os filtros e estados de consulta do painel
   const clearAllPanelFilters = useCallback(() => {
@@ -856,9 +894,29 @@ export default function App() {
       const isUnavailable = (error as any)?.code === 'unavailable' || errMessage.includes('unavailable') || errMessage.includes('Could not reach Cloud Firestore backend');
       if (isUnavailable) {
         console.warn(`[Firestore Offline Fallback] Conexão indisponível para '${collectionName}'. Carregando estado de contingência local/Supabase.`);
+        setIsOfflineFallbackActive(true);
+        setOfflineFallbackReason(`Conexão com Firestore indisponível para '${collectionName}'. O painel entrou em Modo Offline/Fallback.`);
+      } else {
+        setIsOfflineFallbackActive(true);
+        setOfflineFallbackReason(`Falha temporária de comunicação com '${collectionName}'. Operando com dados de contingência locais.`);
       }
       loadFallbackData();
     };
+
+    const handleNetworkOnline = () => {
+      console.log('[Network] 🌐 Conexão restabelecida. Reconectando serviços em tempo real...');
+      setIsOfflineFallbackActive(false);
+      setOfflineFallbackReason('');
+    };
+
+    const handleNetworkOffline = () => {
+      console.warn('[Network] ⚠️ Sem conexão de internet. Painel em Modo Offline/Fallback.');
+      setIsOfflineFallbackActive(true);
+      setOfflineFallbackReason('Sem conexão com a internet. O painel está operando em Modo Offline/Fallback local.');
+    };
+
+    window.addEventListener('online', handleNetworkOnline);
+    window.addEventListener('offline', handleNetworkOffline);
 
     // 4. Setup real-time listeners with registered tracking wrappers
     const unsubOrders = registerSnapshotListener(
@@ -967,6 +1025,8 @@ export default function App() {
 
     return () => {
       isCancelled = true;
+      window.removeEventListener('online', handleNetworkOnline);
+      window.removeEventListener('offline', handleNetworkOffline);
       window.removeEventListener('beforeunload', handleUnloadOrHide);
       window.removeEventListener('pagehide', handleUnloadOrHide);
       unsubOrders();
@@ -2140,7 +2200,7 @@ export default function App() {
         const existing = orders.find(o => o.id === imported.id);
         if (existing) {
           const isImportedConcluido = imported.status === 'Concluído';
-          const isExistingActiveOrCompleted = existing.status === 'Concluído' || existing.status === 'Ocorrência' || existing.status === 'Em rota' || existing.status === 'Entregando';
+          const isExistingActiveOrCompleted = existing.status === 'Concluído' || existing.status === 'Ocorrência' || existing.status === 'Em rota' || (existing.status as string) === 'Entregando';
           
           return {
             ...imported,
@@ -2220,8 +2280,8 @@ export default function App() {
 
       let updatedRiderObj: DeliveryRider | null = null;
 
-      // If status changes to 'Em rota' or 'Entregando', we make sure the rider is marked 'Em rota'
-      if ((nextStatus === 'Em rota' || nextStatus === 'Entregando') && currentOrder.riderId) {
+      // If status changes to 'Em rota', we make sure the rider is marked 'Em rota'
+      if ((nextStatus === 'Em rota' || (nextStatus as string) === 'Entregando') && currentOrder.riderId) {
         const rider = riders.find(r => r.id === currentOrder.riderId);
         if (rider) {
           updatedRiderObj = { ...rider, status: 'Em rota', currentOrderId: currentOrder.id };
@@ -2666,11 +2726,8 @@ export default function App() {
       let logMsg = '';
       let logType: 'info' | 'success' | 'warning' | 'danger' = 'info';
 
-      if (nextStatus === 'Em rota') {
+      if (nextStatus === 'Em rota' || (nextStatus as string) === 'Entregando') {
         logMsg = `Pedido #${orderId} despachado e a caminho (Em Rota).`;
-        logType = 'info';
-      } else if (nextStatus === 'Entregando') {
-        logMsg = `Pedido #${orderId} em processo final de entrega (Entregando).`;
         logType = 'info';
       } else if (nextStatus === 'Concluído') {
         logMsg = `Pedido #${orderId} entregue com sucesso e concluído (Concluído).`;
@@ -2783,7 +2840,7 @@ export default function App() {
 
       const riderName = riders.find(r => r.id === riderId)?.name || 'Entregador';
 
-      const preservedAssignStatus: OrderStatus = (currentOrder.status === 'Concluído' || currentOrder.status === 'Ocorrência' || currentOrder.status === 'Cancelado' || currentOrder.status === 'Em rota' || currentOrder.status === 'Entregando')
+      const preservedAssignStatus: OrderStatus = (currentOrder.status === 'Concluído' || currentOrder.status === 'Ocorrência' || currentOrder.status === 'Cancelado' || currentOrder.status === 'Em rota' || (currentOrder.status as string) === 'Entregando')
         ? currentOrder.status
         : ('Não iniciado' as OrderStatus);
 
@@ -2825,8 +2882,8 @@ export default function App() {
         }
       }
 
-      // Mark rider busy if order is already in route/delivering
-      if (currentOrder.status === 'Entregando' || currentOrder.status === 'Em rota') {
+      // Mark rider busy if order is already in route
+      if ((currentOrder.status as string) === 'Entregando' || currentOrder.status === 'Em rota') {
         const rider = riders.find(r => r.id === riderId);
         if (rider) {
           const updatedRider: DeliveryRider = { ...rider, status: 'Em rota', currentOrderId: orderId };
@@ -3904,7 +3961,24 @@ export default function App() {
 
   if (isStandaloneRider) {
     return (
-      <div className="flex h-screen h-[100dvh] w-screen bg-slate-900 overflow-hidden font-sans antialiased text-slate-100">
+      <div className="flex flex-col h-screen h-[100dvh] w-screen bg-slate-900 overflow-hidden font-sans antialiased text-slate-100">
+        {/* Top bar with immediate switch to Admin Login / Panel */}
+        <div className="bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center justify-between z-50 shrink-0 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="font-semibold text-slate-200 text-xs">Modo Aplicativo do Entregador (Campo)</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleExitToAdmin}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+            title="Alternar para Tela de Login e Painel do Administrador"
+          >
+            <Shield size={14} />
+            <span>Acessar Painel do Administrador (Login)</span>
+          </button>
+        </div>
+
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           <main className="flex-1 overflow-hidden p-0">
             <RiderAppSimulator
@@ -3934,6 +4008,7 @@ export default function App() {
               onActiveRiderChange={setSelectedRiderId}
               isStandalone={true}
               isRealDevice={isRealDeviceMode}
+              onExitToAdmin={handleExitToAdmin}
             />
           </main>
         </div>
@@ -3985,6 +4060,50 @@ export default function App() {
           onNavigateToOrders={() => setActiveSection('pedidos')}
           onNavigateToSection={setActiveSection}
         />
+
+        {/* Persistent Visual Offline / Fallback Mode Alert Banner */}
+        <AnimatePresence>
+          {isOfflineFallbackActive && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-amber-500 text-slate-900 border-b border-amber-600/30 px-4 py-2 flex items-center justify-between shadow-sm z-30 shrink-0"
+              id="offline-fallback-banner"
+            >
+              <div className="flex items-center gap-2.5 text-xs font-bold">
+                <span className="p-1 rounded bg-amber-600 text-white animate-pulse">
+                  <WifiOff size={14} />
+                </span>
+                <span className="font-extrabold tracking-wide uppercase text-[10px] bg-amber-600/30 px-2 py-0.5 rounded text-amber-950">
+                  Modo Offline / Fallback
+                </span>
+                <span className="text-amber-950 font-medium hidden sm:inline">
+                  {offlineFallbackReason || 'A conexão com o Firestore está indisponível. O painel está operando de forma autônoma com cache local e contingência.'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    window.location.reload();
+                  }}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-bold flex items-center gap-1 transition-colors shadow-xs"
+                  title="Reconectar ao servidor"
+                >
+                  <RefreshCw size={11} />
+                  Reconectar
+                </button>
+                <button
+                  onClick={() => setIsOfflineFallbackActive(false)}
+                  className="p-1 hover:bg-amber-600/30 text-amber-950 rounded transition-colors"
+                  title="Ocultar aviso"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Scrollable Stage area */}
         <main className={`flex-1 overflow-y-auto ${activeSection === 'pedidos' ? 'p-3 sm:p-5 space-y-4 w-full max-w-none' : 'p-6 space-y-6'}`}>
@@ -6453,6 +6572,7 @@ export default function App() {
                 riders={riders}
                 financialTransactions={financialTransactions}
                 lastContingencyTime={lastContingencyBackupTime}
+                onGenerateBackup={() => exportDatabaseContingency(false)}
                 onRestoreData={(restoredOrders, restoredPartners, restoredRiders, mode, startDate, endDate) => {
                   setOrders(restoredOrders);
                   if (restoredOrders.length > 0) {

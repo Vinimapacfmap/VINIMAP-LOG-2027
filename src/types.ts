@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type OrderStatus = 'Não iniciado' | 'Em rota' | 'Entregando' | 'Concluído' | 'Cancelado' | 'Ocorrência';
+export type OrderStatus = 'Não iniciado' | 'Em rota' | 'Concluído' | 'Cancelado' | 'Ocorrência';
 export type OrderPriority = 'Baixa' | 'Média' | 'Alta' | 'Normal' | 'expresso' | 'normal' | 'Expresso';
 export type RiderStatus = 'Disponível' | 'Em rota' | 'Alerta' | 'Offline';
 export type VehicleType = 'Moto' | 'Bicicleta' | 'Carro' | 'Elétrico';

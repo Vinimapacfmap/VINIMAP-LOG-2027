@@ -228,10 +228,8 @@ export function mapOrderFromDb(row: any): Order {
     resolvedStatus = 'Ocorrência';
   } else if (cleanStatus === 'cancelado' || cleanStatus === 'cancelada') {
     resolvedStatus = 'Cancelado';
-  } else if (cleanStatus === 'em trânsito' || cleanStatus === 'em transito' || cleanStatus === 'a caminho' || cleanStatus === 'em rota') {
+  } else if (cleanStatus === 'em trânsito' || cleanStatus === 'em transito' || cleanStatus === 'a caminho' || cleanStatus === 'em rota' || cleanStatus === 'entregando') {
     resolvedStatus = 'Em rota';
-  } else if (cleanStatus === 'entregando') {
-    resolvedStatus = 'Entregando';
   } else if (cleanStatus === 'não iniciado' || cleanStatus === 'nao iniciado' || cleanStatus === 'pendente') {
     resolvedStatus = 'Não iniciado';
   } else if (!hasAdminOverride && (protocolNumber || signatureUrl || deliveryPhotoUrl || dataConclusao)) {

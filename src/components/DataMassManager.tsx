@@ -177,7 +177,7 @@ export default function DataMassManager({
       const nowSp = getSaoPauloISODate();
       const nowTimeSp = getSaoPauloTime();
 
-      const statuses: OrderStatus[] = ['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência'];
+      const statuses: OrderStatus[] = ['Não iniciado', 'Em rota', 'Concluído', 'Ocorrência'];
       
       for (let i = 0; i < orderQty; i++) {
         const randIndex = Math.floor(Math.random() * SP_ADDRESS_POOL.length);
@@ -187,10 +187,9 @@ export default function DataMassManager({
         let selectedStatus: OrderStatus = 'Não iniciado';
         if (statusPreset === 'mix') {
           const r = Math.random();
-          if (r < 0.45) selectedStatus = 'Concluído';
-          else if (r < 0.65) selectedStatus = 'Em rota';
-          else if (r < 0.80) selectedStatus = 'Não iniciado';
-          else if (r < 0.90) selectedStatus = 'Entregando';
+          if (r < 0.50) selectedStatus = 'Concluído';
+          else if (r < 0.75) selectedStatus = 'Em rota';
+          else if (r < 0.90) selectedStatus = 'Não iniciado';
           else selectedStatus = 'Ocorrência';
         } else {
           selectedStatus = statusPreset;

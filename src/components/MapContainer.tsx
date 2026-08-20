@@ -158,7 +158,7 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
 
       const cachedOrders = orders.map(o => {
         const coords = getCoordinatesFromCep(o.cep, o.region, o.address, o.lat, o.lng);
-        if (o.status === 'Entregando' || o.status === 'Em rota') {
+        if (o.status === 'Em rota' || (o.status as string) === 'Entregando') {
           activeRoutePoints.push([coords.lat, coords.lng]);
         }
         return {
@@ -402,13 +402,13 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
     });
   };
 
-  // Active deliveries currently out on route ('Entregando' status)
-  const activeDeliveries = effectiveOrders.filter(o => o.status === 'Entregando');
+  // Active deliveries currently out on route ('Em rota' status)
+  const activeDeliveries = effectiveOrders.filter(o => o.status === 'Em rota');
 
   // Comprehensive list of active orders to render on the map with exact coordinates
   const mapOrdersToShow = isEffectiveOffline
     ? [...effectiveOrders]
-    : [...effectiveOrders.filter(o => o.status === 'Entregando' || o.status === 'Em rota')];
+    : [...effectiveOrders.filter(o => o.status === 'Em rota')];
     
   if (selectedRider && !isEffectiveOffline) {
     sortedActiveRiderOrders.forEach(o => {
@@ -703,7 +703,7 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
                         <span className={`font-bold px-1.5 py-0.2 rounded-md ${
                           order.status === 'Concluído' ? 'bg-emerald-50 text-emerald-600' :
                           order.status === 'Cancelado' ? 'bg-slate-100 text-slate-500' :
-                          order.status === 'Entregando' ? 'bg-blue-50 text-blue-600' :
+                          order.status === 'Em rota' ? 'bg-blue-50 text-blue-600' :
                           order.status === 'Ocorrência' ? 'bg-rose-50 text-rose-600' :
                           'bg-amber-50 text-amber-600'
                         }`}>{order.status}</span>
@@ -1216,7 +1216,6 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
                                   <span className={`text-[8px] px-1.5 py-0.2 rounded font-extrabold uppercase border shrink-0 ${
                                     order.status === 'Não iniciado' ? 'bg-amber-50 text-amber-700 border-amber-100' :
                                     order.status === 'Em rota' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                    order.status === 'Entregando' ? 'bg-purple-50 text-purple-700 border-purple-100' :
                                     'bg-slate-50 text-slate-600 border-slate-200'
                                   }`}>
                                     {order.status}

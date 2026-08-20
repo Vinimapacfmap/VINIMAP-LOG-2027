@@ -65,7 +65,7 @@ export function calculateOrderPriority(order: Order, explicit?: QueuePriority): 
   if (order.status === 'Concluído' || order.status === 'Ocorrência') return 'HIGH';
   if (order.priority === 'Alta' || order.priority === 'Expresso' || order.priority === 'expresso') return 'HIGH';
   if (order.signatureUrl || order.deliveryPhotoUrl || order.protocolNumber) return 'HIGH';
-  if (order.status === 'Em rota' || order.status === 'Entregando') return 'NORMAL';
+  if (order.status === 'Em rota') return 'NORMAL';
   return 'NORMAL';
 }
 

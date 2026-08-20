@@ -238,10 +238,7 @@ function OrdersTable({
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(FIRST_10_COLUMNS));
   const [showColumnFilterMenu, setShowColumnFilterMenu] = useState<boolean>(false);
   const [columnSearchTerm, setColumnSearchTerm] = useState<string>('');
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({
-    key: 'DataSolicitacao',
-    direction: 'desc'
-  });
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const handleSort = (key: string) => {
     setSortConfig(current => {
@@ -251,8 +248,8 @@ function OrdersTable({
       if (current.direction === 'asc') {
         return { key, direction: 'desc' };
       }
-      // Return to default newest first date sorting
-      return { key: 'DataSolicitacao', direction: 'desc' };
+      // Return null to restore natural lexicographic search or newest date sorting
+      return null;
     });
   };
   
@@ -697,7 +694,7 @@ function OrdersTable({
           h.details?.toLowerCase().includes('despachado')
         );
         if (entry) return entry.timestamp;
-        const isActive = hubOrder.status === 'Em rota' || hubOrder.status === 'Entregando' || hubOrder.status === 'Concluído';
+        const isActive = hubOrder.status === 'Em rota' || (hubOrder.status as string) === 'Entregando' || hubOrder.status === 'Concluído';
         if (isActive) {
           return `${dateStr} às ${addMinutesToTime(baseTime, 12)}`;
         }
@@ -711,7 +708,7 @@ function OrdersTable({
           h.details?.toLowerCase().includes('no local')
         );
         if (entry) return entry.timestamp;
-        const isActive = hubOrder.status === 'Entregando' || hubOrder.status === 'Concluído';
+        const isActive = hubOrder.status === 'Em rota' || hubOrder.status === 'Concluído';
         if (isActive) {
           return `${dateStr} às ${addMinutesToTime(baseTime, 25)}`;
         }
@@ -915,22 +912,34 @@ function OrdersTable({
 
   // Filter orders by active tab AND search query AND local dropdown filters
   const filteredOrders = useMemo(() => {
-    const query = (searchQuery || '').toString().trim().toLowerCase();
+    const query = (searchQuery || '').toString().trim();
     const isSearching = query !== '';
 
     return orders.filter((order) => {
+      // 1. Tab filter
+      const matchesTab = activeTab === 'Todos' 
+        || order.status === activeTab 
+        || (activeTab === 'Em rota' && (order.status as string) === 'Entregando');
+      if (!matchesTab) return false;
+
+      // 2. Partner filter
+      const matchesPartner = localPartner === 'Todos' || isOrderMatchingPartner(order, localPartner, clientPartners);
+      if (!matchesPartner) return false;
+
+      // 3. Rider filter
+      const matchesRider = localRider === 'Todos' || isOrderMatchingRider(order, localRider, riders);
+      if (!matchesRider) return false;
+
+      // 4. Region filter
+      const matchesRegion = localRegion === 'Todos' || order.region === localRegion;
+      if (!matchesRegion) return false;
+
+      // 5. Lexicographical global search query
       if (isSearching) {
-        // Use universal global search matcher (supports dates like 14-08, DANFE, CPF, partner, etc.)
         return isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners);
       }
 
-      // Default filters when not searching
-      const matchesTab = activeTab === 'Todos' || order.status === activeTab;
-      const matchesPartner = localPartner === 'Todos' || isOrderMatchingPartner(order, localPartner, clientPartners);
-      const matchesRider = localRider === 'Todos' || isOrderMatchingRider(order, localRider, riders);
-      const matchesRegion = localRegion === 'Todos' || order.region === localRegion;
-
-      return matchesTab && matchesPartner && matchesRider && matchesRegion;
+      return true;
     });
   }, [orders, activeTab, searchQuery, localPartner, localRider, localRegion, riders, clientPartners]);
 
@@ -940,11 +949,16 @@ function OrdersTable({
       if (searchQuery && searchQuery.trim().length > 0) {
         return sortOrdersByLexicographicSearch(filteredOrders, searchQuery, riders, clientPartners);
       }
-      return filteredOrders;
+      // Default: sort newest orders first
+      return [...filteredOrders].sort((a, b) => {
+        const dateA = a.date || extractISODateFromTimestamp(a.createdAt) || '';
+        const dateB = b.date || extractISODateFromTimestamp(b.createdAt) || '';
+        if (dateB !== dateA) return dateB.localeCompare(dateA);
+        return (b.id || '').localeCompare(a.id || '', 'pt-BR', { numeric: true });
+      });
     }
 
     return [...filteredOrders].sort((a, b) => {
-      // Check if simplified or spreadsheet mode sorting
       let valA = '';
       let valB = '';
 
@@ -954,13 +968,13 @@ function OrdersTable({
       } else {
         // Simplified fields sorting
         const key = sortConfig.key;
-        if (key === 'Código') {
+        if (key === 'Código' || key === 'Pedido') {
           valA = String(a.id ?? '');
           valB = String(b.id ?? '');
-        } else if (key === 'Cliente') {
+        } else if (key === 'Cliente' || key === 'ProcurarPor') {
           valA = String(a.clientName ?? '');
           valB = String(b.clientName ?? '');
-        } else if (key === 'Endereço') {
+        } else if (key === 'Endereço' || key === 'Endereco') {
           valA = String(a.address ?? '');
           valB = String(b.address ?? '');
         } else if (key === 'Prioridade') {
@@ -969,16 +983,24 @@ function OrdersTable({
         } else if (key === 'Status') {
           valA = String(a.status ?? '');
           valB = String(b.status ?? '');
-        } else if (key === 'Valor') {
+        } else if (key === 'Entregador' || key === 'Condutor' || key === 'DispositivoCondutor') {
+          const riderA = riders.find(r => r.id === a.riderId)?.name || '';
+          const riderB = riders.find(r => r.id === b.riderId)?.name || '';
+          valA = riderA;
+          valB = riderB;
+        } else if (key === 'Valor' || key === 'ValorNotaFiscal') {
           return sortConfig.direction === 'asc' ? (a.value || 0) - (b.value || 0) : (b.value || 0) - (a.value || 0);
+        } else if (key === 'Data' || key === 'DataSolicitacao') {
+          valA = String(a.date || a.createdAt || '');
+          valB = String(b.date || b.createdAt || '');
         } else {
           valA = String(a.id ?? '');
           valB = String(b.id ?? '');
         }
       }
 
-      valA = String(valA ?? '');
-      valB = String(valB ?? '');
+      valA = String(valA ?? '').trim();
+      valB = String(valB ?? '').trim();
 
       const keyLower = sortConfig.key.toLowerCase();
 
@@ -1025,14 +1047,14 @@ function OrdersTable({
           : String(dateB || '').localeCompare(String(dateA || ''));
       }
 
-      // 2. Is it a sequence/index column?
+      // 3. Is it a sequence/index column?
       if (keyLower === 'sequencia') {
         const numA = parseInt(valA, 10) || 0;
         const numB = parseInt(valB, 10) || 0;
         return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
       }
 
-      // 3. Robust numeric, currency, and alphanumeric prefix parsing
+      // 4. Robust numeric, currency, and alphanumeric prefix parsing
       const extractNumber = (str: string): number | null => {
         if (!str) return null;
         let clean = (str || '').toString().trim();
@@ -1057,12 +1079,12 @@ function OrdersTable({
         return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
       }
 
-      // 4. Default natural Portuguese alphanumeric comparison
+      // 5. Default natural Portuguese alphanumeric comparison (lexicographical)
       return sortConfig.direction === 'asc' 
         ? String(valA || '').localeCompare(String(valB || ''), 'pt-BR', { sensitivity: 'base', numeric: true }) 
         : String(valB || '').localeCompare(String(valA || ''), 'pt-BR', { sensitivity: 'base', numeric: true });
     });
-  }, [filteredOrders, sortConfig, viewMode]);
+  }, [filteredOrders, sortConfig, viewMode, searchQuery, riders, clientPartners]);
 
   // Calculate pagination details
   const totalPages = useMemo(() => Math.ceil(sortedOrders.length / itemsPerPage) || 1, [sortedOrders.length, itemsPerPage]);
@@ -1115,7 +1137,6 @@ function OrdersTable({
   const getStatusClasses = (status: OrderStatus) => {
     switch (status) {
       case 'Concluído': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'Entregando': return 'bg-blue-50 text-blue-700 border-blue-100';
       case 'Em rota': return 'bg-sky-50 text-sky-700 border-sky-100';
       case 'Não iniciado': return 'bg-amber-50 text-amber-700 border-amber-100';
       case 'Ocorrência': return 'bg-rose-50 text-rose-700 border-rose-100';
@@ -1127,7 +1148,6 @@ function OrdersTable({
   const getStatusIcon = (status: OrderStatus) => {
     switch (status) {
       case 'Concluído': return <Flag size={11} className="text-emerald-500 fill-emerald-500 shrink-0" />;
-      case 'Entregando': return <Flag size={11} className="text-sky-500 fill-sky-500 shrink-0" />;
       case 'Em rota': return <Flag size={11} className="text-amber-500 fill-amber-500 shrink-0" />;
       case 'Não iniciado': return <Flag size={11} className="text-slate-400 fill-slate-400 shrink-0 animate-pulse" />;
       case 'Ocorrência': return <Flag size={11} className="text-rose-500 fill-rose-500 shrink-0 animate-bounce" />;
@@ -2238,9 +2258,7 @@ function OrdersTable({
         }
       }
       nextStatus = 'Em rota';
-    } else if (order.status === 'Em rota') {
-      nextStatus = 'Entregando';
-    } else if (order.status === 'Entregando' || order.status === 'Ocorrência') {
+    } else if (order.status === 'Em rota' || (order.status as string) === 'Entregando' || order.status === 'Ocorrência') {
       nextStatus = 'Concluído';
     }
 
@@ -2331,8 +2349,7 @@ function OrdersTable({
           {[
             { key: 'Todos', label: 'Todos os Pedidos', activeColor: 'bg-blue-600 text-white shadow-sm shadow-blue-200', count: orders.length },
             { key: 'Não iniciado', label: 'Não Iniciados', activeColor: 'bg-amber-600 text-white shadow-sm shadow-amber-200', count: orders.filter(o => o.status === 'Não iniciado').length },
-            { key: 'Em rota', label: 'Em Rota', activeColor: 'bg-sky-600 text-white shadow-sm shadow-sky-200', count: orders.filter(o => o.status === 'Em rota').length },
-            { key: 'Entregando', label: 'Entregando', activeColor: 'bg-indigo-600 text-white shadow-sm shadow-indigo-200', count: orders.filter(o => o.status === 'Entregando').length },
+            { key: 'Em rota', label: 'Em Rota', activeColor: 'bg-sky-600 text-white shadow-sm shadow-sky-200', count: orders.filter(o => o.status === 'Em rota' || (o.status as string) === 'Entregando').length },
             { key: 'Concluído', label: 'Concluídos', activeColor: 'bg-emerald-600 text-white shadow-sm shadow-emerald-200', count: orders.filter(o => o.status === 'Concluído').length },
             { key: 'Ocorrência', label: 'Ocorrências', activeColor: 'bg-rose-600 text-white shadow-sm shadow-rose-200', count: orders.filter(o => o.status === 'Ocorrência').length },
             { key: 'Cancelado', label: 'Cancelados', activeColor: 'bg-slate-700 text-white shadow-sm shadow-slate-200', count: orders.filter(o => o.status === 'Cancelado').length }
@@ -2911,7 +2928,7 @@ function OrdersTable({
               </button>
               {isBulkStatusOpen && (
                 <div className="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl py-1 z-[9999]">
-                  {(['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((status) => (
+                  {(['Não iniciado', 'Em rota', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((status) => (
                     <button
                       key={status}
                       onClick={() => {
@@ -3066,7 +3083,12 @@ function OrdersTable({
                     </th>
                   )}
                   {visibleColumns.has('DispositivoCondutor') && (
-                    <th className="px-2 py-1.5 text-slate-800 font-black">Entregador</th>
+                    <th className="px-2 py-1.5 cursor-pointer hover:bg-slate-200/50 transition-colors text-slate-800 font-black" onClick={() => handleSort('Entregador')}>
+                      <div className="flex items-center gap-1">
+                        <span>Entregador</span>
+                        {sortConfig?.key === 'Entregador' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </div>
+                    </th>
                   )}
                   {visibleColumns.has('ValorNotaFiscal') && (
                     <th className="px-2 py-1.5 text-right cursor-pointer hover:bg-slate-200/50 transition-colors text-slate-800 font-black" onClick={() => handleSort('Valor')}>
@@ -4080,7 +4102,7 @@ function OrdersTable({
 
                          {/* Step 3: Em Rota */}
                          {(() => {
-                           const isActive = hubOrder.status === 'Em rota' || hubOrder.status === 'Entregando' || hubOrder.status === 'Concluído';
+                           const isActive = hubOrder.status === 'Em rota' || (hubOrder.status as string) === 'Entregando' || hubOrder.status === 'Concluído';
                            const stepTime = getTimelineStepTime(3);
                            return (
                              <div className="relative flex gap-4">
@@ -4112,7 +4134,7 @@ function OrdersTable({
  
                          {/* Step 4: No local de entrega */}
                          {(() => {
-                           const isActive = hubOrder.status === 'Entregando' || hubOrder.status === 'Concluído';
+                           const isActive = hubOrder.status === 'Em rota' || (hubOrder.status as string) === 'Entregando' || hubOrder.status === 'Concluído';
                            const stepTime = getTimelineStepTime(4);
                            return (
                              <div className="relative flex gap-4">
@@ -5262,7 +5284,7 @@ function OrdersTable({
                 Menu Status #{statusMenuState.order.id}
               </div>
               <div className="py-1 max-h-48 overflow-y-auto custom-scrollbar">
-                {(['Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((st) => (
+                {(['Não iniciado', 'Em rota', 'Concluído', 'Ocorrência', 'Cancelado'] as OrderStatus[]).map((st) => (
                   <button
                     key={st}
                     onClick={(e) => {

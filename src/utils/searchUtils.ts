@@ -136,8 +136,8 @@ function isOrderMatchingSingleToken(
   if (order.status && isLexicographicallyMatching(order.status, cleanToken)) return true;
   if ((normToken.includes('baixad') || normToken === 'concluido' || normToken === 'entregue') && order.status === 'Concluído') return true;
   if ((normToken.includes('lancad') || normToken === 'aberto' || normToken === 'pendente' || normToken === 'nao iniciado') && 
-      (order.status === 'Não iniciado' || order.status === 'Em rota' || order.status === 'Entregando')) return true;
-  if ((normToken.includes('rota') || normToken.includes('transito')) && (order.status === 'Em rota' || order.status === 'Entregando')) return true;
+      (order.status === 'Não iniciado' || order.status === 'Em rota')) return true;
+  if ((normToken.includes('rota') || normToken.includes('transito') || normToken.includes('entregando')) && order.status === 'Em rota') return true;
   if ((normToken.includes('ocorrencia') || normToken === 'problema') && order.status === 'Ocorrência') return true;
   if ((normToken.includes('cancelad')) && order.status === 'Cancelado') return true;
 
