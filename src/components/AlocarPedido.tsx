@@ -1185,6 +1185,9 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     const distinctPartners = Array.from(new Set(selectedOrdersList.map(o => o.partnerName || 'Geral')));
     const isMidRoute = targetRider?.status === 'Em rota';
 
+    const nowIso = new Date().toISOString();
+    const todayIso = getSaoPauloISODate();
+
     // Initial Status requirement for pending orders: "STATUS INICIAL DEVE SER NAO INICIADO, ESPERANDO O CONDUTOR DAR O INICIO DA ROTA"
     // However, if order is already completed or has completion evidence, preserve its status.
     const updatedOrders = orders.map(order => {
@@ -1196,6 +1199,10 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
           ...order,
           riderId: targetRider?.id,
           status: assignedStatus,
+          updatedAt: nowIso,
+          statusUpdatedAt: nowIso,
+          reallocatedAt: todayIso,
+          reallocatedDate: todayIso,
         };
 
         const comm = calculateRiderCommissionForOrder(targetRider, tempAssignedOrder, clientPartners || []);
@@ -1209,6 +1216,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
           updatedRaw['NomeEntregador'] = targetRider.name;
           updatedRaw['DispositivoCondutor'] = targetRider.deviceNumber ? String(targetRider.deviceNumber) : targetRider.name;
           updatedRaw['riderId'] = targetRider.id;
+          updatedRaw['updatedAt'] = nowIso;
           for (const k of Object.keys(updatedRaw)) {
             const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
             if (norm === 'condutor' || norm === 'nomecondutor' || norm === 'entregador' || norm === 'nomeentregador' || norm === 'motorista' || norm === 'nomemotorista' || norm === 'rider' || norm === 'ridername') {
@@ -1298,6 +1306,10 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       }
     ];
 
+    // Broadcast real-time allocation updates
+    realtimeSyncBus.broadcastOrdersBatch(updatedOrders);
+    updatedRiders.forEach(r => realtimeSyncBus.broadcastRiderUpdate(r));
+
     // Callback to update global App state
     onAllocateSuccess(updatedOrders, updatedRiders, logsGenerated);
     
@@ -1315,6 +1327,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     if (itinerarySequence.length === 0) return;
 
     const routeOrderIds = itinerarySequence.map(o => o.id);
+    const nowIso = new Date().toISOString();
 
     // Update these orders to "Em rota" status
     const updatedOrders = orders.map(order => {
@@ -1322,6 +1335,8 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
         return {
           ...order,
           status: 'Em rota' as const,
+          updatedAt: nowIso,
+          statusUpdatedAt: nowIso,
           history: [
             ...(order.history || []),
             {
@@ -1356,6 +1371,8 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       }
     ];
 
+    realtimeSyncBus.broadcastOrdersBatch(updatedOrders);
+    updatedRiders.forEach(r => realtimeSyncBus.broadcastRiderUpdate(r));
     onAllocateSuccess(updatedOrders, updatedRiders, logsGenerated);
     alert(`Rota iniciada! O status dos ${itinerarySequence.length} pedidos mudou para "Em rota" no Dashboard.`);
   };

@@ -736,6 +736,45 @@ export default function App() {
   useEffect(() => {
     let isCancelled = false;
 
+    const parseOrderTimestamp = (val?: string | number): number => {
+      if (!val) return 0;
+      if (typeof val === 'number') return val;
+      const s = String(val).trim();
+      if (!s) return 0;
+
+      const direct = new Date(s).getTime();
+      if (!isNaN(direct) && direct > 0) return direct;
+
+      const match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:(?:\s+às\s+|\s+)(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+      if (match) {
+        const day = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1;
+        const year = parseInt(match[3], 10);
+        const hour = match[4] ? parseInt(match[4], 10) : 0;
+        const min = match[5] ? parseInt(match[5], 10) : 0;
+        const sec = match[6] ? parseInt(match[6], 10) : 0;
+        const d = new Date(year, month, day, hour, min, sec);
+        if (!isNaN(d.getTime())) return d.getTime();
+      }
+      return 0;
+    };
+
+    const getOrderTimestampScore = (o: Order): number => {
+      if (!o) return 0;
+      let maxTime = 0;
+      if (o.statusUpdatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.statusUpdatedAt));
+      if (o.updatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.updatedAt));
+      if (o.reallocatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.reallocatedAt));
+      if (o.history && Array.isArray(o.history) && o.history.length > 0) {
+        o.history.forEach(h => {
+          if (h && h.timestamp) {
+            maxTime = Math.max(maxTime, parseOrderTimestamp(h.timestamp));
+          }
+        });
+      }
+      return maxTime;
+    };
+
     const mergeOrders = (prev: Order[], incoming: Order[]): Order[] => {
       const map = new Map<string, Order>();
       prev.forEach(o => map.set(o.id, o));
@@ -754,14 +793,25 @@ export default function App() {
             return;
           }
 
-          // If existing order has a newer updatedAt or statusUpdatedAt timestamp than incoming, preserve the latest edit
-          const existingTime = existing.statusUpdatedAt || existing.updatedAt || (existing.history && existing.history.length > 0 ? existing.history[existing.history.length - 1]?.timestamp : undefined);
-          const incTime = inc.statusUpdatedAt || inc.updatedAt || (inc.history && inc.history.length > 0 ? inc.history[inc.history.length - 1]?.timestamp : undefined);
+          const existingScore = getOrderTimestampScore(existing);
+          const incScore = getOrderTimestampScore(inc);
 
-          if (existingTime && incTime && existingTime > incTime) {
+          // If existing order has an allocated rider and incoming does not (or incoming is older), keep existing
+          const existingHasRider = Boolean(existing.riderId && existing.riderId !== 'unassigned' && existing.riderId !== 'desalocar');
+          const incHasRider = Boolean(inc.riderId && inc.riderId !== 'unassigned' && inc.riderId !== 'desalocar');
+
+          if (existingHasRider && !incHasRider && incScore <= existingScore) {
+            map.set(inc.id, { ...inc, ...existing });
+            return;
+          }
+
+          if (existingScore >= incScore) {
+            // Existing in-memory state is newer or equal (e.g. recent allocation/status change)
             map.set(inc.id, { ...inc, ...existing });
           } else {
-            map.set(inc.id, { ...existing, ...inc });
+            // Incoming is strictly newer; merge incoming but preserve assigned rider if incoming is unassigned
+            const mergedRiderId = inc.riderId || existing.riderId;
+            map.set(inc.id, { ...existing, ...inc, riderId: mergedRiderId });
           }
         }
       });
@@ -2806,18 +2856,23 @@ export default function App() {
           ? currentOrder.status
           : ('Não iniciado' as OrderStatus);
 
+        const isoNow = new Date().toISOString();
         const initialUpdatedOrder: Order = {
           ...currentOrder,
           riderId: undefined,
           status: preservedUnassignStatus,
+          updatedAt: isoNow,
+          statusUpdatedAt: isoNow,
           history: [...(currentOrder.history || []), historyEntry]
         };
 
         const updatedOrder = validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners);
 
         setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+        realtimeSyncBus.broadcastOrderStatusChanged(updatedOrder);
         if (updatedRiderObj) {
           setRiders(prev => prev.map(r => r.id === updatedRiderObj.id ? updatedRiderObj : r));
+          realtimeSyncBus.broadcastRiderUpdate(updatedRiderObj);
         }
 
         const promises: Promise<any>[] = [dbSaveOrder(updatedOrder)];
@@ -2851,16 +2906,20 @@ export default function App() {
         details: `Entregador ${riderName} vinculado ao pedido. Status: ${preservedAssignStatus}.`
       };
 
+      const isoNow = new Date().toISOString();
       const initialUpdatedOrder: Order = { 
         ...currentOrder, 
         riderId, 
         status: preservedAssignStatus,
+        updatedAt: isoNow,
+        statusUpdatedAt: isoNow,
         history: [...(currentOrder.history || []), historyEntry]
       };
 
       const updatedOrder = validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners);
 
       setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+      realtimeSyncBus.broadcastOrderStatusChanged(updatedOrder);
 
       const promises: Promise<any>[] = [];
 
@@ -2878,6 +2937,7 @@ export default function App() {
             currentOrderId: hasRemaining ? remainingActiveOrders[0].id : undefined
           };
           setRiders(prev => prev.map(r => r.id === updatedPrevRider.id ? updatedPrevRider : r));
+          realtimeSyncBus.broadcastRiderUpdate(updatedPrevRider);
           promises.push(dbSaveDeliveryRider(updatedPrevRider));
         }
       }
@@ -2888,6 +2948,7 @@ export default function App() {
         if (rider) {
           const updatedRider: DeliveryRider = { ...rider, status: 'Em rota', currentOrderId: orderId };
           setRiders(prev => prev.map(r => r.id === riderId ? updatedRider : r));
+          realtimeSyncBus.broadcastRiderUpdate(updatedRider);
           promises.push(dbSaveDeliveryRider(updatedRider));
         }
       }
@@ -3229,10 +3290,13 @@ export default function App() {
           const preservedBulkStatus = isUnassign 
             ? ((order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado') ? order.status : ('Não iniciado' as OrderStatus))
             : order.status;
+          const isoNow = new Date().toISOString();
           const initialUpdatedOrder: Order = {
             ...order,
             riderId: isUnassign ? undefined : riderId,
             status: preservedBulkStatus,
+            updatedAt: isoNow,
+            statusUpdatedAt: isoNow,
             history: [...(order.history || []), historyEntry]
           };
           updatedOrders.push(validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners));
@@ -3244,6 +3308,7 @@ export default function App() {
       const allNewOrders = orders.map(o => updatedOrdersMap.get(o.id) || o);
 
       setOrders(allNewOrders);
+      realtimeSyncBus.broadcastOrdersBatch(updatedOrders);
 
       const promises: Promise<any>[] = [];
 

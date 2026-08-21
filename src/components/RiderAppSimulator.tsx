@@ -841,34 +841,32 @@ export default function RiderAppSimulator({
   // State for manual synchronization with system
   const [isSyncingWithSystem, setIsSyncingWithSystem] = useState<boolean>(false);
 
-  // Synchronize orders in real-time from broadcast channel (for instant reallocation / new orders updates)
+  // Audio/visual notification when real-time updates affect this rider
   useEffect(() => {
     const unsub = realtimeSyncBus.subscribe('*', (msg) => {
       const { type, payload } = msg;
 
-      if (type === 'ORDERS_BATCH_UPDATED' && Array.isArray(payload) && onUpdateOrders) {
+      const currentDriverId = selectedRiderId || selectedRider?.id;
+
+      if (type === 'ORDERS_BATCH_UPDATED' && Array.isArray(payload)) {
         const batch: Order[] = payload;
-        const map = new Map(orders.map(o => [o.id, o]));
-        batch.forEach(o => map.set(o.id, { ...(map.get(o.id) || o), ...o }));
-        onUpdateOrders(Array.from(map.values()));
-      } else if ((type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED') && payload?.id && onUpdateOrders) {
-        const updatedOrder: Order = payload;
-        const exists = orders.some(o => o.id === updatedOrder.id);
-        if (exists) {
-          onUpdateOrders(orders.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
-        } else {
-          onUpdateOrders([updatedOrder, ...orders]);
+        const hasMyOrder = currentDriverId && batch.some(o => isOrderMatchingRider(o, currentDriverId, riders));
+        if (hasMyOrder) {
+          playBeep(987.77, 0.12);
+          setTimeout(() => playBeep(1318.51, 0.22), 120);
         }
-      } else if (type === 'ORDER_DELETED' && typeof payload === 'string' && onUpdateOrders) {
-        const deletedId = payload;
-        onUpdateOrders(orders.filter(o => o.id !== deletedId));
+      } else if ((type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED') && payload?.id) {
+        const updatedOrder: Order = payload;
+        if (currentDriverId && isOrderMatchingRider(updatedOrder, currentDriverId, riders)) {
+          playBeep(987.77, 0.1);
+        }
       }
     });
 
     return () => {
       unsub();
     };
-  }, [onUpdateOrders, orders]);
+  }, [selectedRiderId, selectedRider, riders]);
 
   // Manual explicit synchronization of today's orders with system
   const handleManualSyncTodayOrders = async () => {

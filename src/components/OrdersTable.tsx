@@ -3225,15 +3225,13 @@ function OrdersTable({
                           {/* Order Code / ID */}
                           {(visibleColumns.has('Pedido') || visibleColumns.has('Código')) && (
                             <td className="px-2.5 py-1.5 font-mono font-black text-slate-900 text-xs">
-                              <OrderQuickViewTooltip order={order} rider={rider}>
-                                <span className="hover:text-blue-600 hover:underline cursor-pointer inline-flex items-center gap-1">
-                                  {order.id}
-                                </span>
-                              </OrderQuickViewTooltip>
+                              <span className="inline-flex items-center gap-1">
+                                {order.id}
+                              </span>
                             </td>
                           )}
 
-                          {/* Client information */}
+                          {/* Client information (Hover Quick View Tooltip enabled here only) */}
                           {(visibleColumns.has('ProcurarPor') || visibleColumns.has('CodigoCliente')) && (
                             <td className="px-2.5 py-1.5">
                               <OrderQuickViewTooltip order={order} rider={rider}>
@@ -3260,9 +3258,7 @@ function OrdersTable({
                           {/* Destination Address */}
                           {visibleColumns.has('Endereco') && (
                             <td className="px-2.5 py-1.5 max-w-[220px]" title={order.address}>
-                              <OrderQuickViewTooltip order={order} rider={rider}>
-                                <span className="block text-slate-800 leading-tight text-xs font-semibold truncate max-w-[210px] hover:text-blue-600 cursor-pointer">{order.address}</span>
-                              </OrderQuickViewTooltip>
+                              <span className="block text-slate-800 leading-tight text-xs font-semibold truncate max-w-[210px]">{order.address}</span>
                               <div className="flex flex-wrap items-center gap-1 mt-0.5">
                                 <button
                                   onClick={(e) => handleCopyAddressAndRoute(order, e)}
@@ -3422,11 +3418,9 @@ function OrdersTable({
                           if (col === 'Pedido') {
                             return (
                               <td key={col} className="px-1.5 py-1 border-r border-slate-100 font-mono font-black text-slate-900 text-[10px]">
-                                <OrderQuickViewTooltip order={order} rider={rider}>
-                                  <span className="hover:text-blue-600 hover:underline cursor-pointer">
-                                    {cellVal}
-                                  </span>
-                                </OrderQuickViewTooltip>
+                                <span>
+                                  {cellVal}
+                                </span>
                               </td>
                             );
                           }
@@ -3451,9 +3445,7 @@ function OrdersTable({
                                 title={cellVal}
                               >
                                 <div className="flex items-center justify-between gap-1 min-w-0">
-                                  <OrderQuickViewTooltip order={order} rider={rider} className="truncate flex-1">
-                                    <span className="truncate block font-semibold text-slate-900 text-[10px] hover:text-blue-600 cursor-pointer">{cellVal}</span>
-                                  </OrderQuickViewTooltip>
+                                  <span className="truncate block font-semibold text-slate-900 text-[10px] flex-1">{cellVal}</span>
                                   <button
                                     onClick={(e) => handleCopyAddressAndRoute(order, e)}
                                     className={`opacity-0 group-hover:opacity-100 focus:opacity-100 inline-flex items-center justify-center p-0.5 rounded border shadow-2xs transition-all shrink-0 cursor-pointer ${
