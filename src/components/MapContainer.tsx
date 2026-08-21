@@ -48,9 +48,12 @@ interface MapContainerProps {
 // Controller component to safely pan/zoom the map instance imperatively
 function MapController({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
+  const centerLat = center[0];
+  const centerLng = center[1];
+
   useEffect(() => {
-    map.setView(center, zoom, { animate: true });
-  }, [center, zoom, map]);
+    map.setView([centerLat, centerLng], zoom, { animate: true });
+  }, [centerLat, centerLng, zoom, map]);
   return null;
 }
 
@@ -60,11 +63,10 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
   const [showOptimizedRoute, setShowOptimizedRoute] = useState<boolean>(true);
   const [osrmEtas, setOsrmEtas] = useState<Record<string, OsrmRouteResult>>({});
 
-  // Calculate real OSRM routes and ETAs for all riders with active pending deliveries
+  // Calculate real OSRM routes and ETAs for all riders with active pending deliveries (debounced)
   useEffect(() => {
     let isMounted = true;
-
-    async function calculateOsrmEtas() {
+    const timer = setTimeout(async () => {
       const hubLat = activeHub?.lat || -23.5385556;
       const hubLng = activeHub?.lng || -46.70118;
 
@@ -93,14 +95,13 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
       if (isMounted) {
         setOsrmEtas(newEtas);
       }
-    }
-
-    calculateOsrmEtas();
+    }, 1000);
 
     return () => {
       isMounted = false;
+      clearTimeout(timer);
     };
-  }, [riders, orders, activeHub?.id, activeHub?.lat, activeHub?.lng]);
+  }, [riders.length, orders.length, selectedRiderId, activeHub?.id, activeHub?.lat, activeHub?.lng]);
 
   // Offline Map Cache State
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);

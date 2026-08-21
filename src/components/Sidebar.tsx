@@ -56,6 +56,7 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub, on
 
   // Admin sub-items list
   const adminSubItems = [
+    { id: 'bloquear_login', label: '🔒 Tela de Login Admin (Bloquear)', icon: ShieldCheck },
     { id: 'financeiro', label: 'Financeiro (Contas & Repasses)', icon: Wallet },
     { id: 'relatorios', label: 'Relatórios & Performance', icon: BarChart3 },
     { id: 'clientes', label: 'Clientes & Parceiros', icon: Building2 },
@@ -236,7 +237,19 @@ export default function Sidebar({ activeSection, setActiveSection, activeHub, on
                           return (
                             <button
                               key={sub.id}
-                              onClick={() => setActiveSection(sub.id)}
+                              onClick={() => {
+                                if (sub.id === 'bloquear_login') {
+                                  if (onLogout) {
+                                    onLogout();
+                                  } else {
+                                    localStorage.removeItem('vinimap_admin_session');
+                                    localStorage.setItem('vinimap_logged_out', 'true');
+                                    window.location.reload();
+                                  }
+                                  return;
+                                }
+                                setActiveSection(sub.id);
+                              }}
                               className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
                                 isSubActive
                                   ? 'bg-blue-100/70 text-blue-800 font-extrabold shadow-2xs'

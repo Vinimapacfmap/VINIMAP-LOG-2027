@@ -27,6 +27,20 @@ export function useAppInitialization(): AppInitState {
 
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const isExplicitLogin = 
+        params.get('login') === '1' ||
+        params.get('login') === 'true' ||
+        params.get('view') === 'login' ||
+        params.get('view') === 'admin_login' ||
+        params.get('admin') === 'login' ||
+        params.get('mode') === 'login' ||
+        window.location.hash === '#login';
+
+      if (isExplicitLogin) {
+        return false;
+      }
+
       const loggedOut = localStorage.getItem('vinimap_logged_out');
       if (loggedOut === 'true') return false;
       const localSession = localStorage.getItem('vinimap_admin_session');
@@ -104,9 +118,19 @@ export function useAppInitialization(): AppInitState {
             timestamp: new Date().toISOString()
           });
 
+          const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+          const isExplicitLoginReq = 
+            urlParams.get('login') === '1' ||
+            urlParams.get('login') === 'true' ||
+            urlParams.get('view') === 'login' ||
+            urlParams.get('view') === 'admin_login' ||
+            urlParams.get('admin') === 'login' ||
+            urlParams.get('mode') === 'login' ||
+            (typeof window !== 'undefined' && window.location.hash === '#login');
+
           const loggedOut = localStorage.getItem('vinimap_logged_out');
-          if (loggedOut === 'true') {
-            console.log('[useAppInitialization] [SUPABASE SESSION END] Usuário deslogado explicitamente no localStorage.');
+          if (loggedOut === 'true' || isExplicitLoginReq) {
+            console.log('[useAppInitialization] [SUPABASE SESSION END] Login explícito ou usuário deslogado.');
             if (isMounted) setIsAdminAuthenticated(false);
           } else {
             try {
@@ -161,11 +185,21 @@ export function useAppInitialization(): AppInitState {
           }
         } else {
           console.log('[useAppInitialization] [SUPABASE INIT SKIP] Supabase não configurado. Utilizando autenticação/banco local/Firebase.');
+          const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+          const isExplicitLoginReq = 
+            urlParams.get('login') === '1' ||
+            urlParams.get('login') === 'true' ||
+            urlParams.get('view') === 'login' ||
+            urlParams.get('view') === 'admin_login' ||
+            urlParams.get('admin') === 'login' ||
+            urlParams.get('mode') === 'login' ||
+            (typeof window !== 'undefined' && window.location.hash === '#login');
+
           const loggedOut = localStorage.getItem('vinimap_logged_out');
           const localSession = localStorage.getItem('vinimap_admin_session') === 'true';
           if (isMounted) {
             setIsSupabaseReady(false);
-            if (loggedOut === 'true') {
+            if (loggedOut === 'true' || isExplicitLoginReq) {
               setIsAdminAuthenticated(false);
             } else {
               setIsAdminAuthenticated(localSession);

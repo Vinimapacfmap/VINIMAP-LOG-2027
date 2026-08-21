@@ -442,6 +442,8 @@ export default function RiderAppSimulator({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (riders.length === 0) return;
+    if (hasRestoredSessionRef.current) return;
+    hasRestoredSessionRef.current = true;
 
     const savedLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
     const savedRiderId = localStorage.getItem('vinimap_driver_id') || lockedRiderId;
@@ -484,7 +486,7 @@ export default function RiderAppSimulator({
         }
       }
     }
-  }, [riders, orders, isStandalone, isEffectiveRealDevice]);
+  }, [riders.length, orders.length, isStandalone, isEffectiveRealDevice, lockedRiderId]);
 
   // Handle visibility change (returning from Google Maps or other backgrounded apps)
   useEffect(() => {
@@ -1211,6 +1213,15 @@ export default function RiderAppSimulator({
   const [realGpsStatus, setRealGpsStatus] = useState<'off' | 'connecting' | 'active' | 'error' | 'denied'>('off');
   const [realGpsErrorMessage, setRealGpsErrorMessage] = useState<string>('');
   const realGpsWatchRef = useRef<number | null>(null);
+  const gpsRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const gpsFallbackModeRef = useRef<boolean>(false); // false: highAccuracy (satélites), true: balanced (rede/Wi-Fi)
+
+  // Stable references for closures to prevent stale state issues
+  const selectedRiderRef = useRef<DeliveryRider | undefined>(selectedRider);
+  selectedRiderRef.current = selectedRider;
+
+  const onUpdateRiderCoordsRef = useRef(onUpdateRiderCoords);
+  onUpdateRiderCoordsRef.current = onUpdateRiderCoords;
 
   // Sync selected rider's real GPS state if present
   useEffect(() => {
@@ -1227,18 +1238,97 @@ export default function RiderAppSimulator({
     }
   }, [selectedRiderId]);
 
-  // Cleanup watcher on unmount
+  // Cleanup watcher and retry timer on unmount
   useEffect(() => {
     return () => {
-      if (realGpsWatchRef.current !== null && navigator.geolocation) {
+      if (realGpsWatchRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.clearWatch(realGpsWatchRef.current);
+        realGpsWatchRef.current = null;
+      }
+      if (gpsRetryTimeoutRef.current) {
+        clearTimeout(gpsRetryTimeoutRef.current);
+        gpsRetryTimeoutRef.current = null;
       }
     };
   }, []);
 
-  // Start continuous watchPosition
-  const startRealGpsTracking = () => {
-    if (!navigator.geolocation) {
+  // Process and publish received GPS coordinate
+  const handleGpsCoordinateUpdate = (coords: GeolocationCoordinates, timestamp?: number) => {
+    const { latitude, longitude, accuracy, speed } = coords;
+    const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    setRealGpsStatus('active');
+    setIsRealGpsActive(true);
+    setRealGpsErrorMessage('');
+    setRealGpsData({
+      lat: latitude,
+      lng: longitude,
+      accuracy: accuracy || 0,
+      speed: speed,
+      timestamp: timestamp || Date.now()
+    });
+
+    // Calculate SVG percentage coordinates for fallback map grids
+    const nextLatPercent = (-23.52 - latitude) / 0.12 * 100;
+    const nextLngPercent = (longitude - (-46.72)) / 0.18 * 100;
+
+    const clampedLat = Math.min(100, Math.max(0, nextLatPercent));
+    const clampedLng = Math.min(100, Math.max(0, nextLngPercent));
+
+    const currentRider = selectedRiderRef.current;
+    if (currentRider) {
+      onUpdateRiderCoordsRef.current(
+        currentRider.id,
+        clampedLat,
+        clampedLng,
+        latitude,
+        longitude,
+        accuracy || 0,
+        nowTime,
+        true
+      );
+      realtimeSyncBus.broadcastRiderGps({
+        riderId: currentRider.id,
+        lat: clampedLat,
+        lng: clampedLng,
+        realGeoLat: latitude,
+        realGeoLng: longitude,
+        gpsAccuracy: accuracy || 0,
+        lastGpsUpdate: nowTime,
+        isGpsRealActive: true
+      });
+      queueOfflineGpsCoord({
+        riderId: currentRider.id,
+        lat: clampedLat,
+        lng: clampedLng,
+        realGeoLat: latitude,
+        realGeoLng: longitude,
+        accuracy: accuracy || 0,
+        timestamp: nowTime
+      }).catch(() => {});
+    }
+
+    // Move phone Leaflet map marker if visible
+    try {
+      if (phoneRiderMarkerRef.current && (phoneRiderMarkerRef.current as any)._map) {
+        phoneRiderMarkerRef.current.setLatLng([latitude, longitude]);
+      }
+      if (phoneMapInstanceRef.current && (phoneMapInstanceRef.current as any)._loaded) {
+        phoneMapInstanceRef.current.panTo([latitude, longitude]);
+      }
+    } catch (err) {
+      // Ignore marker movement on detached/unmounting maps
+    }
+
+    setSimulationLog(prev => [
+      `📡 GPS REAL CELULAR: Lat ${latitude.toFixed(6)}, Lng ${longitude.toFixed(6)} (±${Math.round(accuracy || 0)}m) às ${nowTime}`,
+      ...prev
+    ].slice(0, 10));
+  };
+
+  // Start continuous watchPosition with auto-fallback and auto-recovery
+  const startRealGpsTracking = (forceHighAccuracy: boolean = true) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setRealGpsStatus('error');
       setRealGpsErrorMessage('Navegador não possui suporte ao GPS Geolocation.');
       triggerPhoneNotification('GPS Indisponível', 'Seu dispositivo ou navegador não suporta a API de Geolocalização.', 'failure');
@@ -1247,128 +1337,115 @@ export default function RiderAppSimulator({
 
     setRealGpsStatus('connecting');
     setRealGpsErrorMessage('');
+    gpsFallbackModeRef.current = !forceHighAccuracy;
 
+    // Clear any previous watcher and retry timer
     if (realGpsWatchRef.current !== null) {
       navigator.geolocation.clearWatch(realGpsWatchRef.current);
+      realGpsWatchRef.current = null;
+    }
+    if (gpsRetryTimeoutRef.current) {
+      clearTimeout(gpsRetryTimeoutRef.current);
+      gpsRetryTimeoutRef.current = null;
     }
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude, accuracy, speed } = pos.coords;
-        const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-        setRealGpsStatus('active');
-        setIsRealGpsActive(true);
-        setRealGpsData({
-          lat: latitude,
-          lng: longitude,
-          accuracy: accuracy || 0,
-          speed: speed,
-          timestamp: pos.timestamp || Date.now()
-        });
-
-        // Calculate SVG percentage coordinates for fallback map grids
-        const nextLatPercent = (-23.52 - latitude) / 0.12 * 100;
-        const nextLngPercent = (longitude - (-46.72)) / 0.18 * 100;
-
-        const clampedLat = Math.min(100, Math.max(0, nextLatPercent));
-        const clampedLng = Math.min(100, Math.max(0, nextLngPercent));
-
-        if (selectedRider) {
-          onUpdateRiderCoords(
-            selectedRider.id,
-            clampedLat,
-            clampedLng,
-            latitude,
-            longitude,
-            accuracy || 0,
-            nowTime,
-            true
-          );
-          realtimeSyncBus.broadcastRiderGps({
-            riderId: selectedRider.id,
-            lat: clampedLat,
-            lng: clampedLng,
-            realGeoLat: latitude,
-            realGeoLng: longitude,
-            gpsAccuracy: accuracy || 0,
-            lastGpsUpdate: nowTime,
-            isGpsRealActive: true
-          });
-          queueOfflineGpsCoord({
-            riderId: selectedRider.id,
-            lat: clampedLat,
-            lng: clampedLng,
-            realGeoLat: latitude,
-            realGeoLng: longitude,
-            accuracy: accuracy || 0,
-            timestamp: nowTime
-          }).catch(() => {});
-        }
-
-        // Move phone Leaflet map marker if visible
-        try {
-          if (phoneRiderMarkerRef.current && (phoneRiderMarkerRef.current as any)._map) {
-            phoneRiderMarkerRef.current.setLatLng([latitude, longitude]);
-          }
-          if (phoneMapInstanceRef.current && (phoneMapInstanceRef.current as any)._loaded) {
-            phoneMapInstanceRef.current.panTo([latitude, longitude]);
-          }
-        } catch (err) {
-          // Ignore marker movement on detached/unmounting maps
-        }
-
-        setSimulationLog(prev => [
-          `📡 GPS REAL CELULAR: Lat ${latitude.toFixed(6)}, Lng ${longitude.toFixed(6)} (±${Math.round(accuracy)}m) às ${nowTime}`,
-          ...prev
-        ].slice(0, 10));
+    // STEP 1: Quick instant fix via cached/network position to show immediate location without delay
+    navigator.geolocation.getCurrentPosition(
+      (quickPos) => {
+        handleGpsCoordinateUpdate(quickPos.coords, quickPos.timestamp);
       },
-      (err) => {
-        console.warn('Geolocation watchPosition error:', err);
-        let errorMsg = 'Erro ao capturar sinal do GPS.';
-        if (err.code === err.PERMISSION_DENIED) {
-          setRealGpsStatus('denied');
-          errorMsg = 'Permissão de localização foi negada no celular. Permita o GPS no seu navegador para rastrear ao vivo.';
-          triggerPhoneNotification('GPS Negado', 'Habilite a localização no navegador do celular.', 'failure');
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          setRealGpsStatus('error');
-          errorMsg = 'Sinal de GPS temporariamente indisponível.';
-        } else if (err.code === err.TIMEOUT) {
-          setRealGpsStatus('error');
-          errorMsg = 'Tempo limite esgotado ao aguardar o sinal do GPS do celular.';
-        }
-        setRealGpsErrorMessage(errorMsg);
-        setIsRealGpsActive(false);
+      (quickErr) => {
+        // Quick initial fix failed; continuous watchPosition below will continue trying
+        console.debug('Fast initial GPS probe:', quickErr.message);
       },
       {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 1000
+        enableHighAccuracy: false,
+        timeout: 6000,
+        maximumAge: 60000
+      }
+    );
+
+    // STEP 2: Continuous watchPosition
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        handleGpsCoordinateUpdate(pos.coords, pos.timestamp);
+      },
+      (err) => {
+        console.warn('Geolocation watchPosition error:', err.code, err.message);
+        let errorMsg = 'Erro ao capturar sinal do GPS.';
+        
+        if (err.code === err.PERMISSION_DENIED) {
+          setRealGpsStatus('denied');
+          errorMsg = 'Permissão de localização negada no navegador. Habilite o GPS no ícone de configurações da barra de endereços.';
+          setIsRealGpsActive(false);
+          triggerPhoneNotification('GPS Negado', 'Permita o acesso à localização nas configurações do navegador.', 'failure');
+          return;
+        }
+
+        if (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE) {
+          if (forceHighAccuracy && !gpsFallbackModeRef.current) {
+            // Fallback immediately to standard balanced accuracy (Wi-Fi/Cellular) which is reliable indoors
+            console.log('GPS satellite lock timed out. Switching to balanced network geolocation...');
+            gpsFallbackModeRef.current = true;
+            if (realGpsWatchRef.current !== null) {
+              navigator.geolocation.clearWatch(realGpsWatchRef.current);
+              realGpsWatchRef.current = null;
+            }
+            startRealGpsTracking(false);
+            return;
+          }
+
+          setRealGpsStatus('error');
+          errorMsg = err.code === err.TIMEOUT 
+            ? 'Tempo limite esgotado. Buscando sinal do GPS novamente...' 
+            : 'Sinal de GPS temporariamente fraco. Tentando restabelecer...';
+          
+          setRealGpsErrorMessage(errorMsg);
+
+          // Auto-reconnect in 8 seconds instead of permanently failing
+          if (!gpsRetryTimeoutRef.current) {
+            gpsRetryTimeoutRef.current = setTimeout(() => {
+              gpsRetryTimeoutRef.current = null;
+              startRealGpsTracking(false);
+            }, 8000);
+          }
+        }
+      },
+      {
+        enableHighAccuracy: forceHighAccuracy,
+        timeout: forceHighAccuracy ? 20000 : 30000,
+        maximumAge: forceHighAccuracy ? 5000 : 15000
       }
     );
 
     realGpsWatchRef.current = watchId;
 
     triggerPhoneNotification(
-      '📡 GPS Real Conectando...',
-      'Capturando sinal do sensor de localização do seu celular.',
+      '📡 Conectando GPS...',
+      forceHighAccuracy ? 'Capturando sinal de satélite de alta precisão.' : 'Capturando coordenadas do dispositivo.',
       'info'
     );
   };
 
   const stopRealGpsTracking = () => {
-    if (realGpsWatchRef.current !== null && navigator.geolocation) {
+    if (realGpsWatchRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.clearWatch(realGpsWatchRef.current);
       realGpsWatchRef.current = null;
     }
+    if (gpsRetryTimeoutRef.current) {
+      clearTimeout(gpsRetryTimeoutRef.current);
+      gpsRetryTimeoutRef.current = null;
+    }
     setIsRealGpsActive(false);
     setRealGpsStatus('off');
+    setRealGpsErrorMessage('');
 
-    if (selectedRider) {
-      onUpdateRiderCoords(
-        selectedRider.id,
-        selectedRider.lat,
-        selectedRider.lng,
+    const currentRider = selectedRiderRef.current;
+    if (currentRider) {
+      onUpdateRiderCoordsRef.current(
+        currentRider.id,
+        currentRider.lat,
+        currentRider.lng,
         undefined,
         undefined,
         undefined,
@@ -1382,81 +1459,92 @@ export default function RiderAppSimulator({
   };
 
   const captureInstantLocation = () => {
-    if (!navigator.geolocation) {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
       triggerPhoneNotification('GPS Indisponível', 'Navegador sem suporte a geolocalização.', 'failure');
       return;
     }
 
     setRealGpsStatus('connecting');
+    setRealGpsErrorMessage('');
+
+    // Attempt high accuracy first, falling back to network if needed
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-        setRealGpsStatus('active');
-        setIsRealGpsActive(true);
-        setRealGpsData({
-          lat: latitude,
-          lng: longitude,
-          accuracy: accuracy || 0,
-          speed: pos.coords.speed,
-          timestamp: pos.timestamp || Date.now()
-        });
-
-        const nextLatPercent = (-23.52 - latitude) / 0.12 * 100;
-        const nextLngPercent = (longitude - (-46.72)) / 0.18 * 100;
-
-        if (selectedRider) {
-          onUpdateRiderCoords(
-            selectedRider.id,
-            nextLatPercent,
-            nextLngPercent,
-            latitude,
-            longitude,
-            accuracy || 0,
-            nowTime,
-            true
-          );
-          realtimeSyncBus.broadcastRiderGps({
-            riderId: selectedRider.id,
-            lat: nextLatPercent,
-            lng: nextLngPercent,
-            realGeoLat: latitude,
-            realGeoLng: longitude,
-            gpsAccuracy: accuracy || 0,
-            lastGpsUpdate: nowTime,
-            isGpsRealActive: true
-          });
-        }
-
+        handleGpsCoordinateUpdate(pos.coords, pos.timestamp);
         triggerPhoneNotification(
           '📍 GPS Capturado com Sucesso!',
-          `Coordenadas Reais: ${latitude.toFixed(5)}, ${longitude.toFixed(5)} (Precisão: ±${Math.round(accuracy)}m)`,
+          `Coordenadas: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${Math.round(pos.coords.accuracy || 0)}m)`,
           'success'
         );
       },
       (err) => {
-        setRealGpsStatus('denied');
-        triggerPhoneNotification('GPS Desativado', 'Verifique as permissões de localização do celular.', 'failure');
+        if (err.code === err.PERMISSION_DENIED) {
+          setRealGpsStatus('denied');
+          setRealGpsErrorMessage('Permissão de GPS negada.');
+          triggerPhoneNotification('GPS Negado', 'Permita o acesso à localização no navegador.', 'failure');
+          return;
+        }
+        // Fallback to low-accuracy/cached network coordinate
+        navigator.geolocation.getCurrentPosition(
+          (fallbackPos) => {
+            handleGpsCoordinateUpdate(fallbackPos.coords, fallbackPos.timestamp);
+            triggerPhoneNotification(
+              '📍 GPS Capturado (Modo Rede)',
+              `Coordenadas: ${fallbackPos.coords.latitude.toFixed(5)}, ${fallbackPos.coords.longitude.toFixed(5)} (±${Math.round(fallbackPos.coords.accuracy || 0)}m)`,
+              'success'
+            );
+          },
+          (finalErr) => {
+            setRealGpsStatus('error');
+            setRealGpsErrorMessage('Não foi possível obter a posição atual do GPS.');
+            triggerPhoneNotification('GPS Falhou', 'Verifique o sensor de localização do aparelho.', 'failure');
+          },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        );
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
   };
+
+  // Keep GPS alive when returning to app (after opening Google Maps, switching tabs, or unlocking screen)
+  useEffect(() => {
+    const handleReactivateGpsOnFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const isLogged = localStorage.getItem('vinimap_driver_logged_in') === 'true';
+        if (isLogged) {
+          if (typeof navigator !== 'undefined' && navigator.geolocation) {
+            startRealGpsTracking(true);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleReactivateGpsOnFocus);
+    window.addEventListener('focus', handleReactivateGpsOnFocus);
+    window.addEventListener('online', handleReactivateGpsOnFocus);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleReactivateGpsOnFocus);
+      window.removeEventListener('focus', handleReactivateGpsOnFocus);
+      window.removeEventListener('online', handleReactivateGpsOnFocus);
+    };
+  }, []);
 
   // Initialize first available rider (only in non-standalone desktop preview mode)
   useEffect(() => {
     if (!isStandalone && !isEffectiveRealDevice && riders.length > 0 && !selectedRiderId) {
       changeSelectedRiderId(riders[0].id);
     }
-  }, [riders, selectedRiderId, isStandalone, isEffectiveRealDevice]);
+  }, [riders.length, selectedRiderId, isStandalone, isEffectiveRealDevice]);
 
   // Auto-activate real GPS tracking when driver is active on a real device or when tracking starts
+  const hasAutoStartedGpsRef = useRef(false);
   useEffect(() => {
-    if (selectedRider && currentScreen !== 'login' && !isRealGpsActive && (realGpsStatus === 'off' || realGpsStatus === 'connecting') && typeof navigator !== 'undefined' && navigator.geolocation) {
-      // Auto-start GPS tracking
-      startRealGpsTracking();
+    if (selectedRider && currentScreen !== 'login' && !isRealGpsActive && realGpsStatus === 'off' && !hasAutoStartedGpsRef.current && typeof navigator !== 'undefined' && navigator.geolocation) {
+      hasAutoStartedGpsRef.current = true;
+      startRealGpsTracking(true);
     }
-  }, [selectedRider?.id, currentScreen, isEffectiveRealDevice, isStandalone]);
+  }, [selectedRider?.id, currentScreen, isRealGpsActive, realGpsStatus]);
 
   // Active highlighted/selected order in focus
   const focusedOrder = (currentScreen === 'details' && selectedOrder)
@@ -1664,6 +1752,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 };
 
   // Sync / pre-populate protocols based on completed orders of today for the driver
+  const completedOrdersFingerprint = useMemo(() => {
+    if (!orders || orders.length === 0) return '';
+    return orders
+      .filter(o => o.status === 'Concluído' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o))
+      .map(o => `${o.id}:${o.status}:${o.riderId || ''}:${o.deliveryDate || ''}:${o.protocolNumber || ''}`)
+      .join('|');
+  }, [orders]);
+
   useEffect(() => {
     if (!orders || orders.length === 0) return;
     
@@ -1727,7 +1823,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
       return updatedProtocols;
     });
-  }, [selectedRiderId, orders]);
+  }, [selectedRiderId, completedOrdersFingerprint]);
 
   // Render Expandable Delivery Cards with status transition options
   const renderDeliveryCards = () => {
@@ -2245,7 +2341,19 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       map.fitBounds(bounds, { padding: [30, 30] });
     }
 
+    // Invalidate size shortly after mounting to fix tile rendering issues
+    const resizeTimer = setTimeout(() => {
+      try {
+        if (phoneMapInstanceRef.current && (phoneMapInstanceRef.current as any)._loaded) {
+          phoneMapInstanceRef.current.invalidateSize();
+        }
+      } catch (err) {
+        // Ignore map resize error on unmounted elements
+      }
+    }, 250);
+
     return () => {
+      clearTimeout(resizeTimer);
       if (phoneMapInstanceRef.current) {
         phoneMapInstanceRef.current.remove();
         phoneMapInstanceRef.current = null;
@@ -3589,6 +3697,24 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <Download size={14} className="animate-bounce" />
                       <span>{deferredPrompt ? '⚡ Instalar App no Celular' : '📱 Instalar / Baixar Aplicativo'}</span>
                     </button>
+
+                    {/* Button to Return to Admin Dashboard / Login */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onExitToAdmin) {
+                          onExitToAdmin();
+                        } else {
+                          localStorage.removeItem('vinimap_is_driver_app');
+                          localStorage.removeItem('vinimap_driver_id');
+                          window.location.href = window.location.pathname + '?admin=1';
+                        }
+                      }}
+                      className="w-full py-2 bg-slate-800/90 hover:bg-slate-700 active:bg-slate-800 text-slate-300 hover:text-white font-bold text-[10.5px] rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-1.5 mt-1"
+                    >
+                      <Shield size={13} className="text-blue-400" />
+                      <span>Painel do Administrador (Login)</span>
+                    </button>
                   </form>
 
                   {/* Footer Terms */}
@@ -3864,10 +3990,28 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               <Download size={15} />
                               <span>Instalar Aplicativo PWA</span>
                             </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDrawerMenuOpen(false);
+                                if (onExitToAdmin) {
+                                  onExitToAdmin();
+                                } else {
+                                  localStorage.removeItem('vinimap_is_driver_app');
+                                  localStorage.removeItem('vinimap_driver_id');
+                                  window.location.href = window.location.pathname + '?admin=1';
+                                }
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-sky-300 hover:bg-sky-950/40 border border-sky-500/30 transition-all cursor-pointer"
+                            >
+                              <Shield size={15} className="text-sky-400" />
+                              <span>Painel do Administrador (Login)</span>
+                            </button>
                           </div>
 
                           {/* Drawer Footer Logout */}
-                          <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0">
+                          <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0 space-y-2">
                             <button
                               type="button"
                               onClick={async () => {
@@ -4075,6 +4219,57 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       )}
                     </AnimatePresence>
                     
+                    {/* INLINE GPS DIAGNOSTICS & RECOVERY BAR */}
+                    {realGpsStatus === 'denied' && (
+                      <div className="mx-3.5 mt-2.5 p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 shadow-xs text-rose-800">
+                        <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-extrabold text-xs text-rose-950 mb-0.5">Permissão do GPS Bloqueada</h5>
+                          <p className="text-[10px] text-rose-700 leading-tight mb-2">
+                            O navegador não tem permissão para acessar o sensor de localização. Habilite a localização nas configurações do navegador para que o rastreamento funcione.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => startRealGpsTracking(true)}
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-bold transition-all shadow-3xs flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <RefreshCw size={11} />
+                            <span>Tentar Novamente / Permitir GPS</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {realGpsStatus === 'error' && (
+                      <div className="mx-3.5 mt-2.5 p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 shadow-xs text-amber-800">
+                        <Compass size={16} className="text-amber-600 shrink-0 mt-0.5 animate-spin" />
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-extrabold text-xs text-amber-950 mb-0.5">Sinal de GPS em Busca</h5>
+                          <p className="text-[10px] text-amber-700 leading-tight mb-2">
+                            {realGpsErrorMessage || 'Sinal de satélite fraco. O sistema está buscando novas coordenadas automaticamente.'}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startRealGpsTracking(false)}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-bold transition-all shadow-3xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <RefreshCw size={11} />
+                              <span>Reconectar Modo Rede</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={captureInstantLocation}
+                              className="px-2.5 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-xl text-[10px] font-bold transition-all shadow-3xs flex items-center gap-1 cursor-pointer"
+                            >
+                              <MapPin size={11} />
+                              <span>Capturar Agora</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* VIEW: HOME / DASHBOARD TAB */}
                     {activeTab === 'home' && (
                       <div className="p-3.5 sm:p-4 space-y-3.5">
@@ -5634,7 +5829,13 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                     <button
                       type="button"
-                      onClick={isRealGpsActive ? stopRealGpsTracking : startRealGpsTracking}
+                      onClick={() => {
+                        if (isRealGpsActive) {
+                          stopRealGpsTracking();
+                        } else {
+                          startRealGpsTracking(true);
+                        }
+                      }}
                       className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-md flex items-center gap-1.5 ${
                         isRealGpsActive
                           ? 'bg-rose-600 hover:bg-rose-700 text-white'

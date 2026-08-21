@@ -286,8 +286,29 @@ export default function App() {
     const urlAdmin = params.get('admin');
     const urlView = params.get('view');
     const urlMode = params.get('mode');
+    const isHashLogin = typeof window !== 'undefined' && window.location.hash === '#login';
 
-    // If explicit admin requested in URL
+    const isExplicitLogin = 
+      params.get('login') === '1' ||
+      params.get('login') === 'true' ||
+      urlView === 'login' ||
+      urlView === 'admin_login' ||
+      urlAdmin === 'login' ||
+      urlMode === 'login' ||
+      isHashLogin;
+
+    // If explicit login or admin requested in URL
+    if (isExplicitLogin) {
+      localStorage.removeItem('vinimap_is_driver_app');
+      localStorage.removeItem('vinimap_driver_id');
+      localStorage.setItem('vinimap_logged_out', 'true');
+      localStorage.removeItem('vinimap_admin_session');
+      setIsStandaloneRider(false);
+      setIsRealDeviceMode(false);
+      setIsAdminAuthenticated(false);
+      return;
+    }
+
     if (urlAdmin === '1' || urlView === 'admin' || urlMode === 'admin') {
       localStorage.removeItem('vinimap_is_driver_app');
       localStorage.removeItem('vinimap_driver_id');
@@ -331,7 +352,7 @@ export default function App() {
       // Clean standard state: do not lock user out of Admin Login / Admin Dashboard
       setIsStandaloneRider(false);
     }
-  }, []);
+  }, [setIsAdminAuthenticated]);
 
   // Admin panel states
   const [adminTab, setAdminTab] = useState<'financeiro' | 'relatorios' | 'clientes' | 'condutores' | 'supabase' | 'github' | 'sede' | 'logo_sede' | 'notificacoes'>('financeiro');
@@ -4058,6 +4079,14 @@ export default function App() {
               onActiveRiderChange={setSelectedRiderId}
               isStandalone={true}
               isRealDevice={isRealDeviceMode}
+              onExitToAdmin={() => {
+                localStorage.removeItem('vinimap_is_driver_app');
+                localStorage.removeItem('vinimap_driver_id');
+                setIsStandaloneRider(false);
+                setIsRealDeviceMode(false);
+                setIsAdminAuthenticated(false);
+                setActiveSection('dashboard');
+              }}
             />
           </main>
         </div>

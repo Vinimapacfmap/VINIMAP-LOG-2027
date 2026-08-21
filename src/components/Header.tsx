@@ -570,6 +570,29 @@ export default function Header({
                     </div>
                     <ChevronRight size={13} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
+
+                  <button 
+                    onClick={() => {
+                      setShowProfile(false);
+                      if (onLogout) {
+                        onLogout();
+                      } else {
+                        localStorage.removeItem('vinimap_admin_session');
+                        localStorage.setItem('vinimap_logged_out', 'true');
+                        window.location.reload();
+                      }
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50/70 rounded-xl transition-colors cursor-pointer group text-left"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 transition-colors">
+                      <ShieldCheck size={13} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="leading-tight text-slate-800 group-hover:text-blue-700 font-bold text-[11px]">Tela de Login (Bloquear)</p>
+                      <p className="text-[9.5px] text-slate-400 mt-0.5 leading-tight truncate">Exibir tela de autenticação do administrador</p>
+                    </div>
+                    <ChevronRight size={13} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
                 </div>
 
                 {/* Elegant Sair do Painel Card */}
