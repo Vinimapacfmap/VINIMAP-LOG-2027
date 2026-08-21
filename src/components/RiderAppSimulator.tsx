@@ -372,27 +372,51 @@ export default function RiderAppSimulator({
       onUpdateOrders(updatedOrders);
     }
   };
-  const [currentScreen, setCurrentScreen] = useState<'login' | 'dashboard' | 'map' | 'deliveries' | 'details'>('login');
-  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'tasks' | 'protocols' | 'help' | 'audio'>('home');
+  const [currentScreen, setCurrentScreen] = useState<'login' | 'dashboard' | 'map' | 'deliveries' | 'details'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
+      const savedRiderId = localStorage.getItem('vinimap_driver_id') || lockedRiderId;
+      if (savedLoggedIn && savedRiderId) {
+        const savedScreen = localStorage.getItem('vinimap_driver_active_screen');
+        if (savedScreen === 'details' && localStorage.getItem('vinimap_driver_selected_order_id')) {
+          return 'details';
+        }
+        return 'dashboard';
+      }
+    }
+    return 'login';
+  });
+
+  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'tasks' | 'protocols' | 'help' | 'audio'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
+      const savedTab = localStorage.getItem('vinimap_driver_active_tab');
+      if (savedLoggedIn && savedTab) {
+        return savedTab as any;
+      }
+    }
+    return 'tasks'; // Padrão: tela de pedidos para visualização imediata da fila de entregas
+  });
+
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-  // Helper to persist driver session and selected order before external map navigation
+  // Helper to persist driver session and selected order before external map navigation (e.g. Google Maps, Waze)
   const prepareExternalMapNavigation = (orderToNavigate?: Order | null) => {
     if (typeof window !== 'undefined') {
       const targetRiderId = selectedRiderId || lockedRiderId;
       if (targetRiderId) {
         localStorage.setItem('vinimap_driver_id', targetRiderId);
         localStorage.setItem('vinimap_driver_logged_in', 'true');
+        localStorage.setItem('vinimap_is_driver_app', 'true');
       }
       const targetOrd = orderToNavigate || selectedOrder;
       if (targetOrd) {
         setSelectedOrder(targetOrd);
         localStorage.setItem('vinimap_driver_selected_order_id', targetOrd.id);
-        localStorage.setItem('vinimap_driver_active_screen', 'details');
-        localStorage.setItem('vinimap_driver_active_tab', 'tasks');
-      } else {
-        localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
       }
+      // Sempre salvar para retornar diretamente à tela de pedidos / entregas
+      localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
+      localStorage.setItem('vinimap_driver_active_tab', 'tasks');
     }
   };
 
@@ -402,6 +426,7 @@ export default function RiderAppSimulator({
       if (selectedRiderId && currentScreen !== 'login') {
         localStorage.setItem('vinimap_driver_id', selectedRiderId);
         localStorage.setItem('vinimap_driver_logged_in', 'true');
+        localStorage.setItem('vinimap_is_driver_app', 'true');
         localStorage.setItem('vinimap_driver_active_screen', currentScreen);
         localStorage.setItem('vinimap_driver_active_tab', activeTab);
         if (selectedOrder) {
@@ -413,13 +438,11 @@ export default function RiderAppSimulator({
 
   const hasRestoredSessionRef = useRef(false);
 
-  // Restore active session and selected order when returning to the app (e.g., after viewing map)
+  // Restore active session and selected order when returning to the app (e.g., after viewing Google Maps)
   useEffect(() => {
-    if (typeof window === 'undefined' || hasRestoredSessionRef.current) return;
+    if (typeof window === 'undefined') return;
     if (riders.length === 0) return;
 
-    hasRestoredSessionRef.current = true;
-    
     const savedLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
     const savedRiderId = localStorage.getItem('vinimap_driver_id') || lockedRiderId;
     const savedOrderId = localStorage.getItem('vinimap_driver_selected_order_id');
@@ -429,34 +452,27 @@ export default function RiderAppSimulator({
     if (savedRiderId) {
       const targetRider = riders.find(r => r.id === savedRiderId);
       if (targetRider) {
-        setSelectedRiderId(targetRider.id);
+        if (!selectedRiderId) {
+          setSelectedRiderId(targetRider.id);
+        }
         
         // Auto restore order if saved
-        if (savedOrderId && orders.length > 0) {
+        if (savedOrderId && orders.length > 0 && !selectedOrder) {
           const foundOrder = orders.find(o => o.id === savedOrderId);
           if (foundOrder) {
             setSelectedOrder(foundOrder);
           }
         }
 
-        // Auto restore logged-in screen instead of resetting to login
+        // Auto restore logged-in screen (tela de pedidos) instead of resetting to login
         if (savedLoggedIn || targetRider.isLoggedIn || isStandalone || isEffectiveRealDevice) {
           if (savedScreen === 'details' && savedOrderId) {
             setCurrentScreen('details');
             setActiveTab('tasks');
-          } else if (savedScreen === 'map' || savedTab === 'map') {
-            setActiveTab('map');
-            if (savedOrderId) {
-              setCurrentScreen('details');
-            } else {
-              setCurrentScreen('dashboard');
-            }
-          } else if (savedScreen === 'dashboard' || savedScreen === 'deliveries') {
+          } else {
             setCurrentScreen('dashboard');
-            if (savedTab) setActiveTab(savedTab as any);
-          } else if (currentScreen === 'login') {
-            // Fallback for active driver session: restore details if order exists, otherwise dashboard
-            setCurrentScreen(savedOrderId ? 'details' : 'dashboard');
+            // Retorna preferencialmente para a tela de pedidos (tasks)
+            setActiveTab(savedTab === 'map' ? 'tasks' : ((savedTab as any) || 'tasks'));
           }
 
           // Auto-start GPS by default upon active session restore
@@ -469,6 +485,29 @@ export default function RiderAppSimulator({
       }
     }
   }, [riders, orders, isStandalone, isEffectiveRealDevice]);
+
+  // Handle visibility change (returning from Google Maps or other backgrounded apps)
+  useEffect(() => {
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const savedLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
+        const savedRiderId = localStorage.getItem('vinimap_driver_id') || lockedRiderId;
+        if (savedLoggedIn && savedRiderId) {
+          // Se o condutor estava autenticado e voltou do mapa externo, garante tela de pedidos
+          setCurrentScreen(prev => (prev === 'login' ? 'dashboard' : prev));
+          setActiveTab(prev => (prev === 'map' ? 'tasks' : prev));
+        }
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
+  }, [lockedRiderId]);
 
   // Keep selectedOrder synced with updated orders prop
   useEffect(() => {
@@ -3410,10 +3449,17 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         console.warn('Non-blocking save error during login:', saveErr);
                       }
 
-                      // Login successful
+                      // Login successful - persist session immediately
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('vinimap_driver_id', matched.id);
+                        localStorage.setItem('vinimap_driver_logged_in', 'true');
+                        localStorage.setItem('vinimap_is_driver_app', 'true');
+                        localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
+                        localStorage.setItem('vinimap_driver_active_tab', 'tasks');
+                      }
                       changeSelectedRiderId(matched.id);
                       setCurrentScreen('dashboard');
-                      setActiveTab('home');
+                      setActiveTab('tasks');
                       setPhoneInput('');
                       setPasswordInput('');
                       setLoginError(null);

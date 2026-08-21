@@ -313,9 +313,12 @@ export default function App() {
       document.referrer.includes('android-app://');
 
     const storedRiderId = localStorage.getItem('vinimap_driver_id');
-    const isPwaWithRider = isPwaDisplay && localStorage.getItem('vinimap_is_driver_app') === 'true' && Boolean(storedRiderId);
+    const isDriverAppStored = localStorage.getItem('vinimap_is_driver_app') === 'true';
+    const isDriverLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
+    const isPwaWithRider = isPwaDisplay && isDriverAppStored && Boolean(storedRiderId);
+    const hasActiveDriverSession = isDriverLoggedIn && Boolean(storedRiderId);
 
-    if (isExplicitRiderParam || isPwaWithRider) {
+    if (isExplicitRiderParam || isPwaWithRider || (hasActiveDriverSession && isDriverAppStored)) {
       setIsStandaloneRider(true);
       setIsRealDeviceMode(true);
       setActiveSection('dispositivo_condutor');
@@ -327,7 +330,6 @@ export default function App() {
     } else {
       // Clean standard state: do not lock user out of Admin Login / Admin Dashboard
       setIsStandaloneRider(false);
-      localStorage.removeItem('vinimap_is_driver_app');
     }
   }, []);
 
