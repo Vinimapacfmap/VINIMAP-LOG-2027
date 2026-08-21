@@ -4027,23 +4027,6 @@ export default function App() {
   if (isStandaloneRider) {
     return (
       <div className="flex flex-col h-screen h-[100dvh] w-screen bg-slate-900 overflow-hidden font-sans antialiased text-slate-100">
-        {/* Top bar with immediate switch to Admin Login / Panel */}
-        <div className="bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center justify-between z-50 shrink-0 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-semibold text-slate-200 text-xs">Modo Aplicativo do Entregador (Campo)</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleExitToAdmin}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
-            title="Alternar para Tela de Login e Painel do Administrador"
-          >
-            <Shield size={14} />
-            <span>Acessar Painel do Administrador (Login)</span>
-          </button>
-        </div>
-
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           <main className="flex-1 overflow-hidden p-0">
             <RiderAppSimulator
@@ -4073,7 +4056,6 @@ export default function App() {
               onActiveRiderChange={setSelectedRiderId}
               isStandalone={true}
               isRealDevice={isRealDeviceMode}
-              onExitToAdmin={handleExitToAdmin}
             />
           </main>
         </div>

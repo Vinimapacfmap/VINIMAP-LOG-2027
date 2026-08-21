@@ -1485,10 +1485,10 @@ export default function RiderAppSimulator({
     }
   };
 
-  // Filter orders for the active driver based on the start-the-day-clean rule.
   // Filter orders for the active driver:
-  // Any open order allocated to the driver (regardless of original date) is displayed on the driver's screen today to follow the route.
-  // Completed/canceled orders remain allocated to the driver for historical and reporting purposes.
+  // PREVIOUS-DAY ORDERS: ONLY displayed if their status is still OPEN/PENDING in the Admin dashboard ('Não iniciado', 'Em rota').
+  // COMPLETED/CANCELED orders from previous days are permanently excluded from the driver's active route screen.
+  // TODAY'S ORDERS: Open orders are shown to follow the route, and today's completed/occurrence orders are displayed for daily totals.
   const todayIso = getSaoPauloISODate();
   const todayFormatted = getSaoPauloDate();
 
@@ -1496,20 +1496,55 @@ export default function RiderAppSimulator({
     const isAssignedToRider = isOrderMatchingRider(order, selectedRiderId || selectedRider?.id, riders);
     if (!isAssignedToRider) return false;
     
-    // Open orders allocated to this driver MUST be displayed on driver screen today to follow route, even if from another date
-    if (order.status !== 'Concluído' && order.status !== 'Cancelado') {
-      return true;
+    // Extract base order creation/assignment date
+    const rawOrderDate = order.date 
+      || order.rawData?.DataSolicitacao 
+      || order.rawData?.dataSolicitacao 
+      || order.rawData?.DataLancamento 
+      || order.rawData?.dataLancamento 
+      || order.rawData?.DataEntrega 
+      || order.rawData?.dataEntrega 
+      || order.rawData?.Data 
+      || order.rawData?.data 
+      || order.createdAt;
+
+    const orderIsoDate = extractISODateFromTimestamp(rawOrderDate) || (order.date ? String(order.date).split('T')[0] : '') || todayIso;
+    const isFromToday = orderIsoDate === todayIso;
+
+    // Statuses that are considered "em aberto" (open / pending in the Admin dashboard)
+    const isOpenStatus = order.status === 'Não iniciado' || order.status === 'Em rota' || (order.status as string) === 'Entregando';
+
+    // REGRA MANDATÓRIA: Pedidos de datas anteriores (dia anterior) SÓ devem ser exibidos se o status estiver em aberto no painel ADM
+    if (!isFromToday) {
+      return isOpenStatus;
     }
 
-    // For completed orders, show ONLY if completed TODAY (Padrão: exibir apenas pedidos concluídos do dia)
+    // Pedidos do dia de hoje (today):
+    // 1. Pedidos em aberto ('Não iniciado', 'Em rota') são exibidos para o condutor executar
+    if (isOpenStatus) return true;
+
+    // 2. Pedidos concluídos no dia de hoje
     if (order.status === 'Concluído') {
-      const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || order.date) || order.deliveryDate || order.dataConclusao || order.date;
+      const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || order.date) 
+        || (order.deliveryDate ? String(order.deliveryDate).split('T')[0] : '') 
+        || (order.dataConclusao ? String(order.dataConclusao).split('T')[0] : '') 
+        || todayIso;
       return completionDate === todayIso;
     }
 
-    // For canceled orders, show if canceled today
+    // 3. Ocorrências do dia de hoje
+    if (order.status === 'Ocorrência') {
+      const occurrenceDate = extractISODateFromTimestamp(order.occurrenceDate || order.deliveryDate || order.date) 
+        || (order.occurrenceDate ? String(order.occurrenceDate).split('T')[0] : '') 
+        || todayIso;
+      return occurrenceDate === todayIso;
+    }
+
+    // 4. Cancelados do dia de hoje
     if (order.status === 'Cancelado') {
-      const canceledDate = extractISODateFromTimestamp(order.date) || order.date;
+      const canceledDate = extractISODateFromTimestamp(order.date) 
+        || (order.date ? String(order.date).split('T')[0] : '') 
+        || todayIso;
       return canceledDate === todayIso;
     }
 
@@ -3408,11 +3443,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     className="space-y-3.5 my-3"
                   >
                     <div className="space-y-3">
-                      {/* Driver Select Dropdown */}
+                      {/* Exclusive Driver Identification */}
                       {lockedRiderId ? (
                         <div>
                           <label className="text-[9.5px] font-bold text-emerald-300 uppercase tracking-wider block mb-1">
-                            🔒 Condutor Exclusivo do Link
+                            🔒 Condutor Exclusivo do Dispositivo
                           </label>
                           <div className="bg-slate-800/90 border border-emerald-500/40 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-inner">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -3433,58 +3468,40 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       ) : (
                         <div>
                           <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">
-                            Condutor Cadastrado (Selecione abaixo)
+                            Identificação do Condutor
                           </label>
                           <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-blue-300 pointer-events-none z-10">
+                            <span className="absolute left-3 top-2.5 text-blue-300">
                               <User size={13} />
                             </span>
-                            <select
-                              value={selectedRiderId || ''}
-                              onChange={(e) => {
-                                const id = e.target.value;
-                                if (id) {
-                                  const r = riders.find(item => item.id === id);
-                                  if (r) {
-                                    changeSelectedRiderId(r.id);
-                                    setPhoneInput(r.deviceNumber || r.phone || r.name);
-                                    setPasswordInput(r.password || '1234');
-                                    setLoginError(null);
-                                  }
-                                } else {
-                                  changeSelectedRiderId('');
-                                  setPhoneInput('');
-                                  setPasswordInput('');
-                                }
-                              }}
-                              className="w-full bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-900 border border-white/20 focus:border-blue-400 rounded-xl py-2 pl-8 pr-3 text-xs text-white focus:outline-none transition-all cursor-pointer font-semibold shadow-inner"
-                            >
-                              <option value="" className="bg-slate-900 text-slate-300">-- Selecione o Condutor Cadastrado --</option>
-                              {riders.map(r => (
-                                <option key={r.id} value={r.id} className="bg-slate-900 text-white">
-                                  {r.name} ({r.vehicle || 'Veículo'}) — {r.deviceNumber || r.phone || 'Cadastrado'}
-                                </option>
-                              ))}
-                            </select>
+                            <input 
+                              type="text"
+                              placeholder="Dispositivo, Telefone, CPF ou Matrícula"
+                              value={phoneInput}
+                              onChange={(e) => setPhoneInput(e.target.value)}
+                              className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/15 focus:border-white/35 rounded-xl py-2 pl-8 pr-3 text-xs text-white placeholder-blue-300/60 focus:outline-none transition-all"
+                            />
                           </div>
                         </div>
                       )}
 
-                      <div>
-                        <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">Dispositivo / Telefone</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-2.5 text-blue-300">
-                            <Phone size={12} />
-                          </span>
-                          <input 
-                            type="text"
-                            placeholder="Ex: DISP01 ou Telefone"
-                            value={phoneInput}
-                            onChange={(e) => setPhoneInput(e.target.value)}
-                            className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/15 focus:border-white/35 rounded-xl py-2 pl-8 pr-3 text-xs text-white placeholder-blue-300/60 focus:outline-none transition-all"
-                          />
+                      {lockedRiderId && (
+                        <div>
+                          <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">Dispositivo / Telefone</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-blue-300">
+                              <Phone size={12} />
+                            </span>
+                            <input 
+                              type="text"
+                              placeholder="Ex: DISP01 ou Telefone"
+                              value={phoneInput}
+                              onChange={(e) => setPhoneInput(e.target.value)}
+                              className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/15 focus:border-white/35 rounded-xl py-2 pl-8 pr-3 text-xs text-white placeholder-blue-300/60 focus:outline-none transition-all"
+                            />
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       <div>
                         <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">Senha de Acesso</label>
@@ -3513,7 +3530,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       type="submit"
                       className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-950/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                      <span>Acessar Painel</span>
+                      <span>Acessar Aplicativo</span>
                       <ChevronRight size={13} />
                     </button>
 
@@ -3528,50 +3545,8 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     </button>
                   </form>
 
-                  {/* Quick select helpful tool - only in simulator preview mode without locked link */}
-                  {!lockedRiderId && (
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
-                      <span className="text-[8.5px] font-black text-blue-300 uppercase tracking-wider block">
-                        ⚡ Seleção Rápida de Condutores Cadastrados:
-                      </span>
-                      <div className="grid grid-cols-1 gap-1 max-h-[120px] overflow-y-auto pr-1">
-                        {riders.map(r => (
-                          <button
-                            key={r.id}
-                            type="button"
-                            onClick={() => {
-                              changeSelectedRiderId(r.id);
-                              setPhoneInput(r.deviceNumber || r.phone || r.name);
-                              setPasswordInput(r.password || '1234');
-                              setLoginError(null);
-                            }}
-                            className="w-full py-1 px-2 bg-white/5 hover:bg-white/10 active:bg-white/15 rounded-lg text-left text-[9.5px] text-blue-100 flex items-center justify-between gap-1 border border-white/5 transition-all cursor-pointer"
-                          >
-                            <span className="font-semibold truncate">{r.name} ({r.vehicle})</span>
-                            <span className="font-mono text-blue-300 shrink-0">{r.deviceNumber || r.phone} (senha: {r.password || '1234'})</span>
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[8px] text-blue-300/60 leading-none m-0 text-center">Senha padrão: <strong className="text-blue-300">1234</strong> ou a cadastrada pelo administrador.</p>
-                    </div>
-                  )}
-
-                  {/* Footer Terms & Admin Switcher */}
+                  {/* Footer Terms */}
                   <div className="space-y-2 pt-1 pb-1 text-center">
-                    {onExitToAdmin && (
-                      <div className="pt-2 border-t border-white/15">
-                        <button
-                          type="button"
-                          onClick={onExitToAdmin}
-                          className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-900/80 via-slate-800 to-indigo-950/80 hover:from-blue-800 hover:to-indigo-900 text-blue-200 hover:text-white border border-blue-400/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg group"
-                        >
-                          <Shield size={15} className="text-blue-400 group-hover:scale-110 transition-transform" />
-                          <span>Ir para o Painel do Administrador (Login)</span>
-                        </button>
-                        <p className="text-[9px] text-blue-300/70 mt-1">Área restrita de operadores e administradores</p>
-                      </div>
-                    )}
-
                     <div className="text-[8.5px] text-blue-300/80">
                       Ao conectar, você aceita os termos operacionais do Vinimap OS.
                     </div>
@@ -3877,20 +3852,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               <LogOut size={15} />
                               <span>Sair do Aplicativo</span>
                             </button>
-
-                            {onExitToAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsDrawerMenuOpen(false);
-                                  onExitToAdmin();
-                                }}
-                                className="w-full py-2.5 bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 hover:text-white border border-blue-600/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer mt-2"
-                              >
-                                <Shield size={14} className="text-blue-400" />
-                                <span>Painel do Administrador</span>
-                              </button>
-                            )}
                           </div>
                         </motion.div>
                       </motion.div>
