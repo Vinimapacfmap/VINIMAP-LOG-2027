@@ -81,7 +81,8 @@ import {
   Lock as LockIcon,
   Menu,
   Users,
-  LogOut
+  LogOut,
+  Package
 } from 'lucide-react';
 import { SignatureCanvasModal } from './SignatureCanvasModal';
 import { DriverAppInstallerModal } from './DriverAppInstallerModal';
@@ -1623,23 +1624,30 @@ export default function RiderAppSimulator({
     const isAssignedToRider = isOrderMatchingRider(order, selectedRiderId || selectedRider?.id, riders);
     if (!isAssignedToRider) return false;
     
-    // Extract base order creation/assignment date
+    // Extract true operational date
     const rawOrderDate = order.date 
+      || order.deliveryDate
+      || order.dataConclusao
+      || order.occurrenceDate
+      || order.rawData?.DataEntrega 
+      || order.rawData?.dataEntrega 
       || order.rawData?.DataSolicitacao 
       || order.rawData?.dataSolicitacao 
       || order.rawData?.DataLancamento 
       || order.rawData?.dataLancamento 
-      || order.rawData?.DataEntrega 
-      || order.rawData?.dataEntrega 
       || order.rawData?.Data 
-      || order.rawData?.data 
-      || order.createdAt;
+      || order.rawData?.data;
 
-    const orderIsoDate = extractISODateFromTimestamp(rawOrderDate) || (order.date ? String(order.date).split('T')[0] : '') || todayIso;
-    const isFromToday = orderIsoDate === todayIso;
+    const orderIsoDate = extractISODateFromTimestamp(rawOrderDate) || (order.date ? String(order.date).split('T')[0] : '');
+    const isFromToday = !orderIsoDate || orderIsoDate === todayIso;
+
+    // Check if the order was already completed or baixado in admin
+    const isCompleted = order.status === 'Concluído';
+    const isOccurrence = order.status === 'Ocorrência';
+    const isCanceled = order.status === 'Cancelado';
 
     // Statuses that are considered "em aberto" (open / pending in the Admin dashboard)
-    const isOpenStatus = order.status === 'Não iniciado' || order.status === 'Em rota' || (order.status as string) === 'Entregando';
+    const isOpenStatus = (order.status === 'Não iniciado' || order.status === 'Em rota' || (order.status as string) === 'Entregando') && !isCompleted && !isCanceled && !isOccurrence;
 
     // REGRA MANDATÓRIA: Pedidos de datas anteriores (dia anterior) SÓ devem ser exibidos se o status estiver em aberto no painel ADM
     if (!isFromToday) {
@@ -1651,28 +1659,21 @@ export default function RiderAppSimulator({
     if (isOpenStatus) return true;
 
     // 2. Pedidos concluídos no dia de hoje
-    if (order.status === 'Concluído') {
-      const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || order.date) 
-        || (order.deliveryDate ? String(order.deliveryDate).split('T')[0] : '') 
-        || (order.dataConclusao ? String(order.dataConclusao).split('T')[0] : '') 
-        || todayIso;
-      return completionDate === todayIso;
+    if (isCompleted) {
+      const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || order.date);
+      return !completionDate || completionDate === todayIso;
     }
 
     // 3. Ocorrências do dia de hoje
-    if (order.status === 'Ocorrência') {
-      const occurrenceDate = extractISODateFromTimestamp(order.occurrenceDate || order.deliveryDate || order.date) 
-        || (order.occurrenceDate ? String(order.occurrenceDate).split('T')[0] : '') 
-        || todayIso;
-      return occurrenceDate === todayIso;
+    if (isOccurrence) {
+      const occurrenceDate = extractISODateFromTimestamp(order.occurrenceDate || order.deliveryDate || order.date);
+      return !occurrenceDate || occurrenceDate === todayIso;
     }
 
     // 4. Cancelados do dia de hoje
-    if (order.status === 'Cancelado') {
-      const canceledDate = extractISODateFromTimestamp(order.date) 
-        || (order.date ? String(order.date).split('T')[0] : '') 
-        || todayIso;
-      return canceledDate === todayIso;
+    if (isCanceled) {
+      const canceledDate = extractISODateFromTimestamp(order.date);
+      return !canceledDate || canceledDate === todayIso;
     }
 
     return false;
@@ -4303,132 +4304,134 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           </div>
                         </div>
 
-                        {/* STATUS DAS ENTREGAS GRIDS */}
+                        {/* STATUS DAS ENTREGAS GRIDS - 5 CARDS: TOTAL GERAL, NÃO INICIADO, EM ROTA, CONCLUÍDO, OCORRÊNCIA */}
                         <div className="space-y-1.5">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">📊 Resumo das Entregas (Toque p/ Mudar Status)</span>
-                          <div className="grid grid-cols-3 gap-1.5">
-                            {/* Não iniciado */}
-                            <button
-                              type="button"
-                              onClick={() => handleCardStatusClick('Não iniciado')}
-                              className={`text-left bg-white border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
-                                focusedOrder
-                                  ? 'border-slate-300 hover:border-slate-500 hover:bg-slate-50/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
-                                  : 'border-slate-150 cursor-default'
-                              }`}
-                            >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">📊 Resumo das Entregas</span>
+                            {focusedOrder && (
+                              <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 animate-pulse">
+                                Toque no card p/ mudar status
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Top Row: Total Geral & Não Iniciado */}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {/* 1. Total Geral */}
+                            <div className="bg-gradient-to-br from-indigo-50/90 to-blue-50/70 border border-indigo-200/80 rounded-xl p-2 flex flex-col justify-between shadow-3xs">
                               <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center">
-                                  <Clock size={11} />
+                                <div className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                                  <Package size={11} />
                                 </div>
-                                {focusedOrder && (
-                                  <span className="text-[7px] font-bold text-slate-400 uppercase">Toque</span>
-                                )}
+                                <span className="text-[7.5px] font-bold text-indigo-600 uppercase bg-indigo-100/70 px-1.5 py-0.2 rounded">Plantão</span>
                               </div>
                               <div>
-                                <span className="text-[8px] font-bold text-slate-400 uppercase block truncate">Não Iniciado</span>
-                                <span className="text-sm font-black text-slate-700 font-mono">{naoIniciadoCount}</span>
+                                <span className="text-[8.5px] font-bold text-indigo-900 uppercase block truncate">Total Geral</span>
+                                <span className="text-base font-black text-indigo-950 font-mono leading-none">{totalAssignedCount}</span>
                               </div>
-                            </button>
+                            </div>
 
-                            {/* Não iniciado */}
+                            {/* 2. Não Iniciado */}
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Não iniciado')}
                               className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-amber-50/80 border-amber-300 hover:border-amber-500 hover:bg-amber-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
-                                  : 'bg-amber-50/40 border-amber-100/60 cursor-default'
+                                  ? 'bg-amber-50/90 border-amber-300 hover:border-amber-500 hover:bg-amber-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  : 'bg-amber-50/40 border-amber-200/60 cursor-default'
                               }`}
                             >
                               <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center">
+                                <div className="w-5 h-5 rounded-md bg-amber-500 text-white flex items-center justify-center shadow-xs">
                                   <Clock size={11} />
                                 </div>
-                                {focusedOrder && (
-                                  <span className="text-[7px] font-bold text-amber-500 uppercase">Toque</span>
+                                {focusedOrder ? (
+                                  <span className="text-[7px] font-bold text-amber-600 uppercase bg-amber-100 px-1 py-0.2 rounded">Mudar</span>
+                                ) : (
+                                  <span className="text-[7px] font-semibold text-amber-600">Pendente</span>
                                 )}
                               </div>
                               <div>
-                                <span className="text-[8px] font-bold text-amber-600 uppercase block truncate">Não Iniciado</span>
-                                <span className="text-sm font-black text-amber-800 font-mono">{naoIniciadoCount}</span>
+                                <span className="text-[8.5px] font-bold text-amber-800 uppercase block truncate">Não Iniciado</span>
+                                <span className="text-base font-black text-amber-900 font-mono leading-none">{naoIniciadoCount}</span>
                               </div>
                             </button>
+                          </div>
 
-                            {/* Em Rota */}
+                          {/* Bottom Row: Em Rota, Concluído, Ocorrência */}
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {/* 3. Em Rota */}
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Em rota')}
                               className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-sky-50/80 border-sky-300 hover:border-sky-500 hover:bg-sky-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
-                                  : 'bg-sky-50/40 border-sky-100/60 cursor-default'
+                                  ? 'bg-sky-50/90 border-sky-300 hover:border-sky-500 hover:bg-sky-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  : 'bg-sky-50/40 border-sky-200/60 cursor-default'
                               }`}
                             >
                               <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-sky-100 text-sky-600 flex items-center justify-center">
+                                <div className="w-5 h-5 rounded-md bg-sky-500 text-white flex items-center justify-center shadow-xs">
                                   <Truck size={11} />
                                 </div>
-                                {focusedOrder && (
-                                  <span className="text-[7px] font-bold text-sky-400 uppercase">Toque</span>
-                                )}
+                                {focusedOrder ? (
+                                  <span className="text-[7px] font-bold text-sky-600 uppercase bg-sky-100 px-1 py-0.2 rounded">Mudar</span>
+                                ) : null}
                               </div>
                               <div>
-                                <span className="text-[8px] font-bold text-sky-600 uppercase block truncate">Em Rota</span>
-                                <span className="text-sm font-black text-sky-800 font-mono">{emRotaCount}</span>
+                                <span className="text-[8px] font-bold text-sky-800 uppercase block truncate">Em Rota</span>
+                                <span className="text-sm font-black text-sky-950 font-mono leading-none">{emRotaCount}</span>
                               </div>
                             </button>
 
-                            {/* Concluído */}
+                            {/* 4. Concluído */}
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Concluído')}
                               className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-emerald-50/80 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
-                                  : 'bg-emerald-50/40 border-emerald-100/60 cursor-default'
+                                  ? 'bg-emerald-50/90 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  : 'bg-emerald-50/40 border-emerald-200/60 cursor-default'
                               }`}
                             >
                               <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                <div className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center shadow-xs">
                                   <CheckCircle2 size={11} />
                                 </div>
-                                {focusedOrder && (
-                                  <span className="text-[7px] font-bold text-emerald-500 uppercase">Toque</span>
-                                )}
+                                {focusedOrder ? (
+                                  <span className="text-[7px] font-bold text-emerald-600 uppercase bg-emerald-100 px-1 py-0.2 rounded">Mudar</span>
+                                ) : null}
                               </div>
                               <div>
-                                <span className="text-[8px] font-bold text-emerald-600 uppercase block truncate">Concluído</span>
-                                <span className="text-sm font-black text-emerald-800 font-mono">{completedCount}</span>
+                                <span className="text-[8px] font-bold text-emerald-800 uppercase block truncate">Concluído</span>
+                                <span className="text-sm font-black text-emerald-950 font-mono leading-none">{completedCount}</span>
                               </div>
                             </button>
-                          </div>
 
-                          {/* Secondary Row: Ocorrência */}
-                          {occurrenceCount > 0 && (
+                            {/* 5. Ocorrência */}
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Ocorrência')}
-                              className={`w-full text-left border rounded-xl p-2 flex items-center justify-between shadow-3xs transition-all ${
+                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-rose-50/80 border-rose-300 hover:border-rose-500 hover:bg-rose-100/50 cursor-pointer hover:scale-[1.01] active:scale-[0.99]'
-                                  : 'bg-rose-50/40 border-rose-100/60 cursor-default'
+                                  ? 'bg-rose-50/90 border-rose-300 hover:border-rose-500 hover:bg-rose-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  : 'bg-rose-50/40 border-rose-200/60 cursor-default'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <div className="w-5 h-5 rounded-md bg-rose-100 text-rose-600 flex items-center justify-center">
+                              <div className="flex items-center justify-between mb-1 w-full">
+                                <div className="w-5 h-5 rounded-md bg-rose-500 text-white flex items-center justify-center shadow-xs">
                                   <AlertTriangle size={11} />
                                 </div>
-                                <div>
-                                  <span className="text-[8px] font-bold text-rose-600 uppercase block">Ocorrências Registradas</span>
-                                  <span className="text-[7.5px] font-semibold text-rose-400 leading-none block">
-                                    Pedidos com insucesso ou devolução
-                                  </span>
-                                </div>
+                                {focusedOrder ? (
+                                  <span className="text-[7px] font-bold text-rose-600 uppercase bg-rose-100 px-1 py-0.2 rounded">Mudar</span>
+                                ) : null}
                               </div>
-                              <span className="text-sm font-black text-rose-800 font-mono pr-1">{occurrenceCount}</span>
+                              <div>
+                                <span className="text-[8px] font-bold text-rose-800 uppercase block truncate">Ocorrência</span>
+                                <span className="text-sm font-black text-rose-950 font-mono leading-none">{occurrenceCount}</span>
+                              </div>
                             </button>
-                          )}
+                          </div>
                         </div>
 
                         {/* HIGHLY VISIBLE INTERACTIVE SELECTION HINT BANNER */}

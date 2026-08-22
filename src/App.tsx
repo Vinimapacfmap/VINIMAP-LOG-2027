@@ -65,6 +65,11 @@ import { FinancialTransaction } from './types';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { sanitizeOrdersListConsistency, sanitizeOrderConsistency } from './utils/orderConsistency';
 import { realtimeSyncBus } from './utils/realtimeSync';
+import { 
+  deleteOrdersFromIndexedDb, 
+  clearIndexedDbOrdersStore, 
+  clearAllIndexedDbStores 
+} from './utils/indexedDbSync';
 
 import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from './firebase';
@@ -999,10 +1004,8 @@ export default function App() {
           docs.push(doc.data() as Order);
         });
         const { orders: sanitizedDocs, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(docs);
-        setOrders(prev => {
-          if (prev.length === 0) return sanitizedDocs;
-          return mergeOrders(prev, sanitizedDocs);
-        });
+        const filteredDocs = sanitizedDocs.filter(o => !MOCK_ORDER_IDS.includes(o.id));
+        setOrders(filteredDocs);
         if (hasModified && modifiedOrders.length > 0 && !getIsFirestoreQuotaExceeded()) {
           console.log(`[Order Consistency] Persistindo correção de status para ${modifiedOrders.length} pedido(s) concluído(s) em lote.`);
           dbBulkSaveOrders(modifiedOrders, 'LOW').catch(() => {});
@@ -1019,10 +1022,7 @@ export default function App() {
             docs.push(data);
           }
         });
-        setClientPartners(prev => {
-          if (prev.length === 0) return docs;
-          return mergeClients(prev, docs);
-        });
+        setClientPartners(docs);
       }, (error) => handleListenerError(error, 'clientPartners'))
     );
 
@@ -1032,10 +1032,7 @@ export default function App() {
         snapshot.forEach(doc => {
           docs.push(doc.data() as DeliveryRider);
         });
-        setRiders(prev => {
-          if (prev.length === 0) return docs;
-          return mergeRiders(prev, docs);
-        });
+        setRiders(docs);
       }, (error) => handleListenerError(error, 'deliveryRiders'))
     );
 
@@ -2039,11 +2036,11 @@ export default function App() {
         const isToday = order.date === todayStr;
         if (!isDelayed && !isToday) return false;
       } else {
-        if (filterDateFrom || filterDateTo) {
-          const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo, filterStatus);
-          if (!matchesDatePeriod) {
-            return false;
-          }
+        const effectiveFrom = filterDateFrom || todayStr;
+        const effectiveTo = filterDateTo || todayStr;
+        const matchesDatePeriod = isOrderInDatePeriod(order, effectiveFrom, effectiveTo, filterStatus);
+        if (!matchesDatePeriod) {
+          return false;
         }
       }
 
@@ -2080,11 +2077,11 @@ export default function App() {
         const isToday = order.date === todayStr;
         if (!isDelayed && !isToday) return false;
       } else {
-        if (filterDateFrom || filterDateTo) {
-          const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo);
-          if (!matchesDatePeriod) {
-            return false;
-          }
+        const effectiveFrom = filterDateFrom || todayStr;
+        const effectiveTo = filterDateTo || todayStr;
+        const matchesDatePeriod = isOrderInDatePeriod(order, effectiveFrom, effectiveTo);
+        if (!matchesDatePeriod) {
+          return false;
         }
       }
 
@@ -3106,6 +3103,7 @@ export default function App() {
   const handleDeleteOrder = async (orderId: string) => {
     try {
       setOrders(prev => prev.filter(o => o.id !== orderId));
+      deleteOrdersFromIndexedDb(orderId).catch(() => {});
       await dbDeleteOrder(orderId);
 
       const nowTime = getSaoPauloTime();
@@ -3406,6 +3404,7 @@ export default function App() {
 
       const remainingOrders = orders.filter(o => !orderIds.includes(o.id));
       setOrders(remainingOrders);
+      deleteOrdersFromIndexedDb(orderIds).catch(() => {});
 
       const promises: Promise<any>[] = [dbBulkDeleteOrders(orderIds)];
 

@@ -232,6 +232,69 @@ export function verifyAndSanitizeRiderOrders(
   });
 }
 
+/**
+ * Deletes specific order(s) from IndexedDB offline queue
+ */
+export async function deleteOrdersFromIndexedDb(orderIds: string[] | string): Promise<void> {
+  const idsToDelete = new Set(Array.isArray(orderIds) ? orderIds : [orderIds]);
+  if (idsToDelete.size === 0) return;
+
+  try {
+    const idb = await openDatabase();
+    const tx = idb.transaction(STORE_ORDERS, 'readwrite');
+    const store = tx.objectStore(STORE_ORDERS);
+    const getAllReq = store.getAll();
+
+    getAllReq.onsuccess = () => {
+      const records: OfflineOrderAction[] = getAllReq.result || [];
+      records.forEach(rec => {
+        if (rec.id && (idsToDelete.has(rec.orderId) || idsToDelete.has(String(rec.id)))) {
+          try {
+            store.delete(rec.id);
+          } catch (_) {}
+        }
+      });
+    };
+  } catch (err) {
+    console.warn('[IndexedDB Sync] Erro ao deletar pedido(s) do IndexedDB:', err);
+  }
+}
+
+/**
+ * Clears the entire orders store in IndexedDB
+ */
+export async function clearIndexedDbOrdersStore(): Promise<void> {
+  try {
+    const idb = await openDatabase();
+    const tx = idb.transaction(STORE_ORDERS, 'readwrite');
+    const store = tx.objectStore(STORE_ORDERS);
+    store.clear();
+    console.log('[IndexedDB Sync] Store "offline_order_queue" do IndexedDB limpa com sucesso.');
+  } catch (err) {
+    console.warn('[IndexedDB Sync] Erro ao limpar store de pedidos do IndexedDB:', err);
+  }
+}
+
+/**
+ * Clears all object stores in the offline sync IndexedDB database
+ */
+export async function clearAllIndexedDbStores(): Promise<void> {
+  try {
+    const idb = await openDatabase();
+    const storeNames = Array.from(idb.objectStoreNames);
+    if (storeNames.length > 0) {
+      const tx = idb.transaction(storeNames, 'readwrite');
+      storeNames.forEach(name => {
+        try {
+          tx.objectStore(name).clear();
+        } catch (_) {}
+      });
+    }
+  } catch (err) {
+    console.warn('[IndexedDB Sync] Erro ao limpar todos os stores do IndexedDB:', err);
+  }
+}
+
 // Auto-register online event listener to trigger synchronization
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {

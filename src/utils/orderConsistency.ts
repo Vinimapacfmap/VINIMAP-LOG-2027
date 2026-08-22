@@ -162,37 +162,46 @@ export function sanitizeOrderConsistency(
     updated.status = 'Em rota';
     isModified = true;
   }
-  const hasValidExplicitStatus = Boolean(updated.status && VALID_STATUSES.includes(updated.status));
 
-  // Only infer status from raw data or completion evidence if the order has NO valid status set
-  if (!hasAdminOverride && !hasValidExplicitStatus) {
-    const rawStatus = (
-      updated.rawData?.status ||
-      updated.rawData?.Status ||
-      updated.rawData?.Situacao ||
-      updated.rawData?.situacao ||
-      updated.rawData?.STATUS ||
-      ''
-    ).toString().trim().toLowerCase();
+  const rawStatus = (
+    updated.rawData?.status ||
+    updated.rawData?.Status ||
+    updated.rawData?.Situacao ||
+    updated.rawData?.situacao ||
+    updated.rawData?.STATUS ||
+    ''
+  ).toString().trim().toLowerCase();
 
-    const isRawCompleted = rawStatus === 'concluído' || rawStatus === 'concluido' || rawStatus === 'entregue' || rawStatus === 'finalizado' || rawStatus === 'baixado';
-    const isRawOccurrence = rawStatus === 'ocorrência' || rawStatus === 'ocorrencia' || rawStatus === 'devolvido' || rawStatus === 'falha' || rawStatus === 'insucesso';
-    const isRawCancelled = rawStatus === 'cancelado' || rawStatus === 'cancelada';
-    const isRawEmRota = rawStatus === 'em rota' || rawStatus === 'em trânsito' || rawStatus === 'em transito' || rawStatus === 'entregando';
+  const isRawCompleted = rawStatus === 'concluído' || rawStatus === 'concluido' || rawStatus === 'entregue' || rawStatus === 'finalizado' || rawStatus === 'baixado' || rawStatus.includes('baixa');
+  const isRawOccurrence = rawStatus === 'ocorrência' || rawStatus === 'ocorrencia' || rawStatus === 'devolvido' || rawStatus === 'falha' || rawStatus === 'insucesso';
+  const isRawCancelled = rawStatus === 'cancelado' || rawStatus === 'cancelada';
+  const isRawEmRota = rawStatus === 'em rota' || rawStatus === 'em trânsito' || rawStatus === 'em transito' || rawStatus === 'entregando';
 
-    if (isRawCompleted || hasOrderCompletionEvidence(updated)) {
+  const hasCompletion = isRawCompleted || hasOrderCompletionEvidence(updated);
+
+  // If order has completion evidence and is not explicitly canceled or occurrence, enforce Concluído
+  if (hasCompletion && updated.status !== 'Cancelado' && updated.status !== 'Ocorrência') {
+    if (updated.status !== 'Concluído') {
       updated.status = 'Concluído';
       isModified = true;
+    }
+  } else if (!hasAdminOverride) {
+    if (isRawCancelled) {
+      if (updated.status !== 'Cancelado') {
+        updated.status = 'Cancelado';
+        isModified = true;
+      }
     } else if (isRawOccurrence) {
-      updated.status = 'Ocorrência';
-      isModified = true;
-    } else if (isRawCancelled) {
-      updated.status = 'Cancelado';
-      isModified = true;
-    } else if (isRawEmRota) {
-      updated.status = 'Em rota';
-      isModified = true;
-    } else {
+      if (updated.status !== 'Ocorrência') {
+        updated.status = 'Ocorrência';
+        isModified = true;
+      }
+    } else if (isRawEmRota && updated.status !== 'Concluído') {
+      if (updated.status !== 'Em rota') {
+        updated.status = 'Em rota';
+        isModified = true;
+      }
+    } else if (!updated.status || !VALID_STATUSES.includes(updated.status)) {
       updated.status = 'Não iniciado';
       isModified = true;
     }

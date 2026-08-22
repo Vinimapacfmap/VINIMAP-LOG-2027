@@ -63,13 +63,21 @@ export function getLevenshteinDistance(a: string, b: string): number {
 
 /**
  * Checks if a target string matches a query token under lexicographical rules:
- * - Direct normalized substring
- * - Compact string check (ignoring whitespace for codes, CEPs, numbers)
- * - Word boundary / prefix matching
- * - Fuzzy tolerance for minor spelling variations
+ * - Fast path: Direct normalized substring
+ * - Fast path: Compact string check (ignoring whitespace for codes, CEPs, numbers)
+ * - Fast path: Word token prefix & boundary match
+ * - Fallback: Fuzzy tolerance for longer queries only
  */
 export function isLexicographicallyMatching(target: string | number | undefined | null, queryToken: string): boolean {
   if (target === undefined || target === null || !queryToken) return false;
+
+  const rawStr = String(target);
+  if (rawStr.length === 0) return false;
+
+  // Extremely fast raw direct lowercase check
+  const lowerQuery = queryToken.toLowerCase();
+  const lowerTarget = rawStr.toLowerCase();
+  if (lowerTarget.includes(lowerQuery)) return true;
 
   const normTarget = normalizeLexicographical(target);
   const normQuery = normalizeLexicographical(queryToken);
@@ -89,13 +97,17 @@ export function isLexicographicallyMatching(target: string | number | undefined 
   for (const word of targetWords) {
     if (word.startsWith(normQuery)) return true;
     if (normQuery.startsWith(word) && word.length >= 3) return true;
+  }
 
-    // Fuzzy distance tolerance for longer terms (1 typo for >= 4 chars, 2 for >= 7 chars)
-    if (normQuery.length >= 4 && word.length >= 4) {
-      const maxDistance = normQuery.length >= 7 ? 2 : 1;
-      if (Math.abs(word.length - normQuery.length) <= maxDistance) {
-        if (getLevenshteinDistance(word, normQuery) <= maxDistance) {
-          return true;
+  // 4. Fuzzy distance tolerance ONLY for long search queries (>= 5 chars) to keep typing instant
+  if (normQuery.length >= 5) {
+    for (const word of targetWords) {
+      if (word.length >= 4) {
+        const maxDistance = normQuery.length >= 8 ? 2 : 1;
+        if (Math.abs(word.length - normQuery.length) <= maxDistance) {
+          if (getLevenshteinDistance(word, normQuery) <= maxDistance) {
+            return true;
+          }
         }
       }
     }

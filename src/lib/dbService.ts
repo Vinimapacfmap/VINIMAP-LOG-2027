@@ -39,6 +39,11 @@ import {
   CompanyHub 
 } from '../types';
 import { syncRetryQueue, QueuePriority } from '../utils/syncRetryQueue';
+import { 
+  deleteOrdersFromIndexedDb, 
+  clearIndexedDbOrdersStore, 
+  clearAllIndexedDbStores 
+} from '../utils/indexedDbSync';
 import { INITIAL_RIDERS, INITIAL_ORDERS, INITIAL_LOGS } from '../data/mock';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from '../data/financialMock';
 
@@ -182,8 +187,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.warn(`Firestore [${operationType}] handled error on path "${path}":`, errMessage);
 }
 
-// Helper functions for seeding
+// Helper functions for seeding (Auto-seed disabled: when list is empty, returns clean state without repopulating mocks)
 export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force: boolean = false) {
+  if (!force) {
+    // Auto-seed rule disabled: when collection is empty or list.length === 0, keep clean database ([]), never re-populate mock
+    return;
+  }
   if (getIsFirestoreQuotaExceeded()) {
     console.log('Quota diária do Firestore excedida. Pulando restauração remota do Firestore.');
     return;
@@ -566,6 +575,21 @@ export async function dbSaveOrder(order: Order, explicitPriority?: QueuePriority
 }
 
 export async function dbDeleteOrder(orderId: string, explicitPriority: QueuePriority = 'NORMAL') {
+  // 1. Remove from local contingency storage
+  try {
+    const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+    if (rawBackup) {
+      const parsed = JSON.parse(rawBackup);
+      if (parsed.orders && Array.isArray(parsed.orders)) {
+        parsed.orders = parsed.orders.filter((o: Order) => o.id !== orderId);
+        localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
+      }
+    }
+  } catch (_) {}
+
+  // 2. Remove from IndexedDB offline sync store
+  deleteOrdersFromIndexedDb(orderId).catch(() => {});
+
   return await syncRetryQueue.enqueueDelete(orderId, explicitPriority);
 }
 
@@ -601,6 +625,22 @@ export async function dbBulkSaveOrders(orders: Order[], explicitPriority: QueueP
 }
 
 export async function dbBulkDeleteOrders(orderIds: string[]) {
+  const idsSet = new Set(orderIds);
+  // 1. Remove from local contingency storage
+  try {
+    const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+    if (rawBackup) {
+      const parsed = JSON.parse(rawBackup);
+      if (parsed.orders && Array.isArray(parsed.orders)) {
+        parsed.orders = parsed.orders.filter((o: Order) => !idsSet.has(o.id));
+        localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
+      }
+    }
+  } catch (_) {}
+
+  // 2. Remove from IndexedDB offline sync store
+  deleteOrdersFromIndexedDb(orderIds).catch(() => {});
+
   const results = [];
   for (const id of orderIds) {
     results.push(await syncRetryQueue.enqueueDelete(id));
@@ -1031,6 +1071,21 @@ export async function dbPurgeCollectionDocs(collectionName: string) {
     await sbPurgeTable(supabaseTableMap[collectionName]).catch(() => {});
   }
 
+  // Clear local contingency backup and IndexedDB store for the collection
+  if (collectionName === 'orders') {
+    clearIndexedDbOrdersStore().catch(() => {});
+    try {
+      const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+      if (rawBackup) {
+        const parsed = JSON.parse(rawBackup);
+        if (parsed.orders) {
+          parsed.orders = [];
+          localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
+        }
+      }
+    } catch (_) {}
+  }
+
   if (getIsFirestoreQuotaExceeded()) return;
 
   try {
@@ -1083,7 +1138,14 @@ export async function clearLocalSystemCache() {
         console.warn('Could not clear localStorage/sessionStorage:', e);
       }
 
-      // 2. Clear browser IndexedDB databases
+      // 2. Clear app IndexedDB stores
+      try {
+        await clearAllIndexedDbStores();
+      } catch (e) {
+        console.warn('Could not clear app IndexedDB stores:', e);
+      }
+
+      // 3. Clear browser IndexedDB databases
       if ('indexedDB' in window && window.indexedDB) {
         try {
           if (typeof window.indexedDB.databases === 'function') {

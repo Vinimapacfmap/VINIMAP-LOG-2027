@@ -309,7 +309,7 @@ export function formatOrderTime(timeInput?: string | null): string {
  * For completed orders, checks deliveryDate || dataConclusao || date.
  * For occurrence orders, checks occurrenceDate || date.
  * For other orders, checks order.date.
- * Editing order data (metadata/audit history) does NOT alter the operational date or cause past orders to appear on today's view.
+ * Editing order data (metadata/audit history) or database sync timestamps (createdAt) does NOT alter the operational date.
  */
 export function isOrderInDatePeriod(
   order: { 
@@ -334,86 +334,49 @@ export function isOrderInDatePeriod(
   // Determine operational date for the order
   let rawPrimary = order.date;
   if (order.status === 'Concluído') {
-    rawPrimary = order.deliveryDate || order.dataConclusao || order.date;
+    rawPrimary = order.deliveryDate || order.dataConclusao || (order.rawData?.DataEntrega ? getSaoPauloISODate(order.rawData.DataEntrega) : '') || order.date;
   } else if (order.status === 'Ocorrência') {
-    rawPrimary = order.occurrenceDate || order.date;
+    rawPrimary = order.occurrenceDate || (order.rawData?.DataOcorrencia ? getSaoPauloISODate(order.rawData.DataOcorrencia) : '') || order.date;
+  } else {
+    rawPrimary = order.date || order.rawData?.DataSolicitacao || order.rawData?.DataLancamento || order.rawData?.DataAgendamento || order.rawData?.Data || order.rawData?.data;
   }
 
-  // Also collect all other candidate date values present on the order
-  const candidateDates: (string | undefined)[] = [
-    rawPrimary,
-    order.date,
-    order.deliveryDate,
-    order.dataConclusao,
-    order.occurrenceDate,
-    order.createdAt,
-    order.rawData?.Data,
-    order.rawData?.data,
-    order.rawData?.DataEntrega,
-    order.rawData?.dataEntrega,
-    order.rawData?.DataLancamento,
-    order.rawData?.dataLancamento,
-    order.rawData?.DataAgendamento,
-    order.rawData?.DataSolicitacao,
-    order.rawData?.dataSolicitacao,
-    order.rawData?.DataCriacao,
-    order.rawData?.DataStatus,
-  ];
-
-  if (order.rawData && typeof order.rawData === 'object') {
-    Object.entries(order.rawData).forEach(([k, v]) => {
-      if (v && typeof v === 'string') {
-        const normKey = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (normKey.includes('data') || normKey.includes('date') || normKey.includes('solicit') || normKey.includes('dia')) {
-          candidateDates.push(v);
-        }
-      }
-    });
-  }
+  const primaryIsoDate = rawPrimary ? extractISODateFromTimestamp(rawPrimary) : undefined;
 
   let dateMatches = false;
 
-  for (const cand of candidateDates) {
-    if (!cand) continue;
-    const isoDate = extractISODateFromTimestamp(cand);
-    if (isoDate) {
-      const directFrom = !isoFrom || (isoDate >= isoFrom);
-      const directTo = !isoTo || (isoDate <= isoTo);
-      if (directFrom && directTo) {
-        dateMatches = true;
-        break;
-      }
+  if (primaryIsoDate) {
+    const directFrom = !isoFrom || (primaryIsoDate >= isoFrom);
+    const directTo = !isoTo || (primaryIsoDate <= isoTo);
+    if (directFrom && directTo) {
+      dateMatches = true;
     }
   }
 
-  // If primary date didn't match, check history entries ONLY for actual status transition events,
-  // NEVER for administrative metadata edits (e.g., 'Dados do Pedido Alterados')
-  if (!dateMatches && order.history && order.history.length > 0) {
-    for (const entry of order.history) {
-      const actionLower = (entry.action || '').toLowerCase();
-      
-      // Ignore metadata edit actions, geocoding, notifications, and allocation logs
-      if (
-        actionLower.includes('dados do pedido') ||
-        actionLower.includes('pedido editado') ||
-        actionLower.includes('geocodificad') ||
-        actionLower.includes('protocolo') ||
-        actionLower.includes('notificação') ||
-        actionLower.includes('alocado') ||
-        actionLower.includes('desalocado')
-      ) {
-        continue;
-      }
+  // If primary date is absent or didn't match, check explicit rawData operational date fields (excluding createdAt/timestamp)
+  if (!dateMatches && order.rawData && typeof order.rawData === 'object') {
+    const secondaryFields = [
+      order.rawData.DataEntrega,
+      order.rawData.dataEntrega,
+      order.rawData.DataSolicitacao,
+      order.rawData.dataSolicitacao,
+      order.rawData.DataLancamento,
+      order.rawData.dataLancamento,
+      order.rawData.DataAgendamento,
+      order.rawData.Data,
+      order.rawData.data
+    ];
 
-      const entryIsoDate = extractISODateFromTimestamp(entry.timestamp);
-      if (!entryIsoDate) continue;
-
-      const histFrom = !isoFrom || (entryIsoDate >= isoFrom);
-      const histTo = !isoTo || (entryIsoDate <= isoTo);
-
-      if (histFrom && histTo) {
-        dateMatches = true;
-        break;
+    for (const cand of secondaryFields) {
+      if (!cand) continue;
+      const isoCand = extractISODateFromTimestamp(cand);
+      if (isoCand) {
+        const directFrom = !isoFrom || (isoCand >= isoFrom);
+        const directTo = !isoTo || (isoCand <= isoTo);
+        if (directFrom && directTo) {
+          dateMatches = true;
+          break;
+        }
       }
     }
   }
