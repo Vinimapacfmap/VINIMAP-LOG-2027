@@ -3725,23 +3725,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <span>{deferredPrompt ? '⚡ Instalar App no Celular' : '📱 Instalar / Baixar Aplicativo'}</span>
                     </button>
 
-                    {/* Button to Return to Admin Dashboard / Login */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onExitToAdmin) {
-                          onExitToAdmin();
-                        } else {
-                          localStorage.removeItem('vinimap_is_driver_app');
-                          localStorage.removeItem('vinimap_driver_id');
-                          window.location.href = window.location.pathname + '?admin=1';
-                        }
-                      }}
-                      className="w-full py-2 bg-slate-800/90 hover:bg-slate-700 active:bg-slate-800 text-slate-300 hover:text-white font-bold text-[10.5px] rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-1.5 mt-1"
-                    >
-                      <Shield size={13} className="text-blue-400" />
-                      <span>Painel do Administrador (Login)</span>
-                    </button>
                   </form>
 
                   {/* Footer Terms */}
@@ -4016,24 +3999,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             >
                               <Download size={15} />
                               <span>Instalar Aplicativo PWA</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsDrawerMenuOpen(false);
-                                if (onExitToAdmin) {
-                                  onExitToAdmin();
-                                } else {
-                                  localStorage.removeItem('vinimap_is_driver_app');
-                                  localStorage.removeItem('vinimap_driver_id');
-                                  window.location.href = window.location.pathname + '?admin=1';
-                                }
-                              }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-sky-300 hover:bg-sky-950/40 border border-sky-500/30 transition-all cursor-pointer"
-                            >
-                              <Shield size={15} className="text-sky-400" />
-                              <span>Painel do Administrador (Login)</span>
                             </button>
                           </div>
 
@@ -4972,7 +4937,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       className={`flex flex-col items-center gap-0.5 cursor-pointer flex-1 py-1 ${activeTab === 'home' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <User size={15} />
-                      <span className="text-[7.5px] font-bold uppercase">Painel</span>
+                      <span className="text-[7.5px] font-bold uppercase">Início</span>
                     </button>
 
                     <button
