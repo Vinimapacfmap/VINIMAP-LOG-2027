@@ -6737,7 +6737,7 @@ export default function App() {
                   <p className="text-xs text-slate-400 mt-0.5">Histórico operacional da central em tempo real.</p>
                 </div>
 
-                <div className="max-w-4xl">
+                <div className="w-full max-w-6xl">
                   <ActivityFeed logs={logs} />
                 </div>
               </motion.div>

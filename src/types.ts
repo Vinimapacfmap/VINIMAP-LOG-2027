@@ -188,6 +188,8 @@ export interface DeliveryRider {
 export interface ActivityLog {
   id: string;
   time: string;
+  date?: string; // YYYY-MM-DD
+  createdAt?: string; // ISO string
   message: string;
   type: 'info' | 'success' | 'warning' | 'danger';
   orderId?: string;
