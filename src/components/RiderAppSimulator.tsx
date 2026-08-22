@@ -15,6 +15,7 @@ import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbServic
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { verifyAndSanitizeRiderOrders, queueOfflineGpsCoord, queueOfflineOrderAction, flushIndexedDbSyncQueue } from '../utils/indexedDbSync';
+import { hasOrderCompletionEvidence } from '../utils/orderConsistency';
 
 import { PwaInstallBanner } from './PwaInstallBanner';
 
@@ -1624,33 +1625,58 @@ export default function RiderAppSimulator({
     const isAssignedToRider = isOrderMatchingRider(order, selectedRiderId || selectedRider?.id, riders);
     if (!isAssignedToRider) return false;
     
-    // Extract true operational date
+    // Check if the order has physical, digital, or historical evidence of completion
+    const hasCompletion = hasOrderCompletionEvidence(order) || 
+      order.status === 'Concluído' ||
+      (order.rawData && (
+        String(order.rawData.Situacao || '').toLowerCase() === 'baixado' ||
+        String(order.rawData.Situacao || '').toLowerCase() === 'concluído' ||
+        String(order.rawData.Situacao || '').toLowerCase() === 'concluido' ||
+        String(order.rawData.Situacao || '').toLowerCase() === 'entregue' ||
+        String(order.rawData.status || '').toLowerCase() === 'concluído' ||
+        String(order.rawData.status || '').toLowerCase() === 'concluido' ||
+        String(order.rawData.Status || '').toLowerCase() === 'concluído' ||
+        String(order.rawData.Status || '').toLowerCase() === 'concluido' ||
+        String(order.rawData.STATUS || '').toLowerCase() === 'concluído' ||
+        String(order.rawData.STATUS || '').toLowerCase() === 'concluido' ||
+        String(order.rawData.STATUS || '').toLowerCase() === 'baixado'
+      ));
+
+    // Extract true operational / creation date of the order
     const rawOrderDate = order.date 
-      || order.deliveryDate
-      || order.dataConclusao
-      || order.occurrenceDate
-      || order.rawData?.DataEntrega 
-      || order.rawData?.dataEntrega 
       || order.rawData?.DataSolicitacao 
       || order.rawData?.dataSolicitacao 
       || order.rawData?.DataLancamento 
       || order.rawData?.dataLancamento 
       || order.rawData?.Data 
-      || order.rawData?.data;
+      || order.rawData?.data
+      || order.rawData?.DataCriacao
+      || order.deliveryDate
+      || order.dataConclusao
+      || order.occurrenceDate;
 
     const orderIsoDate = extractISODateFromTimestamp(rawOrderDate) || (order.date ? String(order.date).split('T')[0] : '');
     const isFromToday = !orderIsoDate || orderIsoDate === todayIso;
 
     // Check if the order was already completed or baixado in admin
-    const isCompleted = order.status === 'Concluído';
+    const isCompleted = order.status === 'Concluído' || hasCompletion;
     const isOccurrence = order.status === 'Ocorrência';
     const isCanceled = order.status === 'Cancelado';
 
     // Statuses that are considered "em aberto" (open / pending in the Admin dashboard)
-    const isOpenStatus = (order.status === 'Não iniciado' || order.status === 'Em rota' || (order.status as string) === 'Entregando') && !isCompleted && !isCanceled && !isOccurrence;
+    const isOpenStatus = !isCompleted && !isCanceled && !isOccurrence && (
+      order.status === 'Não iniciado' || 
+      order.status === 'Em rota' || 
+      (order.status as string) === 'Entregando'
+    );
 
-    // REGRA MANDATÓRIA: Pedidos de datas anteriores (dia anterior) SÓ devem ser exibidos se o status estiver em aberto no painel ADM
+    // REGRA MANDATÓRIA: Pedidos de datas anteriores (dia anterior) que já foram baixados/concluídos NUNCA devem aparecer no app do condutor (nem abertos nem concluídos)
     if (!isFromToday) {
+      // Se já está baixado / concluído ou cancelado ou ocorrência de dia anterior, NÃO EXIBIR
+      if (isCompleted || isCanceled || isOccurrence) {
+        return false;
+      }
+      // Apenas pedidos verdadeiramente pendentes/abertos de dias anteriores aparecem para entrega
       return isOpenStatus;
     }
 
