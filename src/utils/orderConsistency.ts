@@ -28,17 +28,10 @@ export function hasOrderCompletionEvidence(order: Order): boolean {
     return false;
   }
 
-  const hasProtocol = Boolean(order.protocolNumber && (order.protocolNumber || '').toString().trim() !== '');
+  // Real digital / physical Proof of Delivery (POD)
   const hasSignature = Boolean(order.signatureUrl && (order.signatureUrl || '').toString().trim() !== '');
   const hasPhoto = Boolean(order.deliveryPhotoUrl && (order.deliveryPhotoUrl || '').toString().trim() !== '');
-  const hasRecipient = Boolean(
-    (order.recipientName && (order.recipientName || '').toString().trim() !== '') ||
-    (order.recipientDoc && (order.recipientDoc || '').toString().trim() !== '')
-  );
-  const hasCompletionDates = Boolean(
-    (order.dataConclusao && (order.dataConclusao || '').toString().trim() !== '') ||
-    (order.deliveryDate && (order.deliveryDate || '').toString().trim() !== '')
-  );
+  const hasDataConclusao = Boolean(order.dataConclusao && (order.dataConclusao || '').toString().trim() !== '');
 
   const hasCompletionHistory = Boolean(
     order.history &&
@@ -47,35 +40,34 @@ export function hasOrderCompletionEvidence(order: Order): boolean {
       return (
         text.includes('concluí') ||
         text.includes('conclui') ||
-        text.includes('baixa') ||
-        text.includes('entregue') ||
-        text.includes('conclusão') ||
-        text.includes('conclusao')
+        text.includes('baixa confirmada') ||
+        text.includes('entregue com sucesso')
       );
     })
   );
 
-  const hasRawCompletion = Boolean(
+  const hasRawPod = Boolean(
     order.rawData &&
-    (order.rawData.signatureUrl ||
-      order.rawData.deliveryPhotoUrl ||
-      order.rawData.protocolNumber ||
-      order.rawData.recipientName ||
-      order.rawData.dataConclusao ||
-      order.rawData.Status === 'Concluído' ||
-      order.rawData.status === 'Concluído' ||
-      order.rawData.Status === 'Concluido' ||
-      order.rawData.status === 'Concluido')
+    (
+      (order.rawData.signatureUrl && String(order.rawData.signatureUrl).trim() !== '') ||
+      (order.rawData.signatureImage && String(order.rawData.signatureImage).trim() !== '') ||
+      (order.rawData.deliveryPhotoUrl && String(order.rawData.deliveryPhotoUrl).trim() !== '') ||
+      (order.rawData.photoImage && String(order.rawData.photoImage).trim() !== '') ||
+      (order.rawData.dataConclusao && String(order.rawData.dataConclusao).trim() !== '') ||
+      (order.rawData.dataHoraConclusao && String(order.rawData.dataHoraConclusao).trim() !== '') ||
+      String(order.rawData.Situacao || '').toLowerCase() === 'baixado' ||
+      String(order.rawData.Situacao || '').toLowerCase() === 'concluído' ||
+      String(order.rawData.Situacao || '').toLowerCase() === 'concluido' ||
+      String(order.rawData.Situacao || '').toLowerCase() === 'entregue'
+    )
   );
 
   return (
-    hasProtocol ||
     hasSignature ||
     hasPhoto ||
-    hasRecipient ||
-    hasCompletionDates ||
+    hasDataConclusao ||
     hasCompletionHistory ||
-    hasRawCompletion
+    hasRawPod
   );
 }
 

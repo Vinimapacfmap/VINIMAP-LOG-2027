@@ -997,8 +997,16 @@ export default function App() {
     window.addEventListener('offline', handleNetworkOffline);
 
     // 4. Setup real-time listeners with registered tracking wrappers
+    const markFirestoreConnected = () => {
+      if (!getIsFirestoreQuotaExceeded()) {
+        setIsOfflineFallbackActive(false);
+        setOfflineFallbackReason('');
+      }
+    };
+
     const unsubOrders = registerSnapshotListener(
       onSnapshot(collection(db, 'orders'), (snapshot) => {
+        markFirestoreConnected();
         const docs: Order[] = [];
         snapshot.forEach(doc => {
           docs.push(doc.data() as Order);
@@ -1015,6 +1023,7 @@ export default function App() {
 
     const unsubClients = registerSnapshotListener(
       onSnapshot(collection(db, 'clientPartners'), (snapshot) => {
+        markFirestoreConnected();
         const docs: ClientPartner[] = [];
         snapshot.forEach(doc => {
           const data = doc.data() as ClientPartner;
@@ -1028,6 +1037,7 @@ export default function App() {
 
     const unsubRiders = registerSnapshotListener(
       onSnapshot(collection(db, 'deliveryRiders'), (snapshot) => {
+        markFirestoreConnected();
         const docs: DeliveryRider[] = [];
         snapshot.forEach(doc => {
           docs.push(doc.data() as DeliveryRider);
@@ -1038,6 +1048,7 @@ export default function App() {
 
     const unsubLogs = registerSnapshotListener(
       onSnapshot(collection(db, 'activityLogs'), (snapshot) => {
+        markFirestoreConnected();
         const docs: ActivityLog[] = [];
         snapshot.forEach(doc => {
           docs.push(doc.data() as ActivityLog);
@@ -1049,6 +1060,7 @@ export default function App() {
 
     const unsubTxs = registerSnapshotListener(
       onSnapshot(collection(db, 'financialTransactions'), (snapshot) => {
+        markFirestoreConnected();
         const docs: FinancialTransaction[] = [];
         snapshot.forEach(doc => {
           docs.push(doc.data() as FinancialTransaction);
@@ -1059,6 +1071,7 @@ export default function App() {
 
     const unsubHubs = registerSnapshotListener(
       onSnapshot(collection(db, 'companyHubs'), (snapshot) => {
+        markFirestoreConnected();
         const docs: CompanyHub[] = [];
         snapshot.forEach(doc => {
           const h = doc.data() as CompanyHub;
