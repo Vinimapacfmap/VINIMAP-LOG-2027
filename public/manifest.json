@@ -1,0 +1,27 @@
+{
+  "id": "vinimap-condutor-app",
+  "short_name": "Vinimap Condutor",
+  "name": "Vinimap Logistics - App do Condutor",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/?view=driver_mobile",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait",
+  "categories": ["business", "logistics", "navigation"],
+  "prefer_related_applications": false,
+  "description": "Aplicativo oficial de logística para condutores e entregadores da Vinimap Logistics."
+}

@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "Delivery order entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string" },
+        "partnerName": { "type": "string" },
+        "value": { "type": "number" },
+        "cep": { "type": "string" },
+        "address": { "type": "string" },
+        "driverName": { "type": "string" },
+        "driverPhone": { "type": "string" },
+        "driverId": { "type": "string" },
+        "clientCode": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "protocolNumber": { "type": "string" },
+        "signatureUrl": { "type": "string" },
+        "deliveryPhotoUrl": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "recipientDoc": { "type": "string" },
+        "deliveryDate": { "type": "string" },
+        "deliveryTime": { "type": "string" }
+      },
+      "required": ["id", "status", "partnerName", "value", "cep"]
+    },
+    "ClientPartner": {
+      "title": "ClientPartner",
+      "description": "Client Partner or Store entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "codigoCliente": { "type": "string" },
+        "name": { "type": "string" },
+        "region": { "type": "string" },
+        "tel": { "type": "string" },
+        "addr": { "type": "string" },
+        "status": { "type": "string" },
+        "type": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "cep": { "type": "string" },
+        "cidade": { "type": "string" },
+        "estado": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "DeliveryRider": {
+      "title": "DeliveryRider",
+      "description": "Delivery rider entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "vehicle": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string" },
+        "battery": { "type": "number" }
+      },
+      "required": ["id", "name", "vehicle", "phone", "status"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "System operational or activity log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "time": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["id", "time", "message", "type"]
+    },
+    "CompanyHub": {
+      "title": "CompanyHub",
+      "description": "Company Headquarters or CD Hub configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "address": { "type": "string" },
+        "cep": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "phone": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "address", "cep", "lat", "lng", "active"]
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of delivery orders"
+    },
+    "/clientPartners/{clientId}": {
+      "schema": "ClientPartner",
+      "description": "Collection of client partners and stores"
+    },
+    "/deliveryRiders/{riderId}": {
+      "schema": "DeliveryRider",
+      "description": "Collection of delivery riders"
+    },
+    "/activityLogs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "Collection of activity logs"
+    },
+    "/companyHubs/{hubId}": {
+      "schema": "CompanyHub",
+      "description": "Collection of company headquarters/hubs"
+    }
+  }
+}

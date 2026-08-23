@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "leaflet/dist/leaflet.css";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* Custom modern scrollbars for tables & data containers across all browsers */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+  border: 1px solid #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Smooth transition animation for Leaflet markers (gliding movement between coordinates) */
+.leaflet-marker-icon,
+.custom-rider-icon,
+.custom-rider-icon-leaflet {
+  transition: transform 0.85s cubic-bezier(0.25, 1, 0.5, 1), left 0.85s cubic-bezier(0.25, 1, 0.5, 1), top 0.85s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+/* Disable transitions during map zoom or pan animations to prevent map rendering glitches */
+.leaflet-zoom-anim .leaflet-marker-icon,
+.leaflet-pan-anim .leaflet-marker-icon,
+.leaflet-zoom-anim .custom-rider-icon,
+.leaflet-zoom-anim .custom-rider-icon-leaflet {
+  transition: none !important;
+}
+
+/* Ensure grid cards in #view-configuracoes occupy full width with zero conflicting margins */
+#view-configuracoes > * {
+  margin: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* Modal Dropdown Component CSS Override - Ensures rider list is not clipped by modal containers */
+.modal-dropdown-container,
+.modal-dropdown,
+.modal-rider-select {
+  overflow: visible !important;
+  z-index: 9999 !important;
+  position: relative !important;
+}
+
+.modal-content-visible {
+  overflow: visible !important;
+  z-index: 100 !important;
+}
+
+select.modal-rider-select option {
+  z-index: 9999 !important;
+}

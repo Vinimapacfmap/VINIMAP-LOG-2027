@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Vinimap Logistics OS - App do Condutor</title>
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Vinimap Condutor" />
+    <meta name="apple-touch-fullscreen" content="yes" />
+    <meta name="application-name" content="Vinimap Condutor" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="shortcut icon" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- Service Worker Registration for PWA Installation & Auto-Update -->
+    <script>
+      // Função auxiliar para purgar Service Workers e Cache em caso de falha de bundle no Vercel
+      window.__vinimapPurgeCachesAndReload = function() {
+        if (sessionStorage.getItem('vinimap_reloaded_for_chunk_error')) return;
+        sessionStorage.setItem('vinimap_reloaded_for_chunk_error', 'true');
+        console.warn('[ViniMap Diagnostic] Purgando caches e recarregando para resolver versão obsoleta do Vercel...');
+        
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(reg) { reg.unregister(); });
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) { caches.delete(name); });
+          });
+        }
+        setTimeout(function() {
+          window.location.reload(true);
+        }, 300);
+      };
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(
+            function(reg) {
+              console.log('[Vinimap SW] SW Registrado com sucesso:', reg.scope);
+              reg.update().catch(function(updateErr) {
+                console.warn('[Vinimap SW] Aviso na verificação de atualização do ServiceWorker:', updateErr);
+              });
+
+              reg.onupdatefound = function() {
+                var installingWorker = reg.installing;
+                if (installingWorker) {
+                  installingWorker.onstatechange = function() {
+                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                      console.log('[Vinimap SW] Nova versão instalada. Recarregando página automaticamente...');
+                      if (installingWorker.postMessage) {
+                        installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                      }
+                      window.location.reload();
+                    }
+                  };
+                }
+              };
+            },
+            function(err) { console.warn('[Vinimap SW] Falha no registro do Service Worker:', err); }
+          );
+        });
+      }
+
+      // Handler global de erros de carregamento de scripts/links no Vercel
+      window.addEventListener('error', function(e) {
+        if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+          console.warn('[ViniMap Diagnostic] Erro ao carregar recurso estático:', e.target.src || e.target.href);
+          window.__vinimapPurgeCachesAndReload();
+        }
+      }, true);
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

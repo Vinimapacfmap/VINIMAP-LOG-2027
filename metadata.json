@@ -1,0 +1,6 @@
+{
+  "name": "Vinimap Dashboard",
+  "description": "Painel de controle operacional e de logística inteligente para rastreamento de entregas, monitoramento de entregadores e gestão de pedidos em tempo real.",
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
