@@ -19,33 +19,51 @@ import { getPartnerDisplayName, getCachedClientPartners } from '../utils/partner
 export function mapOrderToDb(o: Order) {
   // Preserve and merge all vital delivery metadata, signatures, photos, and timestamps in raw_data JSON
   const existingRaw = o.rawData || {};
+  const isUnassigned = !o.riderId || o.riderId === 'unassigned' || o.riderId === 'desalocar' || o.riderId === '';
+  const cleanRawData = { ...existingRaw };
+  
+  if (isUnassigned) {
+    delete cleanRawData.riderId;
+    delete cleanRawData.Condutor;
+    delete cleanRawData.condutor;
+    delete cleanRawData.NomeCondutor;
+    delete cleanRawData.nomeCondutor;
+    delete cleanRawData.Entregador;
+    delete cleanRawData.entregador;
+    delete cleanRawData.Motorista;
+    delete cleanRawData.motorista;
+    delete cleanRawData.DispositivoCondutor;
+    delete cleanRawData.dispositivoCondutor;
+    delete cleanRawData.riderName;
+  }
+
   const mergedRawData = {
-    ...existingRaw,
-    protocolNumber: o.protocolNumber || existingRaw.protocolNumber || existingRaw.NumeroProtocolo || existingRaw.protocolo,
-    signatureUrl: o.signatureUrl || existingRaw.signatureUrl || existingRaw.signatureImage || existingRaw.assinatura,
-    deliveryPhotoUrl: o.deliveryPhotoUrl || existingRaw.deliveryPhotoUrl || existingRaw.photoImage || existingRaw.fotoComprovante || existingRaw.foto,
-    recipientName: o.recipientName || existingRaw.recipientName || existingRaw.Recebedor || existingRaw.recebedor,
-    recipientDoc: o.recipientDoc || existingRaw.recipientDoc || existingRaw.DocumentoRecebedor || existingRaw.doc,
-    deliveryDate: o.deliveryDate || o.dataConclusao || existingRaw.deliveryDate || existingRaw.DataConclusao || existingRaw.DataEntrega,
-    deliveryTime: o.deliveryTime || o.horarioFinal || existingRaw.deliveryTime || existingRaw.HorarioFinal || existingRaw.HorarioEntrega,
-    dataConclusao: o.dataConclusao || o.deliveryDate || existingRaw.dataConclusao || existingRaw.DataConclusao,
-    horarioInicial: o.horarioInicial || o.createdAt || existingRaw.horarioInicial || existingRaw.HorarioInicio,
-    horarioFinal: o.horarioFinal || o.deliveryTime || existingRaw.horarioFinal || existingRaw.HorarioFinal,
-    occurrenceDate: o.occurrenceDate || existingRaw.occurrenceDate || existingRaw.DataOcorrencia,
-    sequence: o.sequence ?? existingRaw.sequence,
-    date: o.date || existingRaw.date || existingRaw.DataLancamento,
+    ...cleanRawData,
+    protocolNumber: o.protocolNumber || cleanRawData.protocolNumber || cleanRawData.NumeroProtocolo || cleanRawData.protocolo,
+    signatureUrl: o.signatureUrl || cleanRawData.signatureUrl || cleanRawData.signatureImage || cleanRawData.assinatura,
+    deliveryPhotoUrl: o.deliveryPhotoUrl || cleanRawData.deliveryPhotoUrl || cleanRawData.photoImage || cleanRawData.fotoComprovante || cleanRawData.foto,
+    recipientName: o.recipientName || cleanRawData.recipientName || cleanRawData.Recebedor || cleanRawData.recebedor,
+    recipientDoc: o.recipientDoc || cleanRawData.recipientDoc || cleanRawData.DocumentoRecebedor || cleanRawData.doc,
+    deliveryDate: o.deliveryDate || o.dataConclusao || cleanRawData.deliveryDate || cleanRawData.DataConclusao || cleanRawData.DataEntrega,
+    deliveryTime: o.deliveryTime || o.horarioFinal || cleanRawData.deliveryTime || cleanRawData.HorarioFinal || cleanRawData.HorarioEntrega,
+    dataConclusao: o.dataConclusao || o.deliveryDate || cleanRawData.dataConclusao || cleanRawData.DataConclusao,
+    horarioInicial: o.horarioInicial || o.createdAt || cleanRawData.horarioInicial || cleanRawData.HorarioInicio,
+    horarioFinal: o.horarioFinal || o.deliveryTime || cleanRawData.horarioFinal || cleanRawData.HorarioFinal,
+    occurrenceDate: o.occurrenceDate || cleanRawData.occurrenceDate || cleanRawData.DataOcorrencia,
+    sequence: o.sequence ?? cleanRawData.sequence,
+    date: o.date || cleanRawData.date || cleanRawData.DataLancamento,
     status: o.status,
     priority: o.priority,
     value: o.value,
     deliveryValue: o.deliveryValue,
-    driverValue: o.driverValue,
-    riderId: o.riderId,
+    driverValue: isUnassigned ? 0 : o.driverValue,
+    riderId: isUnassigned ? undefined : o.riderId,
     clientName: o.clientName,
     phone: o.phone,
     address: o.address,
     region: o.region,
     cep: o.cep,
-    history: o.history || existingRaw.history
+    history: o.history || cleanRawData.history
   };
 
   return {
@@ -57,13 +75,13 @@ export function mapOrderToDb(o: Order) {
     status: o.status,
     priority: o.priority,
     value: o.value,
-    rider_id: o.riderId || null,
+    rider_id: isUnassigned ? null : o.riderId,
     items_count: o.itemsCount ?? 1,
     date: o.date,
     cep: o.cep || null,
     partner_name: getPartnerDisplayName(o.partnerName || (mergedRawData as any).partnerName || (mergedRawData as any).NomeFantasia || (mergedRawData as any).CodigoCliente || '', getCachedClientPartners()) || null,
     delivery_value: o.deliveryValue ?? 0,
-    driver_value: o.driverValue ?? 0,
+    driver_value: isUnassigned ? 0 : (o.driverValue ?? 0),
     raw_data: JSON.stringify(mergedRawData),
     history: o.history ? JSON.stringify(o.history) : (mergedRawData.history ? JSON.stringify(mergedRawData.history) : null),
     protocol_number: o.protocolNumber || null,
@@ -188,21 +206,18 @@ export function mapOrderFromDb(row: any): Order {
     || (row.date ? String(row.date) : undefined)
     || getSaoPauloISODate();
 
-  const resolvedRiderId = row.rider_id 
-    || rawDataObj?.riderId 
-    || rawDataObj?.Condutor 
-    || rawDataObj?.condutor 
-    || rawDataObj?.NomeCondutor 
-    || rawDataObj?.nomeCondutor 
-    || rawDataObj?.Entregador 
-    || rawDataObj?.entregador 
-    || rawDataObj?.NomeEntregador 
-    || rawDataObj?.Motorista 
-    || rawDataObj?.motorista 
-    || rawDataObj?.DispositivoCondutor 
-    || rawDataObj?.dispositivoCondutor 
-    || rawDataObj?.riderName 
-    || undefined;
+  let resolvedRiderId: string | undefined = undefined;
+  if (row.rider_id !== undefined && row.rider_id !== null) {
+    const cleanRowRider = String(row.rider_id).trim();
+    if (cleanRowRider !== '' && cleanRowRider !== 'unassigned' && cleanRowRider !== 'desalocar' && cleanRowRider !== 'null' && cleanRowRider !== 'undefined') {
+      resolvedRiderId = cleanRowRider;
+    }
+  } else if (rawDataObj?.riderId) {
+    const cleanRaw = String(rawDataObj.riderId).trim();
+    if (cleanRaw !== '' && cleanRaw !== 'unassigned' && cleanRaw !== 'desalocar' && cleanRaw !== 'null' && cleanRaw !== 'undefined') {
+      resolvedRiderId = cleanRaw;
+    }
+  }
 
   const rawStatusCandidate = (
     row.status 
@@ -925,9 +940,530 @@ export async function syncAllStateToSupabase(data: {
   };
 }
 
-// ============================================================================
-// RETRIEVAL ENGINE (Load state from Supabase)
-// ============================================================================
+export interface TableSyncDiagnostic {
+  tableName: 'company_hubs' | 'client_partners' | 'delivery_riders' | 'orders' | 'activity_logs' | 'financial_transactions';
+  label: string;
+  description: string;
+  localCount: number;
+  remoteCount: number | null;
+  status: 'synced' | 'discrepancy' | 'missing_table' | 'permission_error' | 'column_mismatch' | 'error' | 'idle' | 'checking';
+  latencyMs?: number;
+  errorMessage?: string;
+  actionHint?: string;
+  sqlFix?: string;
+  lastChecked?: string;
+  missingColumns?: string[];
+  isSyncing?: boolean;
+}
+
+export const TABLE_SQL_FIXES: Record<string, string> = {
+  company_hubs: `-- Criar / Corrigir Tabela company_hubs
+CREATE TABLE IF NOT EXISTS company_hubs (
+    id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    cnpj VARCHAR(20),
+    address TEXT NOT NULL,
+    cep VARCHAR(10) NOT NULL,
+    lat NUMERIC(10, 6) NOT NULL,
+    lng NUMERIC(10, 6) NOT NULL,
+    phone VARCHAR(50),
+    email VARCHAR(255),
+    logo_url TEXT,
+    active BOOLEAN DEFAULT TRUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+ALTER TABLE company_hubs DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON company_hubs TO anon, authenticated, postgres, service_role;`,
+
+  client_partners: `-- Criar / Corrigir Tabela client_partners
+CREATE TABLE IF NOT EXISTS client_partners (
+    id VARCHAR(100) PRIMARY KEY,
+    codigo_cliente VARCHAR(100),
+    name VARCHAR(255) NOT NULL,
+    region VARCHAR(100),
+    tel VARCHAR(50),
+    addr TEXT,
+    status VARCHAR(50) DEFAULT 'Ativo',
+    type VARCHAR(20) DEFAULT 'Parceiro',
+    cnpj VARCHAR(20),
+    cep VARCHAR(10),
+    cidade VARCHAR(100),
+    estado VARCHAR(2),
+    enable_completion_notifications BOOLEAN DEFAULT TRUE NOT NULL,
+    cep_ranges JSONB DEFAULT '[]'::jsonb,
+    cep_ranges_history JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+ALTER TABLE client_partners ADD COLUMN IF NOT EXISTS enable_completion_notifications BOOLEAN DEFAULT TRUE NOT NULL;
+ALTER TABLE client_partners ADD COLUMN IF NOT EXISTS cep_ranges_history JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE client_partners DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON client_partners TO anon, authenticated, postgres, service_role;`,
+
+  delivery_riders: `-- Criar / Corrigir Tabela delivery_riders
+CREATE TABLE IF NOT EXISTS delivery_riders (
+    id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    avatar TEXT,
+    vehicle VARCHAR(50) DEFAULT 'Moto',
+    rating NUMERIC(3, 2) DEFAULT 5.0,
+    status VARCHAR(50) DEFAULT 'Offline',
+    phone VARCHAR(50),
+    lat NUMERIC(10, 6) DEFAULT 0.0,
+    lng NUMERIC(10, 6) DEFAULT 0.0,
+    completed_deliveries INT DEFAULT 0,
+    current_order_id VARCHAR(100),
+    battery_percent INT DEFAULT 100,
+    billing_model VARCHAR(50) DEFAULT 'misto',
+    billing_fixed_fee NUMERIC(10, 2) DEFAULT 0.00,
+    billing_variable_percent NUMERIC(5, 2) DEFAULT 0.00,
+    billing_freight_percent NUMERIC(5, 2) DEFAULT 0.00,
+    exibir_valor_turno BOOLEAN DEFAULT TRUE NOT NULL,
+    ocultar_valores_protocolos BOOLEAN DEFAULT FALSE NOT NULL,
+    autorizar_imprimir_recibo BOOLEAN DEFAULT FALSE NOT NULL,
+    device_number VARCHAR(100),
+    password VARCHAR(100),
+    address TEXT,
+    cpf_cnpj VARCHAR(20),
+    vehicle_plate VARCHAR(20),
+    cnh VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+ALTER TABLE delivery_riders ADD COLUMN IF NOT EXISTS autorizar_imprimir_recibo BOOLEAN DEFAULT FALSE NOT NULL;
+ALTER TABLE delivery_riders DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON delivery_riders TO anon, authenticated, postgres, service_role;`,
+
+  orders: `-- Criar / Corrigir Tabela orders
+CREATE TABLE IF NOT EXISTS orders (
+    id VARCHAR(100) PRIMARY KEY,
+    client_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(50),
+    address TEXT NOT NULL,
+    region VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'Não iniciado',
+    priority VARCHAR(20) DEFAULT 'Média',
+    value NUMERIC(10, 2) DEFAULT 0.00 NOT NULL,
+    rider_id VARCHAR(100),
+    items_count INT DEFAULT 1 NOT NULL,
+    date DATE NOT NULL,
+    cep VARCHAR(10),
+    partner_name VARCHAR(255),
+    delivery_value NUMERIC(10, 2) DEFAULT 0.00,
+    driver_value NUMERIC(10, 2) DEFAULT 0.00,
+    raw_data JSONB DEFAULT '{}'::jsonb,
+    history JSONB DEFAULT '[]'::jsonb,
+    protocol_number VARCHAR(100),
+    signature_url TEXT,
+    delivery_photo_url TEXT,
+    recipient_name VARCHAR(255),
+    recipient_doc VARCHAR(50),
+    delivery_date VARCHAR(50),
+    delivery_time VARCHAR(50),
+    data_conclusao VARCHAR(50),
+    horario_inicial VARCHAR(50),
+    horario_final VARCHAR(50),
+    sequence INT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS data_conclusao VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS horario_inicial VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS horario_final VARCHAR(50);
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_rider_id_fkey;
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(date);
+CREATE INDEX IF NOT EXISTS idx_orders_rider_id ON orders(rider_id);
+CREATE INDEX IF NOT EXISTS idx_orders_partner ON orders(partner_name);
+CREATE INDEX IF NOT EXISTS idx_orders_date_status_partner ON orders(date, status, partner_name);
+ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON orders TO anon, authenticated, postgres, service_role;`,
+
+  activity_logs: `-- Criar / Corrigir Tabela activity_logs
+CREATE TABLE IF NOT EXISTS activity_logs (
+    id VARCHAR(100) PRIMARY KEY,
+    time VARCHAR(100) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(20) DEFAULT 'info',
+    order_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+ALTER TABLE activity_logs DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON activity_logs TO anon, authenticated, postgres, service_role;`,
+
+  financial_transactions: `-- Criar / Corrigir Tabela financial_transactions
+CREATE TABLE IF NOT EXISTS financial_transactions (
+    id VARCHAR(100) PRIMARY KEY,
+    description VARCHAR(255) NOT NULL,
+    type VARCHAR(20) NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL,
+    due_date DATE NOT NULL,
+    actual_payment_date DATE,
+    category VARCHAR(100) NOT NULL,
+    status VARCHAR(50) DEFAULT 'Pendente',
+    recipient_or_payer VARCHAR(255),
+    payment_method VARCHAR(100),
+    notes TEXT,
+    cost_type VARCHAR(20),
+    is_recurring BOOLEAN DEFAULT FALSE NOT NULL,
+    recurrence_period VARCHAR(20),
+    recurrence_installment INT,
+    total_installments INT,
+    parent_recurrence_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_financial_due_date ON financial_transactions(due_date);
+CREATE INDEX IF NOT EXISTS idx_financial_type ON financial_transactions(type);
+CREATE INDEX IF NOT EXISTS idx_financial_category ON financial_transactions(category);
+ALTER TABLE financial_transactions DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON financial_transactions TO anon, authenticated, postgres, service_role;`
+};
+
+export async function checkTableSyncStatus(
+  tableName: TableSyncDiagnostic['tableName'],
+  localCount: number,
+  customClient?: any
+): Promise<TableSyncDiagnostic> {
+  const activeClient = customClient || supabase;
+  const labels: Record<TableSyncDiagnostic['tableName'], { label: string; desc: string }> = {
+    company_hubs: { label: 'Sedes & Hubs (company_hubs)', desc: 'Matriz e centros de distribuição para cálculo de rotas e coordenadas' },
+    client_partners: { label: 'Clientes & Parceiros (client_partners)', desc: 'Contratos, faixas de CEP customizadas e regras de frete' },
+    delivery_riders: { label: 'Entregadores & Frota (delivery_riders)', desc: 'Condutores, modelos de repasse, senhas e status de conexão' },
+    orders: { label: 'Pedidos & Entregas (orders)', desc: 'Rastreamento, histórico de ocorrências, comprovantes e valores' },
+    activity_logs: { label: 'Auditoria & Logs (activity_logs)', desc: 'Registro histórico de eventos e alterações do sistema' },
+    financial_transactions: { label: 'Financeiro (financial_transactions)', desc: 'Contas a pagar/receber, repasses e fluxo de caixa' }
+  };
+
+  const info = labels[tableName] || { label: tableName, desc: 'Tabela PostgreSQL' };
+  const nowStr = new Date().toLocaleTimeString('pt-BR');
+
+  if (!isSupabaseConfigured && !customClient) {
+    return {
+      tableName,
+      label: info.label,
+      description: info.desc,
+      localCount,
+      remoteCount: null,
+      status: 'idle',
+      errorMessage: 'Supabase não configurado.',
+      actionHint: 'Insira a URL e a Anon API Key nas configurações do Supabase.',
+      sqlFix: TABLE_SQL_FIXES[tableName],
+      lastChecked: nowStr
+    };
+  }
+
+  const startTime = performance.now();
+
+  try {
+    // 1. Test basic existence, RLS and get count
+    const { count, error } = await activeClient
+      .from(tableName)
+      .select('*', { count: 'exact', head: true });
+
+    const latencyMs = Math.round(performance.now() - startTime);
+
+    if (error) {
+      const errMsg = error.message || String(error);
+      const errCode = error.code;
+
+      // Table does not exist (Postgres code 42P01 or PostgREST PGRST204)
+      if (
+        errCode === '42P01' || 
+        errCode === 'PGRST204' || 
+        errMsg.includes('does not exist') || 
+        errMsg.includes('Could not find the table') || 
+        errMsg.includes('relation')
+      ) {
+        return {
+          tableName,
+          label: info.label,
+          description: info.desc,
+          localCount,
+          remoteCount: null,
+          status: 'missing_table',
+          latencyMs,
+          errorMessage: `Tabela "${tableName}" não existe no schema public do PostgreSQL.`,
+          actionHint: `Copie o SQL de criação desta tabela e execute no "SQL Editor" do Supabase.`,
+          sqlFix: TABLE_SQL_FIXES[tableName],
+          lastChecked: nowStr
+        };
+      }
+
+      // RLS Permission blocking (Postgres 42501 or RLS policy)
+      if (
+        errCode === '42501' || 
+        errMsg.includes('row-level security') || 
+        errMsg.includes('RLS') || 
+        errMsg.includes('policy')
+      ) {
+        return {
+          tableName,
+          label: info.label,
+          description: info.desc,
+          localCount,
+          remoteCount: null,
+          status: 'permission_error',
+          latencyMs,
+          errorMessage: `Políticas de RLS estão bloqueando leitura/gravação na tabela "${tableName}".`,
+          actionHint: `Desative o RLS executando "ALTER TABLE ${tableName} DISABLE ROW LEVEL SECURITY; GRANT ALL ON ${tableName} TO anon;".`,
+          sqlFix: TABLE_SQL_FIXES[tableName],
+          lastChecked: nowStr
+        };
+      }
+
+      // Missing column or schema cache error
+      if (errMsg.includes('column') || errCode === 'PGRST204') {
+        return {
+          tableName,
+          label: info.label,
+          description: info.desc,
+          localCount,
+          remoteCount: null,
+          status: 'column_mismatch',
+          latencyMs,
+          errorMessage: `Discrepância de colunas no schema: ${errMsg}`,
+          actionHint: `Execute o script de migração para adicionar as colunas faltantes e recarregar o schema cache.`,
+          sqlFix: TABLE_SQL_FIXES[tableName],
+          lastChecked: nowStr
+        };
+      }
+
+      return {
+        tableName,
+        label: info.label,
+        description: info.desc,
+        localCount,
+        remoteCount: null,
+        status: 'error',
+        latencyMs,
+        errorMessage: errMsg,
+        actionHint: 'Verifique a conexão de rede e as credenciais do Supabase.',
+        sqlFix: TABLE_SQL_FIXES[tableName],
+        lastChecked: nowStr
+      };
+    }
+
+    const remoteCount = count ?? 0;
+
+    // Check for specific columns based on table
+    const missingCols: string[] = [];
+    if (tableName === 'client_partners') {
+      const colCheck = await activeClient.from('client_partners').select('enable_completion_notifications, cep_ranges_history').limit(1);
+      if (colCheck.error && (colCheck.error.message.includes('column') || colCheck.error.code === 'PGRST204')) {
+        missingCols.push('enable_completion_notifications', 'cep_ranges_history');
+      }
+    } else if (tableName === 'delivery_riders') {
+      const colCheck = await activeClient.from('delivery_riders').select('autorizar_imprimir_recibo').limit(1);
+      if (colCheck.error && (colCheck.error.message.includes('column') || colCheck.error.code === 'PGRST204')) {
+        missingCols.push('autorizar_imprimir_recibo');
+      }
+    } else if (tableName === 'orders') {
+      const colCheck = await activeClient.from('orders').select('data_conclusao, horario_inicial, horario_final').limit(1);
+      if (colCheck.error && (colCheck.error.message.includes('column') || colCheck.error.code === 'PGRST204')) {
+        missingCols.push('data_conclusao', 'horario_inicial', 'horario_final');
+      }
+    }
+
+    if (missingCols.length > 0) {
+      return {
+        tableName,
+        label: info.label,
+        description: info.desc,
+        localCount,
+        remoteCount,
+        status: 'column_mismatch',
+        latencyMs,
+        missingColumns: missingCols,
+        errorMessage: `Colunas adicionais não encontradas no PostgreSQL: ${missingCols.join(', ')}.`,
+        actionHint: `Execute o script SQL da tabela para adicionar as novas colunas.`,
+        sqlFix: TABLE_SQL_FIXES[tableName],
+        lastChecked: nowStr
+      };
+    }
+
+    if (remoteCount === localCount) {
+      return {
+        tableName,
+        label: info.label,
+        description: info.desc,
+        localCount,
+        remoteCount,
+        status: 'synced',
+        latencyMs,
+        actionHint: 'Tabela 100% sincronizada com o banco PostgreSQL.',
+        sqlFix: TABLE_SQL_FIXES[tableName],
+        lastChecked: nowStr
+      };
+    } else {
+      const diff = localCount - remoteCount;
+      const diffText = diff > 0 
+        ? `${diff} registro(s) pendente(s) de envio ao Supabase`
+        : `${Math.abs(diff)} registro(s) a mais no Supabase (pendente de download)`;
+
+      return {
+        tableName,
+        label: info.label,
+        description: info.desc,
+        localCount,
+        remoteCount,
+        status: 'discrepancy',
+        latencyMs,
+        errorMessage: `Discrepância na contagem: ${diffText}.`,
+        actionHint: diff > 0 
+          ? 'Clique em "Enviar Esta Tabela" para gravar as pendências no Supabase.'
+          : 'Clique em "Carregar do Supabase" ou faça o sincronismo bidirecional.',
+        sqlFix: TABLE_SQL_FIXES[tableName],
+        lastChecked: nowStr
+      };
+    }
+  } catch (err: any) {
+    return {
+      tableName,
+      label: info.label,
+      description: info.desc,
+      localCount,
+      remoteCount: null,
+      status: 'error',
+      errorMessage: err.message || String(err),
+      actionHint: 'Falha de comunicação com o servidor Supabase.',
+      sqlFix: TABLE_SQL_FIXES[tableName],
+      lastChecked: nowStr
+    };
+  }
+}
+
+export async function syncSingleTableToSupabase(
+  tableName: TableSyncDiagnostic['tableName'],
+  dataset: {
+    hubs?: CompanyHub[];
+    clients?: ClientPartner[];
+    riders?: DeliveryRider[];
+    orders?: Order[];
+    logs?: ActivityLog[];
+    txs?: FinancialTransaction[];
+  }
+): Promise<number> {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase não está configurado.');
+  }
+
+  if (tableName === 'company_hubs') {
+    const items = (dataset.hubs || []).map(mapCompanyHubToDb);
+    if (items.length === 0) return 0;
+    const chunks = chunkArray(items, 50);
+    for (const chunk of chunks) {
+      const { error } = await supabase.from('company_hubs').upsert(chunk);
+      if (error) throw new Error(error.message);
+    }
+    return items.length;
+  }
+
+  if (tableName === 'client_partners') {
+    const items = (dataset.clients || []).map(mapClientPartnerToDb);
+    if (items.length === 0) return 0;
+    const chunks = chunkArray(items, 50);
+    for (const chunk of chunks) {
+      const { error } = await supabase.from('client_partners').upsert(chunk);
+      if (error) {
+        if (error.message?.includes('column') || error.code === 'PGRST204') {
+          const fallbackChunk = chunk.map(c => {
+            const { enable_completion_notifications, cep_ranges_history, ...rest } = c as any;
+            return rest;
+          });
+          const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackChunk);
+          if (retryErr) throw new Error(retryErr.message);
+        } else {
+          throw new Error(error.message);
+        }
+      }
+    }
+    return items.length;
+  }
+
+  if (tableName === 'delivery_riders') {
+    const items = (dataset.riders || []).map(mapDeliveryRiderToDb);
+    if (items.length === 0) return 0;
+    const chunks = chunkArray(items, 50);
+    for (const chunk of chunks) {
+      const { error } = await supabase.from('delivery_riders').upsert(chunk);
+      if (error) throw new Error(error.message);
+    }
+    return items.length;
+  }
+
+  if (tableName === 'orders') {
+    const validRiderIds = new Set((dataset.riders || []).map(r => r.id));
+    const items = (dataset.orders || []).map(o => {
+      const dbO = mapOrderToDb(o);
+      if (dbO.rider_id && !validRiderIds.has(dbO.rider_id)) {
+        dbO.rider_id = null;
+      }
+      return dbO;
+    });
+    if (items.length === 0) return 0;
+    const chunks = chunkArray(items, 30);
+    for (const chunk of chunks) {
+      const { error } = await supabase.from('orders').upsert(chunk);
+      if (error) {
+        const baseChunk = chunk.map(dbO => ({
+          id: dbO.id,
+          client_name: dbO.client_name,
+          phone: dbO.phone,
+          address: dbO.address,
+          region: dbO.region,
+          status: dbO.status,
+          priority: dbO.priority,
+          value: dbO.value,
+          rider_id: dbO.rider_id,
+          items_count: dbO.items_count,
+          date: dbO.date,
+          cep: dbO.cep,
+          partner_name: dbO.partner_name,
+          delivery_value: dbO.delivery_value,
+          driver_value: dbO.driver_value,
+          raw_data: dbO.raw_data,
+          history: dbO.history
+        }));
+        const { error: retryErr } = await supabase.from('orders').upsert(baseChunk);
+        if (retryErr) throw new Error(retryErr.message);
+      }
+    }
+    return items.length;
+  }
+
+  if (tableName === 'activity_logs') {
+    const items = (dataset.logs || []).map(mapActivityLogToDb);
+    if (items.length === 0) return 0;
+    const chunks = chunkArray(items, 50);
+    for (const chunk of chunks) {
+      const { error } = await supabase.from('activity_logs').upsert(chunk);
+      if (error) throw new Error(error.message);
+    }
+    return items.length;
+  }
+
+  if (tableName === 'financial_transactions') {
+    const items = (dataset.txs || []).map(mapFinancialTransactionToDb);
+    if (items.length === 0) return 0;
+    const chunks = chunkArray(items, 50);
+    for (const chunk of chunks) {
+      const { error } = await supabase.from('financial_transactions').upsert(chunk);
+      if (error) throw new Error(error.message);
+    }
+    return items.length;
+  }
+
+  return 0;
+}
+
+export async function fetchSingleTableFromSupabase(
+  tableName: TableSyncDiagnostic['tableName']
+): Promise<any[]> {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase não está configurado.');
+  }
+  const { data, error } = await safeQueryTable(tableName);
+  if (error) throw new Error(`Erro ao buscar dados de ${tableName}: ${error.message || error}`);
+  return data || [];
+}
+
 
 export interface SupabaseLoadedState {
   hubs: CompanyHub[];

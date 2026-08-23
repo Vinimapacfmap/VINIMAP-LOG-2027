@@ -105,37 +105,31 @@ export function sanitizeOrderConsistency(
     }
   }
 
-  // Restore riderId from rawData if missing in root ONLY if rawData contains a real rider identifier
-  if (!updated.riderId) {
-    const rawRider = updated.rawData?.riderId 
-      || updated.rawData?.Condutor 
-      || updated.rawData?.condutor 
-      || updated.rawData?.NomeCondutor 
-      || updated.rawData?.nomeCondutor 
-      || updated.rawData?.Entregador 
-      || updated.rawData?.entregador 
-      || updated.rawData?.Motorista 
-      || updated.rawData?.motorista 
-      || updated.rawData?.DispositivoCondutor 
-      || updated.rawData?.dispositivoCondutor;
+  // Normalize riderId - empty or placeholder values mean unassigned
+  if (updated.riderId) {
+    const cleanRiderId = (updated.riderId || '').toString().trim();
+    const isPlaceholder = cleanRiderId === '' || 
+      cleanRiderId.toLowerCase() === 'unassigned' || 
+      cleanRiderId.toLowerCase() === 'desalocar' || 
+      cleanRiderId.toLowerCase() === 'nao alocado' || 
+      cleanRiderId.toLowerCase() === 'não alocado' || 
+      cleanRiderId.toLowerCase() === 'nao vinculado' || 
+      cleanRiderId.toLowerCase() === 'não vinculado' || 
+      cleanRiderId.toLowerCase() === 'sem condutor' || 
+      cleanRiderId.toLowerCase() === 'null' || 
+      cleanRiderId.toLowerCase() === 'undefined';
 
-    if (rawRider) {
-      const cleanRawRider = (rawRider || '').toString().trim().toLowerCase();
-      const isPlaceholder = cleanRawRider === '' || 
-        cleanRawRider === 'nao alocado' || 
-        cleanRawRider === 'não alocado' || 
-        cleanRawRider === 'nao vinculado' || 
-        cleanRawRider === 'não vinculado' || 
-        cleanRawRider === 'sem condutor' || 
-        cleanRawRider === 'desalocado' || 
-        cleanRawRider === 'unassigned' || 
-        cleanRawRider === 'undefined' || 
-        cleanRawRider === 'null';
+    if (isPlaceholder) {
+      updated.riderId = undefined;
+      isModified = true;
+    }
+  }
 
-      if (!isPlaceholder) {
-        updated.riderId = (rawRider || '').toString().trim();
-        isModified = true;
-      }
+  // If order is unassigned, ensure rawData does not have conflicting stale rider identifiers
+  if (!updated.riderId && updated.rawData) {
+    if (updated.rawData.riderId) {
+      delete updated.rawData.riderId;
+      isModified = true;
     }
   }
 

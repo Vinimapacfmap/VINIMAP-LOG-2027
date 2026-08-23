@@ -281,7 +281,7 @@ export default function Header({
                           <span className="text-xs font-black text-slate-800 font-mono">
                             R$ {(order.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
-                          {(order.rawData?.DispositivoCondutor || order.riderId) ? (
+                          {(order.riderId && order.riderId !== 'unassigned' && order.riderId !== 'desalocar' && order.rawData?.DispositivoCondutor !== 'Não vinculado') ? (
                             <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-1">
                               <Truck size={10} />
                               <span className="truncate max-w-[90px]">{order.rawData?.DispositivoCondutor || order.riderId}</span>

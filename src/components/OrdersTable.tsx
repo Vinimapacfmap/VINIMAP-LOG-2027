@@ -1397,10 +1397,14 @@ function OrdersTable({
 
   const handleBulkRiderAssign = (riderId: string) => {
     if (selectedIds.size === 0) return;
-    const targetRider = riders.find(r => r.id === riderId);
+    const isUnassign = !riderId || riderId === '' || riderId === 'unassign' || riderId === 'desalocar';
+    const targetRider = !isUnassign ? riders.find(r => r.id === riderId) : null;
     const riderName = targetRider ? targetRider.name : 'Desalocar';
-    if (window.confirm(`Deseja confirmar a alocação de ${selectedIds.size} pedido(s) selecionado(s) para o condutor "${riderName}"?`)) {
-      onBulkAssignRider(Array.from(selectedIds), riderId);
+    const confirmMessage = isUnassign
+      ? `Deseja confirmar a desalocação do condutor de ${selectedIds.size} pedido(s) selecionado(s)?`
+      : `Deseja confirmar a alocação de ${selectedIds.size} pedido(s) selecionado(s) para o condutor "${riderName}"?`;
+    if (window.confirm(confirmMessage)) {
+      onBulkAssignRider(Array.from(selectedIds), isUnassign ? 'unassign' : riderId);
       setSelectedIds(new Set());
     }
   };

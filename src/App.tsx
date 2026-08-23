@@ -2927,12 +2927,28 @@ export default function App() {
           : ('Não iniciado' as OrderStatus);
 
         const isoNow = new Date().toISOString();
+        const cleanedRawData = currentOrder.rawData ? { ...currentOrder.rawData } : {};
+        delete cleanedRawData.riderId;
+        delete cleanedRawData.Condutor;
+        delete cleanedRawData.condutor;
+        delete cleanedRawData.NomeCondutor;
+        delete cleanedRawData.nomeCondutor;
+        delete cleanedRawData.Entregador;
+        delete cleanedRawData.entregador;
+        delete cleanedRawData.Motorista;
+        delete cleanedRawData.motorista;
+        delete cleanedRawData.DispositivoCondutor;
+        delete cleanedRawData.dispositivoCondutor;
+        delete cleanedRawData.riderName;
+
         const initialUpdatedOrder: Order = {
           ...currentOrder,
           riderId: undefined,
+          driverValue: 0,
           status: preservedUnassignStatus,
           updatedAt: isoNow,
           statusUpdatedAt: isoNow,
+          rawData: cleanedRawData,
           history: [...(currentOrder.history || []), historyEntry]
         };
 
@@ -3362,12 +3378,29 @@ export default function App() {
             ? ((order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado') ? order.status : ('Não iniciado' as OrderStatus))
             : order.status;
           const isoNow = new Date().toISOString();
+          const cleanedRawData = order.rawData ? { ...order.rawData } : {};
+          if (isUnassign) {
+            delete cleanedRawData.riderId;
+            delete cleanedRawData.Condutor;
+            delete cleanedRawData.condutor;
+            delete cleanedRawData.NomeCondutor;
+            delete cleanedRawData.nomeCondutor;
+            delete cleanedRawData.Entregador;
+            delete cleanedRawData.entregador;
+            delete cleanedRawData.Motorista;
+            delete cleanedRawData.motorista;
+            delete cleanedRawData.DispositivoCondutor;
+            delete cleanedRawData.dispositivoCondutor;
+            delete cleanedRawData.riderName;
+          }
           const initialUpdatedOrder: Order = {
             ...order,
             riderId: isUnassign ? undefined : riderId,
+            driverValue: isUnassign ? 0 : order.driverValue,
             status: preservedBulkStatus,
             updatedAt: isoNow,
             statusUpdatedAt: isoNow,
+            rawData: cleanedRawData,
             history: [...(order.history || []), historyEntry]
           };
           updatedOrders.push(validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners));
@@ -3576,8 +3609,21 @@ export default function App() {
           }
 
           let newRiderId = order.riderId;
+          const cleanedRawData = order.rawData ? { ...order.rawData } : {};
           if (isUnassignRider) {
             newRiderId = undefined;
+            delete cleanedRawData.riderId;
+            delete cleanedRawData.Condutor;
+            delete cleanedRawData.condutor;
+            delete cleanedRawData.NomeCondutor;
+            delete cleanedRawData.nomeCondutor;
+            delete cleanedRawData.Entregador;
+            delete cleanedRawData.entregador;
+            delete cleanedRawData.Motorista;
+            delete cleanedRawData.motorista;
+            delete cleanedRawData.DispositivoCondutor;
+            delete cleanedRawData.dispositivoCondutor;
+            delete cleanedRawData.riderName;
           } else if (updates.riderId !== undefined) {
             newRiderId = updates.riderId;
             affectedRiderIds.add(updates.riderId);
@@ -3586,6 +3632,8 @@ export default function App() {
           const merged: Order = {
             ...order,
             ...updates,
+            rawData: cleanedRawData,
+            driverValue: isUnassignRider ? 0 : order.driverValue,
             riderId: newRiderId
           };
 
