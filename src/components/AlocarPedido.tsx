@@ -41,6 +41,7 @@ import {
   Flag,
   Maximize2,
   Minimize2,
+  UserX,
   X
 } from 'lucide-react';
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode } from '../types';
@@ -50,6 +51,46 @@ import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from '../utils/addressUtils';
 import { realtimeSyncBus } from '../utils/realtimeSync';
 import OrderQuickViewTooltip from './OrderQuickViewTooltip';
+
+export const isAssignedRider = (order?: Partial<Order> | null, ridersList: DeliveryRider[] = []): boolean => {
+  if (!order || !order.riderId) return false;
+  const rid = String(order.riderId).trim().toLowerCase();
+  if (
+    !rid ||
+    rid === 'unassigned' ||
+    rid === 'desalocar' ||
+    rid === 'nao alocado' ||
+    rid === 'não alocado' ||
+    rid === 'nao vinculado' ||
+    rid === 'não vinculado' ||
+    rid === 'sem condutor' ||
+    rid === 'null' ||
+    rid === 'undefined'
+  ) {
+    return false;
+  }
+  return ridersList.some(r => r.id === order.riderId);
+};
+
+export const getAssignedRider = (order?: Partial<Order> | null, ridersList: DeliveryRider[] = []): DeliveryRider | null => {
+  if (!order || !order.riderId) return null;
+  const rid = String(order.riderId).trim().toLowerCase();
+  if (
+    !rid ||
+    rid === 'unassigned' ||
+    rid === 'desalocar' ||
+    rid === 'nao alocado' ||
+    rid === 'não alocado' ||
+    rid === 'nao vinculado' ||
+    rid === 'não vinculado' ||
+    rid === 'sem condutor' ||
+    rid === 'null' ||
+    rid === 'undefined'
+  ) {
+    return null;
+  }
+  return ridersList.find(r => r.id === order.riderId) || null;
+};
 
 const getStatusClasses = (status: string) => {
   switch (status) {
