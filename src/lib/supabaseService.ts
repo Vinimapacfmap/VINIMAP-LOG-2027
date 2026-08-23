@@ -1481,7 +1481,7 @@ export interface SupabaseLoadedState {
 async function safeQueryTable(tableName: string) {
   try {
     if (!supabase) return { data: [], error: null };
-    const res = await supabase.from(tableName).select('*').limit(50000);
+    const res = await supabase.from(tableName).select('*').limit(1000);
     return { data: res.data || [], error: res.error };
   } catch (err) {
     console.warn(`[safeQueryTable] Exception fetching table ${tableName}:`, err);
