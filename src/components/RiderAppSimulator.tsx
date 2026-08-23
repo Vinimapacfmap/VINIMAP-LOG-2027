@@ -316,6 +316,21 @@ export default function RiderAppSimulator({
       collection(db, 'orders'),
       (snapshot) => {
         if (!active) return;
+        console.log('[RiderRealtime] selectedRiderId:', selectedRiderId);
+        console.log('[RiderRealtime] pedidos Firestore:', snapshot.docs.length);
+        console.log('[RiderRealtime] riderIds:', snapshot.docs.map(d => ({
+          id: d.id,
+          riderId: d.data()?.riderId
+})));
+        console.log('[RiderRealtime] selectedRiderId:', selectedRiderId);
+console.log('[RiderRealtime] pedidos recebidos do Firestore:', snapshot.docs.length);
+console.log(
+  '[RiderRealtime] pedidos/riderId:',
+  snapshot.docs.map(d => ({
+    id: d.id,
+    riderId: d.data()?.riderId
+  }))
+);
 
         const assignedOrders = snapshot.docs
           .map(d => d.data() as Order)
