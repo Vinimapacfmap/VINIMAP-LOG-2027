@@ -126,10 +126,26 @@ export function sanitizeOrderConsistency(
   }
 
   // If order is unassigned, ensure rawData does not have conflicting stale rider identifiers
-  if (!updated.riderId && updated.rawData) {
-    if (updated.rawData.riderId) {
-      delete updated.rawData.riderId;
+  if (!updated.riderId) {
+    if (updated.driverValue && updated.driverValue > 0) {
+      updated.driverValue = 0;
       isModified = true;
+    }
+    if (updated.rawData) {
+      const driverFieldNorms = new Set([
+        'riderid', 'idcondutor', 'identregador', 'codigocondutor', 'codigoentregador',
+        'condutor', 'nomecondutor', 'entregador', 'nomeentregador', 'motorista', 'nomemotorista',
+        'dispositivocondutor', 'dispositivo', 'dispositivoentregador',
+        'ridername', 'rider'
+      ]);
+
+      for (const k of Object.keys(updated.rawData)) {
+        const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (driverFieldNorms.has(norm)) {
+          delete updated.rawData[k];
+          isModified = true;
+        }
+      }
     }
   }
 

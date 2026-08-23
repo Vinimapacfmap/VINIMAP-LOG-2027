@@ -11,8 +11,8 @@ import { compareOrdersByCep } from '../utils/addressUtils';
 import { isOrderMatchingRider, findRiderByIdentifier } from '../utils/partnerUtils';
 import { realtimeSyncBus } from '../utils/realtimeSync';
 import { compressImage } from '../utils/imageCompressor';
-import { dbSaveDeliveryRider, dbSaveOrder, validateRiderDeviceSession } from '../lib/dbService';
-import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { verifyAndSanitizeRiderOrders, queueOfflineGpsCoord, queueOfflineOrderAction, flushIndexedDbSyncQueue } from '../utils/indexedDbSync';
 import { hasOrderCompletionEvidence } from '../utils/orderConsistency';
@@ -302,51 +302,6 @@ export default function RiderAppSimulator({
       }
     }
   }, [riders, activeRiderId]);
-
-  // Cross-device realtime order listener.
-  // The admin panel and the driver app can run on different devices/browsers, so
-  // BroadcastChannel/localStorage cannot be used as the source of truth here.
-  // Firestore onSnapshot is the authoritative channel for new assignments.
-  useEffect(() => {
-    if (!selectedRiderId) return;
-
-    let active = true;
-    const unsubscribe = onSnapshot(
-      collection(db, 'orders'),
-      (snapshot) => {
-        if (!active) return;
-
-        const assignedOrders = snapshot.docs
-          .map(d => d.data() as Order)
-          .filter(order => {
-            if (!order?.id || !order.riderId) return false;
-            return isOrderMatchingRider(order, selectedRiderId, riders);
-          });
-
-        if (assignedOrders.length > 0) {
-          // Update the parent only when Firestore has a value that is not
-          // already represented locally. This avoids a write/read feedback loop.
-          const currentById = new Map(orders.map(o => [o.id, o]));
-          const changed = assignedOrders.filter(remote => {
-            const local = currentById.get(remote.id);
-            return !local || JSON.stringify(local) !== JSON.stringify(remote);
-          });
-
-          if (changed.length > 0 && onUpdateOrders) {
-            onUpdateOrders(changed);
-          }
-        }
-      },
-      (error) => {
-        console.error('[RiderRealtime] Falha no listener Firestore de pedidos:', error);
-      }
-    );
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [selectedRiderId, riders, orders, onUpdateOrders]);
 
   // Sync state with parent activeRiderId
   useEffect(() => {
@@ -856,38 +811,6 @@ export default function RiderAppSimulator({
         'info'
       );
     } else {
-      // Persist the rider status directly as a safety net.
-      // The parent handler also persists the order, but keeping this explicit
-      // here guarantees APP -> cloud -> ADMIN even if the parent state update
-      // is delayed or another realtime path is unavailable.
-      const currentOrder = orders?.find(o => o.id === orderId);
-      if (currentOrder && (status === 'Em rota' || status === 'Não iniciado')) {
-        const nowIso = new Date().toISOString();
-        const persistedOrder: Order = {
-          ...currentOrder,
-          status,
-          statusUpdatedAt: nowIso,
-          updatedAt: nowIso,
-          rawData: {
-            ...(currentOrder.rawData || {}),
-            status,
-            Situacao: status,
-            Status: status,
-            statusUpdatedAt: nowIso
-          }
-        };
-
-        dbSaveOrder(persistedOrder).then((saved) => {
-          if (saved === false) {
-            console.warn(`[RiderStatus] Persistência do pedido #${orderId} ficou pendente na fila de sincronização.`);
-          } else {
-            console.log(`[RiderStatus] Pedido #${orderId} persistido diretamente como "${status}".`);
-          }
-        }).catch((error) => {
-          console.error(`[RiderStatus] Falha ao persistir pedido #${orderId}:`, error);
-        });
-      }
-
       onUpdateOrderStatus(
         orderId,
         status,
