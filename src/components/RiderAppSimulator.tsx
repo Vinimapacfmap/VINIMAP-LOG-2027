@@ -11,9 +11,7 @@ import { compareOrdersByCep } from '../utils/addressUtils';
 import { isOrderMatchingRider, findRiderByIdentifier } from '../utils/partnerUtils';
 import { realtimeSyncBus } from '../utils/realtimeSync';
 import { compressImage } from '../utils/imageCompressor';
-import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
-import { supabase, isSupabaseConfigured } from '../supabase';
-import { mapOrderFromDb } from '../lib/supabaseService';
+import { dbSaveDeliveryRider, dbSaveOrder, validateRiderDeviceSession } from '../lib/dbService';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { verifyAndSanitizeRiderOrders, queueOfflineGpsCoord, queueOfflineOrderAction, flushIndexedDbSyncQueue } from '../utils/indexedDbSync';
@@ -319,7 +317,7 @@ export default function RiderAppSimulator({
         if (!active) return;
 
         const assignedOrders = snapshot.docs
-          .map(d => ({ ...(d.data() as Order), id: (d.data() as any).id || d.id }))
+          .map(d => d.data() as Order)
           .filter(order => {
             if (!order?.id || !order.riderId) return false;
             return isOrderMatchingRider(order, selectedRiderId, riders);
@@ -347,60 +345,6 @@ export default function RiderAppSimulator({
     return () => {
       active = false;
       unsubscribe();
-    };
-  }, [selectedRiderId, riders, orders, onUpdateOrders]);
-
-  // Supabase is the primary persistence layer in this project. Firestore above
-  // is kept as a realtime channel, but a driver must still receive an assignment
-  // when Firestore is delayed, unavailable, or the admin wrote through Supabase.
-  // Poll only the active driver's orders every 3 seconds so this works across
-  // different phones/browsers and does not depend on BroadcastChannel/localStorage.
-  useEffect(() => {
-    if (!selectedRiderId || !isSupabaseConfigured || !supabase || !onUpdateOrders) return;
-
-    let active = true;
-    let timer: ReturnType<typeof setInterval> | null = null;
-
-    const syncAssignedOrdersFromSupabase = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('rider_id', selectedRiderId);
-
-        if (!active || error) {
-          if (error) console.warn('[RiderRealtime/Supabase] Falha ao consultar pedidos do condutor:', error.message);
-          return;
-        }
-
-        const remoteOrders = (data || [])
-          .map(mapOrderFromDb)
-          .filter(order => isOrderMatchingRider(order, selectedRiderId, riders));
-
-        if (remoteOrders.length === 0) return;
-
-        const currentById = new Map(orders.map(o => [o.id, o]));
-        const changed = remoteOrders.filter(remote => {
-          const local = currentById.get(remote.id);
-          return !local || JSON.stringify(local) !== JSON.stringify(remote);
-        });
-
-        if (changed.length > 0) {
-          console.log(`[RiderRealtime/Supabase] ${changed.length} pedido(s) atualizado(s) para o condutor ${selectedRiderId}.`);
-          onUpdateOrders(changed);
-        }
-      } catch (error) {
-        console.warn('[RiderRealtime/Supabase] Erro inesperado na sincronização:', error);
-      }
-    };
-
-    // Do not wait for the first interval tick.
-    syncAssignedOrdersFromSupabase();
-    timer = setInterval(syncAssignedOrdersFromSupabase, 3000);
-
-    return () => {
-      active = false;
-      if (timer) clearInterval(timer);
     };
   }, [selectedRiderId, riders, orders, onUpdateOrders]);
 
@@ -912,6 +856,38 @@ export default function RiderAppSimulator({
         'info'
       );
     } else {
+      // Persist the rider status directly as a safety net.
+      // The parent handler also persists the order, but keeping this explicit
+      // here guarantees APP -> cloud -> ADMIN even if the parent state update
+      // is delayed or another realtime path is unavailable.
+      const currentOrder = orders?.find(o => o.id === orderId);
+      if (currentOrder && (status === 'Em rota' || status === 'Não iniciado')) {
+        const nowIso = new Date().toISOString();
+        const persistedOrder: Order = {
+          ...currentOrder,
+          status,
+          statusUpdatedAt: nowIso,
+          updatedAt: nowIso,
+          rawData: {
+            ...(currentOrder.rawData || {}),
+            status,
+            Situacao: status,
+            Status: status,
+            statusUpdatedAt: nowIso
+          }
+        };
+
+        dbSaveOrder(persistedOrder).then((saved) => {
+          if (saved === false) {
+            console.warn(`[RiderStatus] Persistência do pedido #${orderId} ficou pendente na fila de sincronização.`);
+          } else {
+            console.log(`[RiderStatus] Pedido #${orderId} persistido diretamente como "${status}".`);
+          }
+        }).catch((error) => {
+          console.error(`[RiderStatus] Falha ao persistir pedido #${orderId}:`, error);
+        });
+      }
+
       onUpdateOrderStatus(
         orderId,
         status,
