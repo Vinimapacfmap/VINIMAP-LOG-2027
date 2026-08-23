@@ -2090,9 +2090,7 @@ export default function App() {
         const isToday = order.date === todayStr;
         if (!isDelayed && !isToday) return false;
       } else {
-        const effectiveFrom = filterDateFrom || todayStr;
-        const effectiveTo = filterDateTo || todayStr;
-        const matchesDatePeriod = isOrderInDatePeriod(order, effectiveFrom, effectiveTo, filterStatus);
+        const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo, filterStatus);
         if (!matchesDatePeriod) {
           return false;
         }
@@ -2131,9 +2129,7 @@ export default function App() {
         const isToday = order.date === todayStr;
         if (!isDelayed && !isToday) return false;
       } else {
-        const effectiveFrom = filterDateFrom || todayStr;
-        const effectiveTo = filterDateTo || todayStr;
-        const matchesDatePeriod = isOrderInDatePeriod(order, effectiveFrom, effectiveTo);
+        const matchesDatePeriod = isOrderInDatePeriod(order, filterDateFrom, filterDateTo);
         if (!matchesDatePeriod) {
           return false;
         }
