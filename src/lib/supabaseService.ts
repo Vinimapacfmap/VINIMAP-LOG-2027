@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { sanitizeOrdersListConsistency } from '../utils/orderConsistency';
 import { extractISODateFromTimestamp, getSaoPauloISODate } from '../utils/dateUtils';
+import { getPartnerDisplayName, getCachedClientPartners } from '../utils/partnerUtils';
 
 // ============================================================================
 // MAPPING HELPER FUNCTIONS (camelCase <-> snake_case)
@@ -60,7 +61,7 @@ export function mapOrderToDb(o: Order) {
     items_count: o.itemsCount ?? 1,
     date: o.date,
     cep: o.cep || null,
-    partner_name: o.partnerName || null,
+    partner_name: getPartnerDisplayName(o.partnerName || (mergedRawData as any).partnerName || (mergedRawData as any).NomeFantasia || (mergedRawData as any).CodigoCliente || '', getCachedClientPartners()) || null,
     delivery_value: o.deliveryValue ?? 0,
     driver_value: o.driverValue ?? 0,
     raw_data: JSON.stringify(mergedRawData),
@@ -258,7 +259,7 @@ export function mapOrderFromDb(row: any): Order {
     itemsCount: row.items_count ?? rawDataObj?.itemsCount ?? 1,
     date: resolvedDate,
     cep: row.cep || rawDataObj?.cep || rawDataObj?.CEP || '',
-    partnerName: row.partner_name || rawDataObj?.partnerName || rawDataObj?.NomeFantasia || rawDataObj?.CodigoCliente || '',
+    partnerName: getPartnerDisplayName(row.partner_name || rawDataObj?.partnerName || rawDataObj?.NomeFantasia || rawDataObj?.CodigoCliente || '', getCachedClientPartners()) || '',
     deliveryValue: row.delivery_value !== null && row.delivery_value !== undefined ? Number(row.delivery_value) : (rawDataObj?.deliveryValue !== undefined ? Number(rawDataObj.deliveryValue) : undefined),
     driverValue: row.driver_value !== null && row.driver_value !== undefined ? Number(row.driver_value) : (rawDataObj?.driverValue !== undefined ? Number(rawDataObj.driverValue) : undefined),
     rawData: rawDataObj,

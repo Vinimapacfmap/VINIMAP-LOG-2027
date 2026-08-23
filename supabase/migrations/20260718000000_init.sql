@@ -140,6 +140,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(date);
 CREATE INDEX IF NOT EXISTS idx_orders_rider_id ON orders(rider_id);
 CREATE INDEX IF NOT EXISTS idx_orders_partner ON orders(partner_name);
+CREATE INDEX IF NOT EXISTS idx_orders_date_status_partner ON orders(date, status, partner_name);
 CREATE INDEX IF NOT EXISTS idx_financial_due_date ON financial_transactions(due_date);
 CREATE INDEX IF NOT EXISTS idx_financial_type ON financial_transactions(type);
 CREATE INDEX IF NOT EXISTS idx_financial_category ON financial_transactions(category);

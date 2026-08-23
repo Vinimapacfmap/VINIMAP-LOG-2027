@@ -48,7 +48,7 @@ export interface NormalizedBackupData {
  * Universal normalizer for backup data from any JSON structure or storage format
  */
 export function normalizeBackupData(raw: any): NormalizedBackupData {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw) {
     return {
       orders: [],
       clientPartners: [],
@@ -57,17 +57,28 @@ export function normalizeBackupData(raw: any): NormalizedBackupData {
     };
   }
 
-  // 1. Direct array of orders
+  // 1. Direct array of items
   if (Array.isArray(raw)) {
+    // Check if the array contains orders (has id and address/clientName/status)
+    const isOrderArray = raw.length > 0 && (raw[0].clientName || raw[0].client_name || raw[0].address || raw[0].status);
     return {
-      orders: raw,
+      orders: isOrderArray ? raw : [],
       clientPartners: [],
       riders: [],
       financialTransactions: []
     };
   }
 
-  // 2. Extract Orders
+  if (typeof raw !== 'object') {
+    return {
+      orders: [],
+      clientPartners: [],
+      riders: [],
+      financialTransactions: []
+    };
+  }
+
+  // 2. Extract Orders with comprehensive key matching
   let orders: Order[] = [];
   if (Array.isArray(raw.orders)) {
     orders = raw.orders;
@@ -75,12 +86,20 @@ export function normalizeBackupData(raw: any): NormalizedBackupData {
     orders = raw.pedidos;
   } else if (Array.isArray(raw.deliveryOrders)) {
     orders = raw.deliveryOrders;
+  } else if (Array.isArray(raw.rows)) {
+    orders = raw.rows;
+  } else if (Array.isArray(raw.data)) {
+    orders = raw.data;
   } else if (raw.data && Array.isArray(raw.data.orders)) {
     orders = raw.data.orders;
   } else if (raw.data && Array.isArray(raw.data.pedidos)) {
     orders = raw.data.pedidos;
+  } else if (raw.data && Array.isArray(raw.data.rows)) {
+    orders = raw.data.rows;
   } else if (raw.state && Array.isArray(raw.state.orders)) {
     orders = raw.state.orders;
+  } else if (raw.payload && Array.isArray(raw.payload.orders)) {
+    orders = raw.payload.orders;
   }
 
   // 3. Extract Client Partners
@@ -93,6 +112,8 @@ export function normalizeBackupData(raw: any): NormalizedBackupData {
     clientPartners = raw.clientes;
   } else if (raw.data && Array.isArray(raw.data.clientPartners)) {
     clientPartners = raw.data.clientPartners;
+  } else if (raw.data && Array.isArray(raw.data.parceiros)) {
+    clientPartners = raw.data.parceiros;
   }
 
   // 4. Extract Delivery Riders
@@ -107,6 +128,8 @@ export function normalizeBackupData(raw: any): NormalizedBackupData {
     riders = raw.condutores;
   } else if (raw.data && Array.isArray(raw.data.deliveryRiders)) {
     riders = raw.data.deliveryRiders;
+  } else if (raw.data && Array.isArray(raw.data.riders)) {
+    riders = raw.data.riders;
   }
 
   // 5. Extract Financial Transactions
@@ -270,26 +293,53 @@ export default function BackupRestoreByPeriod({
           }
         }
       }
+
+      // Always prepend live active database state if orders are present in Supabase / memory
+      if (orders && orders.length > 0) {
+        list.unshift({
+          key: 'vinimap_live_active_database',
+          label: `Estado Atual em Memória / Supabase (${orders.length} Pedidos)`,
+          dateStr: 'Tempo Real',
+          timestamp: 'Agora',
+          ordersCount: orders.length,
+          partnersCount: clientPartners ? clientPartners.length : 0,
+          sizeKb: Math.max(1, Math.round(orders.length * 0.6)),
+          data: {
+            exportType: 'ESTADO_ATUAL_MEMORIA_SUPABASE',
+            exportDate: todayIso,
+            date: todayIso,
+            timestamp: new Date().toISOString(),
+            orders,
+            clientPartners,
+            riders,
+            financialTransactions,
+          }
+        });
+      }
     } catch (e) {
       console.warn('Erro ao escanear backups locais:', e);
     }
 
-    // Sort list: latest first
+    // Sort list: live state & latest auto-backup first
     list.sort((a, b) => {
+      if (a.key === 'vinimap_live_active_database') return -1;
+      if (b.key === 'vinimap_live_active_database') return 1;
       if (a.key === 'vinimap_contingency_backup_latest') return -1;
       if (b.key === 'vinimap_contingency_backup_latest') return 1;
       return b.key.localeCompare(a.key);
     });
 
     setLocalBackups(list);
-    if (list.length > 0 && !selectedBackupKey) {
-      setSelectedBackupKey(list[0].key);
+    if (list.length > 0) {
+      if (!selectedBackupKey || !list.some(b => b.key === selectedBackupKey)) {
+        setSelectedBackupKey(list[0].key);
+      }
     }
   };
 
   useEffect(() => {
     scanLocalStorageBackups();
-  }, [lastContingencyTime]);
+  }, [lastContingencyTime, orders.length, clientPartners.length]);
 
   // Handle file drop or upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

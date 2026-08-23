@@ -440,6 +440,16 @@ CREATE TABLE IF NOT EXISTS financial_transactions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
+-- Performance Indices for fast queries & filters
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(date);
+CREATE INDEX IF NOT EXISTS idx_orders_rider_id ON orders(rider_id);
+CREATE INDEX IF NOT EXISTS idx_orders_partner ON orders(partner_name);
+CREATE INDEX IF NOT EXISTS idx_orders_date_status_partner ON orders(date, status, partner_name);
+CREATE INDEX IF NOT EXISTS idx_financial_due_date ON financial_transactions(due_date);
+CREATE INDEX IF NOT EXISTS idx_financial_type ON financial_transactions(type);
+CREATE INDEX IF NOT EXISTS idx_financial_category ON financial_transactions(category);
+
 -- Ensure missing columns exist in pre-existing tables
 ALTER TABLE client_partners ADD COLUMN IF NOT EXISTS enable_completion_notifications BOOLEAN DEFAULT TRUE NOT NULL;
 ALTER TABLE client_partners ADD COLUMN IF NOT EXISTS cep_ranges_history JSONB DEFAULT '[]'::jsonb;

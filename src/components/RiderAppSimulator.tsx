@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { DeliveryRider, Order, OrderStatus, ActivityLog, ClientPartner, isMatchingClientCode, CompanyHub } from '../types';
 import { getSaoPauloISODate, getSaoPauloDate, getSaoPauloTime, extractISODateFromTimestamp } from '../utils/dateUtils';
 import { compareOrdersByCep } from '../utils/addressUtils';
-import { isOrderMatchingRider } from '../utils/partnerUtils';
+import { isOrderMatchingRider, findRiderByIdentifier } from '../utils/partnerUtils';
 import { realtimeSyncBus } from '../utils/realtimeSync';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
@@ -264,19 +264,9 @@ export default function RiderAppSimulator({
 
   const [selectedRiderId, setSelectedRiderId] = useState<string>('');
   const [lockedRiderId, setLockedRiderId] = useState<string | null>(null);
-  const selectedRider = riders.find(r => {
-    if (!selectedRiderId) return false;
-    const cleanSel = selectedRiderId.trim().toLowerCase();
-    const selDigits = cleanSel.replace(/\D/g, '');
-    if (r.id.toLowerCase() === cleanSel) return true;
-    if (r.name.toLowerCase() === cleanSel) return true;
-    if (selDigits.length >= 8) {
-      if (r.phone && r.phone.replace(/\D/g, '') === selDigits) return true;
-      if (r.deviceNumber && r.deviceNumber.replace(/\D/g, '') === selDigits) return true;
-      if (r.cpfCnpj && r.cpfCnpj.replace(/\D/g, '') === selDigits) return true;
-    }
-    return false;
-  });
+  const selectedRider = useMemo(() => {
+    return findRiderByIdentifier(riders, selectedRiderId);
+  }, [riders, selectedRiderId]);
 
   // Apply dynamic PWA icons & manifest using Headquarters Logo
   useEffect(() => {
@@ -289,21 +279,21 @@ export default function RiderAppSimulator({
       const params = new URLSearchParams(window.location.search);
       const urlRiderParam = params.get('riderId');
       if (urlRiderParam) {
-        setLockedRiderId(urlRiderParam);
-        setSelectedRiderId(urlRiderParam);
-        const targetRider = riders.find(r => r.id === urlRiderParam);
-        if (targetRider) {
-          setPhoneInput(prev => prev || targetRider.deviceNumber || targetRider.phone || '');
-          setPasswordInput(prev => prev || targetRider.password || '1234');
+        const resolved = findRiderByIdentifier(riders, urlRiderParam);
+        const riderIdToSet = resolved ? resolved.id : urlRiderParam;
+        setLockedRiderId(riderIdToSet);
+        setSelectedRiderId(riderIdToSet);
+        if (resolved) {
+          setPhoneInput(prev => prev || resolved.deviceNumber || resolved.phone || '');
+          setPasswordInput(prev => prev || resolved.password || '1234');
         }
       } else {
         if (!selectedRiderId && riders.length > 0) {
           const storedRiderId = localStorage.getItem('vinimap_driver_id') || activeRiderId;
-          const initial = (storedRiderId && riders.some(r => r.id === storedRiderId))
-            ? storedRiderId
-            : riders[0].id;
+          const resolvedStored = findRiderByIdentifier(riders, storedRiderId);
+          const initial = resolvedStored ? resolvedStored.id : riders[0].id;
           setSelectedRiderId(initial);
-          const targetRider = riders.find(r => r.id === initial);
+          const targetRider = resolvedStored || riders[0];
           if (targetRider) {
             setPhoneInput(prev => prev || targetRider.deviceNumber || targetRider.phone || '');
             setPasswordInput(prev => prev || targetRider.password || '1234');
@@ -316,34 +306,37 @@ export default function RiderAppSimulator({
   // Sync state with parent activeRiderId
   useEffect(() => {
     if (activeRiderId && activeRiderId !== selectedRiderId) {
-      setSelectedRiderId(activeRiderId);
+      const resolved = findRiderByIdentifier(riders, activeRiderId);
+      setSelectedRiderId(resolved ? resolved.id : activeRiderId);
     }
-  }, [activeRiderId]);
+  }, [activeRiderId, riders]);
 
   const changeSelectedRiderId = (id: string) => {
     if (!id) return;
-    setSelectedRiderId(id);
+    const resolved = findRiderByIdentifier(riders, id);
+    const targetId = resolved ? resolved.id : id;
+    setSelectedRiderId(targetId);
     if (lockedRiderId) {
-      setLockedRiderId(id);
+      setLockedRiderId(targetId);
     }
     if (typeof window !== 'undefined') {
-      localStorage.setItem('vinimap_driver_id', id);
+      localStorage.setItem('vinimap_driver_id', targetId);
     }
-    const targetRider = riders.find(r => r.id === id);
+    const targetRider = resolved || riders.find(r => r.id === targetId);
     if (targetRider) {
       setPhoneInput(targetRider.deviceNumber || targetRider.phone || '');
       setPasswordInput(targetRider.password || '1234');
       setLoginError(null);
     }
     // Clear selected order if it belongs to another driver
-    if (selectedOrder && selectedOrder.riderId !== id && selectedRider && selectedOrder.riderId !== selectedRider.name) {
+    if (selectedOrder && selectedOrder.riderId !== targetId && selectedRider && selectedOrder.riderId !== selectedRider.name) {
       setSelectedOrder(null);
       if (currentScreen === 'details') {
         setCurrentScreen('dashboard');
       }
     }
     if (onActiveRiderChange) {
-      onActiveRiderChange(id);
+      onActiveRiderChange(targetId);
     }
   };
 
@@ -454,9 +447,9 @@ export default function RiderAppSimulator({
     const savedTab = localStorage.getItem('vinimap_driver_active_tab');
 
     if (savedRiderId) {
-      const targetRider = riders.find(r => r.id === savedRiderId);
+      const targetRider = findRiderByIdentifier(riders, savedRiderId);
       if (targetRider) {
-        if (!selectedRiderId) {
+        if (!selectedRiderId || selectedRiderId !== targetRider.id) {
           setSelectedRiderId(targetRider.id);
         }
         
@@ -1622,25 +1615,29 @@ export default function RiderAppSimulator({
   const todayFormatted = getSaoPauloDate();
 
   const isOrderActiveForDriver = (order: Order) => {
-    const isAssignedToRider = isOrderMatchingRider(order, selectedRiderId || selectedRider?.id, riders);
+    const isAssignedToRider = 
+      isOrderMatchingRider(order, selectedRiderId, riders) ||
+      (selectedRider && isOrderMatchingRider(order, selectedRider.id, riders)) ||
+      (selectedRider && isOrderMatchingRider(order, selectedRider.phone, riders)) ||
+      (selectedRider && isOrderMatchingRider(order, selectedRider.name, riders));
+
     if (!isAssignedToRider) return false;
     
-    // Check if the order has physical, digital, or historical evidence of completion
-    const hasCompletion = hasOrderCompletionEvidence(order) || 
-      order.status === 'Concluído' ||
+    // Status in memory / database takes primary authority
+    const currentStatus = order.status;
+    const isExplicitlyOpen = currentStatus === 'Não iniciado' || currentStatus === 'Em rota' || (currentStatus as string) === 'Entregando';
+
+    // Check if the order was genuinely completed
+    const hasCompletion = !isExplicitlyOpen && (
+      hasOrderCompletionEvidence(order) || 
+      currentStatus === 'Concluído' ||
       (order.rawData && (
         String(order.rawData.Situacao || '').toLowerCase() === 'baixado' ||
         String(order.rawData.Situacao || '').toLowerCase() === 'concluído' ||
         String(order.rawData.Situacao || '').toLowerCase() === 'concluido' ||
-        String(order.rawData.Situacao || '').toLowerCase() === 'entregue' ||
-        String(order.rawData.status || '').toLowerCase() === 'concluído' ||
-        String(order.rawData.status || '').toLowerCase() === 'concluido' ||
-        String(order.rawData.Status || '').toLowerCase() === 'concluído' ||
-        String(order.rawData.Status || '').toLowerCase() === 'concluido' ||
-        String(order.rawData.STATUS || '').toLowerCase() === 'concluído' ||
-        String(order.rawData.STATUS || '').toLowerCase() === 'concluido' ||
-        String(order.rawData.STATUS || '').toLowerCase() === 'baixado'
-      ));
+        String(order.rawData.Situacao || '').toLowerCase() === 'entregue'
+      ))
+    );
 
     // Extract true operational / creation date of the order
     const rawOrderDate = order.date 
@@ -1658,45 +1655,33 @@ export default function RiderAppSimulator({
     const orderIsoDate = extractISODateFromTimestamp(rawOrderDate) || (order.date ? String(order.date).split('T')[0] : '');
     const isFromToday = !orderIsoDate || orderIsoDate === todayIso;
 
-    // Check if the order was already completed or baixado in admin
-    const isCompleted = order.status === 'Concluído' || hasCompletion;
-    const isOccurrence = order.status === 'Ocorrência';
-    const isCanceled = order.status === 'Cancelado';
+    const isCompleted = currentStatus === 'Concluído' || hasCompletion;
+    const isOccurrence = currentStatus === 'Ocorrência';
+    const isCanceled = currentStatus === 'Cancelado';
 
-    // Statuses that are considered "em aberto" (open / pending in the Admin dashboard)
-    const isOpenStatus = !isCompleted && !isCanceled && !isOccurrence && (
-      order.status === 'Não iniciado' || 
-      order.status === 'Em rota' || 
-      (order.status as string) === 'Entregando'
-    );
-
-    // REGRA MANDATÓRIA: Pedidos de datas anteriores (dia anterior) que já foram baixados/concluídos NUNCA devem aparecer no app do condutor (nem abertos nem concluídos)
-    if (!isFromToday) {
-      // Se já está baixado / concluído ou cancelado ou ocorrência de dia anterior, NÃO EXIBIR
-      if (isCompleted || isCanceled || isOccurrence) {
-        return false;
-      }
-      // Apenas pedidos verdadeiramente pendentes/abertos de dias anteriores aparecem para entrega
-      return isOpenStatus;
+    // 1. If the order is open and assigned to this driver, ALWAYS display it for delivery
+    if (isExplicitlyOpen) {
+      return true;
     }
 
-    // Pedidos do dia de hoje (today):
-    // 1. Pedidos em aberto ('Não iniciado', 'Em rota') são exibidos para o condutor executar
-    if (isOpenStatus) return true;
+    // 2. Completed, Canceled, or Occurrence orders from previous days should not clutter the active driver screen
+    if (!isFromToday) {
+      return false;
+    }
 
-    // 2. Pedidos concluídos no dia de hoje
+    // 3. Today's completed orders (for history and receipt validation)
     if (isCompleted) {
       const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || order.date);
       return !completionDate || completionDate === todayIso;
     }
 
-    // 3. Ocorrências do dia de hoje
+    // 4. Today's occurrences
     if (isOccurrence) {
       const occurrenceDate = extractISODateFromTimestamp(order.occurrenceDate || order.deliveryDate || order.date);
       return !occurrenceDate || occurrenceDate === todayIso;
     }
 
-    // 4. Cancelados do dia de hoje
+    // 5. Today's canceled orders
     if (isCanceled) {
       const canceledDate = extractISODateFromTimestamp(order.date);
       return !canceledDate || canceledDate === todayIso;

@@ -40,11 +40,15 @@ export const DiagnosticUtility: React.FC<DiagnosticUtilityProps> = ({ mode = 'fl
   };
 
   const handleClearCache = () => {
-    clearSupabaseLocalStorage();
     setCleared(true);
+    clearSupabaseLocalStorage();
+    // Clear session filter flags to prevent blank state
+    try {
+      sessionStorage.removeItem('vinimap_filter_session');
+    } catch (_) {}
     setTimeout(() => {
       window.location.reload();
-    }, 1000);
+    }, 400);
   };
 
   const copyVercelTemplate = () => {

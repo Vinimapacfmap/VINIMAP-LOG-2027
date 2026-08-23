@@ -13,7 +13,7 @@ import {
 } from './data/mock';
 import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHistoryEntry, isMatchingClientCode, CepRange, CepTableHistoryItem, CompanyHub, BillingModelType } from './types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime } from './utils/dateUtils';
-import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider, setCachedClientPartners, setCachedDeliveryRiders } from './utils/partnerUtils';
+import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider, findRiderByIdentifier, setCachedClientPartners, setCachedDeliveryRiders } from './utils/partnerUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from './utils/addressUtils';
 import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from './utils/searchUtils';
 import { playNotificationAudioAlert } from './utils/notificationUtils';
@@ -70,6 +70,17 @@ import {
   clearIndexedDbOrdersStore, 
   clearAllIndexedDbStores 
 } from './utils/indexedDbSync';
+import {
+  getSavedFilterDateFrom,
+  getSavedFilterDateTo,
+  getSavedActiveOrderTab,
+  getSavedSearchQuery,
+  saveFilterDateFrom,
+  saveFilterDateTo,
+  saveActiveOrderTab,
+  saveSearchQuery,
+  clearSavedFilterSession
+} from './utils/sessionFilterPersistence';
 
 import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from './firebase';
@@ -197,9 +208,9 @@ export default function App() {
 
   const [activeSection, setActiveSection] = useState('dashboard');
   const [isPhoneSimulatorOpen, setIsPhoneSimulatorOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => getSavedSearchQuery(''));
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
-  const [activeOrderTab, setActiveOrderTab] = useState<'Todos' | OrderStatus>('Todos');
+  const [activeOrderTab, setActiveOrderTab] = useState<'Todos' | OrderStatus>(() => getSavedActiveOrderTab('Todos'));
 
   const getTodayDateString = () => {
     return getSaoPauloISODate();
@@ -236,14 +247,31 @@ export default function App() {
 
   const todayStr = getTodayDateString();
 
-  // Global filter states (pre-filtered to dynamic today's date by default)
-  const [filterDateFrom, setFilterDateFrom] = useState(todayStr);
-  const [filterDateTo, setFilterDateTo] = useState(todayStr);
+  // Global filter states (pre-filtered to dynamic today's date or persisted session filters)
+  const [filterDateFrom, setFilterDateFrom] = useState(() => getSavedFilterDateFrom(todayStr));
+  const [filterDateTo, setFilterDateTo] = useState(() => getSavedFilterDateTo(todayStr));
   const [filterPartner, setFilterPartner] = useState('');
   const [filterRiderId, setFilterRiderId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCep, setFilterCep] = useState('');
   const [filterShowDelayed, setFilterShowDelayed] = useState(false);
+
+  // Reactive state persistence for reload resilience (filterDateFrom, filterDateTo, activeOrderTab, searchQuery)
+  useEffect(() => {
+    saveFilterDateFrom(filterDateFrom);
+  }, [filterDateFrom]);
+
+  useEffect(() => {
+    saveFilterDateTo(filterDateTo);
+  }, [filterDateTo]);
+
+  useEffect(() => {
+    saveActiveOrderTab(activeOrderTab);
+  }, [activeOrderTab]);
+
+  useEffect(() => {
+    saveSearchQuery(searchQuery);
+  }, [searchQuery]);
 
   // Core App states with real-time Firebase integration
   const [orders, setOrders] = useState<Order[]>([]);
@@ -338,11 +366,16 @@ export default function App() {
       (navigator as any).standalone === true ||
       document.referrer.includes('android-app://');
 
+    const isMobileDevice = typeof window !== 'undefined' && (
+      window.innerWidth <= 768 ||
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+    );
+
     const storedRiderId = localStorage.getItem('vinimap_driver_id');
     const isDriverAppStored = localStorage.getItem('vinimap_is_driver_app') === 'true';
     const isDriverLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
     const isPwaWithRider = isPwaDisplay && isDriverAppStored && Boolean(storedRiderId);
-    const hasActiveDriverSession = isDriverLoggedIn && Boolean(storedRiderId);
+    const hasActiveDriverSession = isDriverLoggedIn && Boolean(storedRiderId) && (isMobileDevice || isPwaDisplay);
 
     if (isExplicitRiderParam || isPwaWithRider || (hasActiveDriverSession && isDriverAppStored)) {
       setIsStandaloneRider(true);
@@ -391,9 +424,10 @@ export default function App() {
 
   // Limpa todos os filtros e estados de consulta do painel
   const clearAllPanelFilters = useCallback(() => {
-    const freshTodayStr = getTodayDateString();
-    setFilterDateFrom(freshTodayStr);
-    setFilterDateTo(freshTodayStr);
+    clearSavedFilterSession();
+    // Exibe todos os pedidos ao limpar filtros sem ocultar pedidos de outras datas
+    setFilterDateFrom('');
+    setFilterDateTo('');
     setFilterPartner('');
     setFilterRiderId('');
     setFilterStatus('');
@@ -438,6 +472,13 @@ export default function App() {
       setCachedClientPartners(clientPartners);
     }
   }, [clientPartners]);
+
+  // Sync delivery riders into global cache for resilient resolution across all components
+  useEffect(() => {
+    if (riders && riders.length > 0) {
+      setCachedDeliveryRiders(riders);
+    }
+  }, [riders]);
 
   // Dynamic PWA manifest and icons update with Headquarters (Hub) Logo
   useEffect(() => {
