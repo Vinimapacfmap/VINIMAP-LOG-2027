@@ -735,6 +735,14 @@ export default function App() {
         if (updatedRider && updatedRider.id) {
           setRiders(prev => prev.map(r => r.id === updatedRider.id ? { ...r, ...updatedRider } : r));
         }
+      } else if (type === 'REQUEST_ORDERS_SYNC') {
+        // Driver requested sync - broadcast current orders and riders to peers/driver apps
+        if (orders.length > 0) {
+          realtimeSyncBus.broadcastOrdersBatch(orders);
+        }
+        if (riders.length > 0) {
+          riders.forEach(r => realtimeSyncBus.broadcastRiderUpdate(r));
+        }
       }
     });
 

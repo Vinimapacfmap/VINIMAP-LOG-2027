@@ -14,6 +14,8 @@ import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { isSupabaseConfigured } from '../supabase';
+import { fetchAllStateFromSupabase } from '../lib/supabaseService';
 import { verifyAndSanitizeRiderOrders, queueOfflineGpsCoord, queueOfflineOrderAction, flushIndexedDbSyncQueue } from '../utils/indexedDbSync';
 import { hasOrderCompletionEvidence } from '../utils/orderConsistency';
 
@@ -517,6 +519,23 @@ export default function RiderAppSimulator({
     }
   }, [orders]);
 
+  // Proactive sync on mount or when orders array is empty
+  useEffect(() => {
+    if (orders.length === 0) {
+      realtimeSyncBus.broadcast('REQUEST_ORDERS_SYNC', {
+        riderId: selectedRiderId || selectedRider?.id,
+        timestamp: Date.now()
+      });
+      if (isSupabaseConfigured && onUpdateOrders) {
+        fetchAllStateFromSupabase().then(sbState => {
+          if (sbState.orders && sbState.orders.length > 0) {
+            onUpdateOrders(sbState.orders);
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [orders.length, selectedRiderId, selectedRider, onUpdateOrders]);
+
   // Individual Login State
   const [phoneInput, setPhoneInput] = useState<string>('');
   const [passwordInput, setPasswordInput] = useState<string>('');
@@ -885,8 +904,11 @@ export default function RiderAppSimulator({
 
       const currentDriverId = selectedRiderId || selectedRider?.id;
 
-      if (type === 'ORDERS_BATCH_UPDATED' && Array.isArray(payload)) {
+      if (type === 'ORDERS_BATCH_UPDATED' && Array.isArray(payload) && payload.length > 0) {
         const batch: Order[] = payload;
+        if (onUpdateOrders) {
+          onUpdateOrders(batch);
+        }
         const hasMyOrder = currentDriverId && batch.some(o => isOrderMatchingRider(o, currentDriverId, riders));
         if (hasMyOrder) {
           playBeep(987.77, 0.12);
@@ -894,6 +916,9 @@ export default function RiderAppSimulator({
         }
       } else if ((type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED') && payload?.id) {
         const updatedOrder: Order = payload;
+        if (onUpdateOrders) {
+          onUpdateOrders([updatedOrder]);
+        }
         if (currentDriverId && isOrderMatchingRider(updatedOrder, currentDriverId, riders)) {
           playBeep(987.77, 0.1);
         }
@@ -903,7 +928,7 @@ export default function RiderAppSimulator({
     return () => {
       unsub();
     };
-  }, [selectedRiderId, selectedRider, riders]);
+  }, [selectedRiderId, selectedRider, riders, onUpdateOrders]);
 
   // Manual explicit synchronization of today's orders with system
   const handleManualSyncTodayOrders = async () => {
@@ -923,7 +948,7 @@ export default function RiderAppSimulator({
         timestamp: Date.now()
       });
 
-      // 3. Fetch directly from Firestore for guaranteed fresh data
+      // 3. Fetch directly from Firestore and Supabase for guaranteed fresh data
       let freshOrders: Order[] = [];
       try {
         const snap = await getDocs(collection(db, 'orders'));
@@ -932,6 +957,31 @@ export default function RiderAppSimulator({
         });
       } catch (e) {
         console.warn("Direct Firestore read fallback:", e);
+      }
+
+      // 3b. Supabase fallback / primary fetch if configured
+      if (freshOrders.length === 0 && isSupabaseConfigured) {
+        try {
+          const sbState = await fetchAllStateFromSupabase();
+          if (sbState.orders && sbState.orders.length > 0) {
+            freshOrders = sbState.orders;
+          }
+        } catch (sbErr) {
+          console.warn("Supabase fetch fallback in Driver App:", sbErr);
+        }
+      }
+
+      // 3c. Contingency local backup fallback
+      if (freshOrders.length === 0 && typeof window !== 'undefined') {
+        try {
+          const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+          if (rawBackup) {
+            const parsed = JSON.parse(rawBackup);
+            if (parsed.orders && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+              freshOrders = parsed.orders;
+            }
+          }
+        } catch (_) {}
       }
 
       if (freshOrders.length > 0 && onUpdateOrders) {
@@ -1625,20 +1675,28 @@ export default function RiderAppSimulator({
     if (!isAssignedToRider) return false;
     
     // Status in memory / database takes primary authority
-    const currentStatus = order.status;
-    const isExplicitlyOpen = currentStatus === 'Não iniciado' || currentStatus === 'Em rota' || (currentStatus as string) === 'Entregando';
+    const currentStatus = String(order.status || '').trim();
+    const normalizedStatus = currentStatus.toLowerCase();
 
     // Check if the order was genuinely completed
-    const hasCompletion = !isExplicitlyOpen && (
-      hasOrderCompletionEvidence(order) || 
-      currentStatus === 'Concluído' ||
+    const hasCompletion = hasOrderCompletionEvidence(order) || 
+      normalizedStatus === 'concluído' ||
+      normalizedStatus === 'concluido' ||
+      normalizedStatus === 'entregue' ||
+      normalizedStatus === 'baixado' ||
       (order.rawData && (
         String(order.rawData.Situacao || '').toLowerCase() === 'baixado' ||
         String(order.rawData.Situacao || '').toLowerCase() === 'concluído' ||
         String(order.rawData.Situacao || '').toLowerCase() === 'concluido' ||
         String(order.rawData.Situacao || '').toLowerCase() === 'entregue'
-      ))
-    );
+      ));
+
+    const isOccurrence = normalizedStatus === 'ocorrência' || normalizedStatus === 'ocorrencia';
+    const isCanceled = normalizedStatus === 'cancelado' || normalizedStatus === 'cancelada';
+    const isCompleted = hasCompletion;
+
+    // Any assigned order that has not been finalized (completed/canceled/occurrence) is considered open
+    const isExplicitlyOpen = !isCompleted && !isOccurrence && !isCanceled;
 
     // Extract true operational / creation date of the order
     const rawOrderDate = order.date 
@@ -1655,10 +1713,6 @@ export default function RiderAppSimulator({
 
     const orderIsoDate = extractISODateFromTimestamp(rawOrderDate) || (order.date ? String(order.date).split('T')[0] : '');
     const isFromToday = !orderIsoDate || orderIsoDate === todayIso;
-
-    const isCompleted = currentStatus === 'Concluído' || hasCompletion;
-    const isOccurrence = currentStatus === 'Ocorrência';
-    const isCanceled = currentStatus === 'Cancelado';
 
     // 1. If the order is open and assigned to this driver, ALWAYS display it for delivery
     if (isExplicitlyOpen) {
