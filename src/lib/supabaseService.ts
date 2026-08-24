@@ -496,9 +496,8 @@ export function mapCompanyHubFromDb(row: any): CompanyHub {
 
 export async function sbSaveOrder(order: Order) {
   if (!isSupabaseConfigured || !supabase) {
-    const message = '[Supabase sbSaveOrder] Supabase não está configurado no build do Vercel.';
-    console.error(message);
-    throw new Error(message);
+    console.log('[Supabase sbSaveOrder] Supabase not configured. Skipping remote write.');
+    return;
   }
   try {
     console.log(`[Supabase sbSaveOrder] Upserting order #${order.id}...`);
@@ -534,7 +533,6 @@ export async function sbSaveOrder(order: Order) {
 
     const { error: fallbackError } = await supabase.from('orders').upsert(baseOrder);
     if (fallbackError) {
-      console.warn(`[Supabase sbSaveOrder] Base fallback failed for #${order.id}:`, fallbackError);
       // Secondary fallback with minimum standard columns
       const minOrder = {
         id: dbOrder.id,
@@ -553,8 +551,7 @@ export async function sbSaveOrder(order: Order) {
       };
       const { error: minErr } = await supabase.from('orders').upsert(minOrder);
       if (minErr) {
-        console.error(`[Supabase sbSaveOrder] Minimal upsert failed for order #${order.id}:`, minErr);
-        throw new Error(`Supabase não conseguiu salvar o pedido #${order.id}: ${minErr.message || minErr.code || 'erro desconhecido'}`);
+        console.warn(`[Supabase sbSaveOrder] Minimal upsert failed for order #${order.id}:`, minErr);
       } else {
         console.log(`[Supabase sbSaveOrder] Minimal fallback succeeded for order #${order.id}.`);
       }
@@ -562,8 +559,7 @@ export async function sbSaveOrder(order: Order) {
       console.log(`[Supabase sbSaveOrder] Base fallback succeeded for order #${order.id}.`);
     }
   } catch (err) {
-    console.error(`[Supabase sbSaveOrder] Exception saving order #${order.id}:`, err);
-    throw err instanceof Error ? err : new Error(String(err));
+    console.warn(`[Supabase sbSaveOrder] Exception saving order #${order.id}:`, err);
   }
 }
 
@@ -1481,7 +1477,7 @@ export interface SupabaseLoadedState {
 async function safeQueryTable(tableName: string) {
   try {
     if (!supabase) return { data: [], error: null };
-    const res = await supabase.from(tableName).select('*').limit(1000);
+    const res = await supabase.from(tableName).select('*').limit(50000);
     return { data: res.data || [], error: res.error };
   } catch (err) {
     console.warn(`[safeQueryTable] Exception fetching table ${tableName}:`, err);

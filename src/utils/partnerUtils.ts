@@ -251,13 +251,8 @@ export function findRiderByIdentifier(
   const digits = clean.replace(/\D/g, '');
 
   return list.find(r => {
-    const riderId = String(r.id || '').trim().toLowerCase();
-    const riderLegacyId = String((r as any).Id || (r as any).ID || '').trim().toLowerCase();
-    const riderName = String(r.name || '').trim().toLowerCase();
-
-    if (riderId === clean) return true;
-    if (riderLegacyId === clean) return true;
-    if (riderName === clean) return true;
+    if (String(r.id || '').trim().toLowerCase() === clean) return true;
+    if (String(r.name || '').trim().toLowerCase() === clean) return true;
     if (r.deviceNumber && String(r.deviceNumber).trim().toLowerCase() === clean) return true;
 
     if (digits.length >= 8) {
@@ -320,7 +315,7 @@ export function isOrderMatchingRider(
       const tDeviceDigits = String(targetRider.deviceNumber || '').replace(/\D/g, '');
       const tCpfDigits = String(targetRider.cpfCnpj || '').replace(/\D/g, '');
 
-      if (orderRiderId === tId || orderRiderId === tLegacyId || orderRiderId === tName) return true;
+      if (orderRiderId === tId || orderRiderId === tName) return true;
       if (tPhoneDigits && areDigitsMatching(orderRiderDigits, tPhoneDigits)) return true;
       if (tDeviceDigits && areDigitsMatching(orderRiderDigits, tDeviceDigits)) return true;
       if (tCpfDigits && areDigitsMatching(orderRiderDigits, tCpfDigits)) return true;
@@ -328,13 +323,8 @@ export function isOrderMatchingRider(
 
     const assignedRider = findRiderByIdentifier(availableRiders, order.riderId);
     if (assignedRider) {
-      const assignedRiderId = String(assignedRider.id || '').trim().toLowerCase();
-const assignedRiderLegacyId = String((assignedRider as any).Id || (assignedRider as any).ID || '').trim().toLowerCase();
-const assignedRiderName = String(assignedRider.name || '').trim().toLowerCase();
-
-if (assignedRiderId === cleanFilter) return true;
-if (assignedRiderLegacyId === cleanFilter) return true;
-if (assignedRiderName === cleanFilter) return true;
+      if (String(assignedRider.id || '').trim().toLowerCase() === cleanFilter) return true;
+      if (String(assignedRider.name || '').trim().toLowerCase() === cleanFilter) return true;
       const aPhoneDigits = String(assignedRider.phone || '').replace(/\D/g, '');
       if (filterDigits.length >= 8 && areDigitsMatching(aPhoneDigits, filterDigits)) return true;
       const aDeviceDigits = String(assignedRider.deviceNumber || '').replace(/\D/g, '');
@@ -379,9 +369,8 @@ if (assignedRiderName === cleanFilter) return true;
   }
 
   if (targetRider) {
-  const tId = String(targetRider.id || '').trim().toLowerCase();
-  const tLegacyId = String((targetRider as any).Id || (targetRider as any).ID || '').trim().toLowerCase();
-  const tName = String(targetRider.name || '').trim().toLowerCase();
+    const tId = String(targetRider.id || '').trim().toLowerCase();
+    const tName = String(targetRider.name || '').trim().toLowerCase();
     const tPhoneDigits = String(targetRider.phone || '').replace(/\D/g, '');
     const tDeviceDigits = String(targetRider.deviceNumber || '').replace(/\D/g, '');
     const tCpfDigits = String(targetRider.cpfCnpj || '').replace(/\D/g, '');
