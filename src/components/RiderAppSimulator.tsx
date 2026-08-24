@@ -12,12 +12,18 @@ import { isOrderMatchingRider, findRiderByIdentifier } from '../utils/partnerUti
 import { realtimeSyncBus } from '../utils/realtimeSync';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
-import { collection, getDocs } from 'firebase/firestore';
+
+
+import { fetchSingleTableFromSupabase, mapOrderFromDb } from '../lib/supabaseService';
+import { getSupabaseClient } from '../supabase';
+import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+
 import { db } from '../firebase';
 import { isSupabaseConfigured } from '../supabase';
 import { fetchAllStateFromSupabase } from '../lib/supabaseService';
 import { verifyAndSanitizeRiderOrders, queueOfflineGpsCoord, queueOfflineOrderAction, flushIndexedDbSyncQueue } from '../utils/indexedDbSync';
 import { hasOrderCompletionEvidence } from '../utils/orderConsistency';
+import { supabase } from '../supabase';
 
 import { PwaInstallBanner } from './PwaInstallBanner';
 
@@ -305,6 +311,168 @@ export default function RiderAppSimulator({
       }
     }
   }, [riders, activeRiderId]);
+  // Supabase Realtime: receives cross-device order assignments.
+  // This is the authoritative realtime channel for rider devices.
+  useEffect(() => {
+    if (!supabase || !selectedRiderId) return;
+
+    console.log('[RiderRealtime] Iniciando Supabase Realtime para rider:', selectedRiderId);
+    console.log('[RiderRealtime][DIAGNOSTICO] selectedRiderId =', selectedRiderId);
+    console.log('[RiderRealtime][DIAGNOSTICO] selectedRider =', selectedRider);
+    console.log('[RiderRealtime][DIAGNOSTICO] URL =', window.location.href);
+    const channel = supabase
+      .channel(`rider-orders-${selectedRiderId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+        },
+        (payload) => {
+          console.log('[RiderRealtime] Supabase Realtime evento recebido:', payload);
+
+          const remoteOrder = payload.new as any;
+
+          if (!remoteOrder || !remoteOrder.id) return;
+
+          const mappedOrder = mapOrderFromDb(remoteOrder);
+
+          // Only update orders assigned to this rider.
+          if (mappedOrder.riderId !== selectedRiderId) return;
+
+          console.log(
+            '[RiderRealtime] Pedido recebido para este condutor:',
+            mappedOrder.id,
+            mappedOrder.riderId
+          );
+
+          if (onUpdateOrders) {
+            onUpdateOrders([mappedOrder]);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log(
+          '[RiderRealtime] Supabase Realtime status:',
+          status,
+          'rider:',
+          selectedRiderId
+        );
+      });
+
+    return () => {
+      console.log(
+        '[RiderRealtime] Encerrando canal Supabase Realtime:',
+        selectedRiderId
+      );
+
+      supabase.removeChannel(channel);
+    };
+  }, [selectedRiderId, onUpdateOrders]);
+  // Cross-device realtime order listener.
+  // The admin panel and the driver app can run on different devices/browsers, so
+  // BroadcastChannel/localStorage cannot be used as the source of truth here.
+  // Firestore onSnapshot is the authoritative channel for new assignments.
+  useEffect(() => {
+    if (!selectedRiderId) return;
+
+    let active = true;
+    const unsubscribe = onSnapshot(
+      collection(db, 'orders'),
+      (snapshot) => {
+        if (!active) return;
+        console.log('[RiderRealtime] selectedRiderId:', selectedRiderId);
+        console.log('[RiderRealtime] pedidos Firestore:', snapshot.docs.length);
+        console.log('[RiderRealtime] riderIds:', snapshot.docs.map(d => ({
+          id: d.id,
+          riderId: d.data()?.riderId
+})));
+        console.log('[RiderRealtime] selectedRiderId:', selectedRiderId);
+console.log('[RiderRealtime] pedidos recebidos do Firestore:', snapshot.docs.length);
+console.log(
+  '[RiderRealtime] pedidos/riderId:',
+  snapshot.docs.map(d => ({
+    id: d.id,
+    riderId: d.data()?.riderId
+  }))
+);
+
+        const assignedOrders = snapshot.docs
+          .map(d => d.data() as Order)
+          .filter(order => {
+            if (!order?.id || !order.riderId) return false;
+            return isOrderMatchingRider(order, selectedRiderId, riders);
+          });
+
+        if (assignedOrders.length > 0) {
+          // Update the parent only when Firestore has a value that is not
+          // already represented locally. This avoids a write/read feedback loop.
+          const currentById = new Map(orders.map(o => [o.id, o]));
+          const changed = assignedOrders.filter(remote => {
+            const local = currentById.get(remote.id);
+            return !local || JSON.stringify(local) !== JSON.stringify(remote);
+          });
+
+          if (changed.length > 0 && onUpdateOrders) {
+            onUpdateOrders(changed);
+          }
+        }
+      },
+      (error) => {
+        console.error('[RiderRealtime] Falha no listener Firestore de pedidos:', error);
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [selectedRiderId, riders, orders, onUpdateOrders]);
+
+  // Supabase fallback channel for real driver devices.
+  // Firestore onSnapshot remains the primary realtime channel; this polling
+  // fallback keeps the real phone synchronized when its Firestore websocket
+  // is unavailable/interrupted.
+  useEffect(() => {
+    if (!selectedRiderId) return;
+
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const syncFromSupabase = async () => {
+      try {
+        const rows = await fetchSingleTableFromSupabase('orders');
+        if (!active || !Array.isArray(rows) || rows.length === 0) return;
+
+        const remoteOrders = rows
+          .map(row => {
+            try { return mapOrderFromDb(row); } catch (_) { return null; }
+          })
+          .filter((order): order is Order => !!order?.id && !!order?.riderId)
+          .filter(order => isOrderMatchingRider(order, selectedRiderId, riders));
+
+        if (remoteOrders.length > 0 && onUpdateOrders) {
+          const currentById = new Map(orders.map(o => [o.id, o]));
+          const changed = remoteOrders.filter(remote => {
+            const local = currentById.get(remote.id);
+            return !local || JSON.stringify(local) !== JSON.stringify(remote);
+          });
+          if (changed.length > 0) onUpdateOrders(changed);
+        }
+      } catch (error) {
+        console.warn('[RiderRealtime] Supabase fallback indisponível:', error);
+      } finally {
+        if (active) timer = setTimeout(syncFromSupabase, 5000);
+      }
+    };
+
+    syncFromSupabase();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [selectedRiderId, riders, orders, onUpdateOrders]);
 
   // Sync state with parent activeRiderId
   useEffect(() => {
