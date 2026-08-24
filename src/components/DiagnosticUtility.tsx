@@ -5,9 +5,14 @@ import { getSupabaseConfig, isSupabaseConfigured, testSupabaseConnection, Supaba
 interface DiagnosticUtilityProps {
   mode?: 'floating' | 'sidebar';
   isExpanded?: boolean;
+  onOpenTableDiagnostics?: () => void;
 }
 
-export const DiagnosticUtility: React.FC<DiagnosticUtilityProps> = ({ mode = 'floating', isExpanded = true }) => {
+export const DiagnosticUtility: React.FC<DiagnosticUtilityProps> = ({ 
+  mode = 'floating', 
+  isExpanded = true,
+  onOpenTableDiagnostics
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -179,6 +184,20 @@ export const DiagnosticUtility: React.FC<DiagnosticUtilityProps> = ({ mode = 'fl
           </div>
           <p className="font-medium">{testResult.message}</p>
         </div>
+      )}
+
+      {onOpenTableDiagnostics && (
+        <button
+          type="button"
+          onClick={() => {
+            setIsOpen(false);
+            onOpenTableDiagnostics();
+          }}
+          className="w-full py-1.5 px-2 bg-indigo-600/30 hover:bg-indigo-600/50 active:bg-indigo-600/70 text-indigo-200 border border-indigo-500/40 rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+        >
+          <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Status das Tabelas (supabase-migration.sql)</span>
+        </button>
       )}
     </div>
   );

@@ -51,7 +51,6 @@ import { calculateRiderCommissionForOrder } from './utils/billingUtils';
 import RiderAppSimulator from './components/RiderAppSimulator';
 import VolumeCalculator from './components/VolumeCalculator';
 import SupabasePanel from './components/SupabasePanel';
-import { DiagnosticUtility } from './components/DiagnosticUtility';
 import GithubPanel from './components/GithubPanel';
 import DataMassManager from './components/DataMassManager';
 import BackupRestoreByPeriod from './components/BackupRestoreByPeriod';

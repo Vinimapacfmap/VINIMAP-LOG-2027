@@ -264,6 +264,7 @@ export default function RiderAppSimulator({
 
   const [selectedRiderId, setSelectedRiderId] = useState<string>('');
   const [lockedRiderId, setLockedRiderId] = useState<string | null>(null);
+  const [deliveryTabFilter, setDeliveryTabFilter] = useState<'pending' | 'completed'>('pending');
   const selectedRider = useMemo(() => {
     return findRiderByIdentifier(riders, selectedRiderId);
   }, [riders, selectedRiderId]);
@@ -1664,30 +1665,30 @@ export default function RiderAppSimulator({
       return true;
     }
 
-    // 2. Completed, Canceled, or Occurrence orders from previous days should not clutter the active driver screen
+    // 2. Completed orders: include if completed today, or if completion date matches today, or recently updated
+    if (isCompleted) {
+      const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || (order as any).statusUpdatedAt || (order as any).updatedAt || order.date);
+      return !completionDate || completionDate === todayIso || isFromToday;
+    }
+
+    // 3. Today's occurrences
+    if (isOccurrence) {
+      const occurrenceDate = extractISODateFromTimestamp(order.occurrenceDate || order.deliveryDate || (order as any).statusUpdatedAt || order.date);
+      return !occurrenceDate || occurrenceDate === todayIso || isFromToday;
+    }
+
+    // 4. Today's canceled orders
+    if (isCanceled) {
+      const canceledDate = extractISODateFromTimestamp(order.date);
+      return !canceledDate || canceledDate === todayIso || isFromToday;
+    }
+
+    // 5. If not from today and not open, do not include
     if (!isFromToday) {
       return false;
     }
 
-    // 3. Today's completed orders (for history and receipt validation)
-    if (isCompleted) {
-      const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || order.date);
-      return !completionDate || completionDate === todayIso;
-    }
-
-    // 4. Today's occurrences
-    if (isOccurrence) {
-      const occurrenceDate = extractISODateFromTimestamp(order.occurrenceDate || order.deliveryDate || order.date);
-      return !occurrenceDate || occurrenceDate === todayIso;
-    }
-
-    // 5. Today's canceled orders
-    if (isCanceled) {
-      const canceledDate = extractISODateFromTimestamp(order.date);
-      return !canceledDate || canceledDate === todayIso;
-    }
-
-    return false;
+    return true;
   };
 
   // Pre-render consistency verification to ensure orders data is clean and valid
@@ -1837,18 +1838,133 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     });
   }, [selectedRiderId, completedOrdersFingerprint]);
 
+  // Get active pending orders for this rider
+  const riderPendingOrders = selectedRiderId
+    ? driverActiveOrders.filter(o => o.status !== 'Concluído' && o.status !== 'Cancelado' && o.status !== 'Ocorrência')
+    : [];
+
+  const riderCompletedOrders = selectedRiderId
+    ? driverActiveOrders.filter(o => o.status === 'Concluído')
+    : [];
+
   // Render Expandable Delivery Cards with status transition options
   const renderDeliveryCards = () => {
-    const riderOrders = selectedRiderId
-      ? driverActiveOrders.filter(o => o.status !== 'Concluído' && o.status !== 'Cancelado' && o.status !== 'Ocorrência')
-      : [];
+    if (deliveryTabFilter === 'completed') {
+      if (riderCompletedOrders.length === 0) {
+        return (
+          <div className="bg-white rounded-2xl p-6 text-center border border-slate-200/50 text-slate-400 space-y-2">
+            <CheckCircle2 size={32} className="text-slate-300 mx-auto" />
+            <div className="text-xs font-bold text-slate-700">Nenhuma entrega concluída hoje</div>
+            <p className="text-[10px]">As entregas baixadas no dia atual ficarão listadas aqui com seus respectivos protocolos.</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="space-y-3">
+          {riderCompletedOrders.map((order, index) => {
+            const protocol = deliveryProtocols.find(p => p.orderId === order.id || p.id === order.protocolNumber) || {
+              id: order.protocolNumber || `PRT-${order.id}`,
+              orderId: order.id,
+              clientName: order.clientName,
+              address: order.address,
+              timestamp: order.deliveryTime ? `${order.deliveryDate || todayFormatted} às ${order.deliveryTime}` : (order.deliveryDate || todayFormatted),
+              receiverName: order.recipientName || 'Recebedor Titular',
+              signatureImage: order.signatureUrl || `typed:${order.recipientName || 'Recebedor'}`,
+              photoImage: order.deliveryPhotoUrl || '',
+              hash: order.protocolNumber || `HASH-${order.id}`,
+              lat: 0,
+              lng: 0,
+              observations: (order as any).observations || (order as any).notes || order.rawData?.observations || order.rawData?.notes || 'Entrega concluída com sucesso.'
+            };
+
+            return (
+              <div 
+                key={order.id}
+                className="bg-white border border-emerald-200 rounded-2xl p-3.5 space-y-2.5 shadow-2xs"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-mono text-[10px] font-extrabold text-slate-700">#{order.id}</span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full font-black border uppercase tracking-wider bg-emerald-100 text-emerald-800 border-emerald-200 flex items-center gap-1">
+                      <CheckCircle2 size={10} className="text-emerald-600" />
+                      <span>Concluído</span>
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md">
+                    {order.deliveryTime ? `Entregue às ${order.deliveryTime}` : (order.deliveryDate || 'Hoje')}
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="font-black text-xs text-slate-950 truncate leading-tight">
+                    {order.clientName}
+                  </h4>
+                  <div className="flex items-center gap-1 text-slate-600 text-[10.5px]">
+                    <MapPin size={11} className="shrink-0 text-slate-400" />
+                    <p className="truncate max-w-[240px] font-medium">{order.address}</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-xl p-2 flex items-center justify-between text-[10px] border border-slate-100">
+                  <div className="min-w-0">
+                    <span className="text-slate-400 block text-[8.5px] font-bold uppercase">RECEBEDOR</span>
+                    <span className="font-bold text-slate-800 truncate block">{order.recipientName || 'Recebedor Titular'}</span>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-slate-400 block text-[8.5px] font-bold uppercase">PROTOCOLO</span>
+                    <span className="font-mono font-bold text-blue-700">{order.protocolNumber || protocol.id}</span>
+                  </div>
+                </div>
+
+                <div className="pt-1 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeneratedProtocol(protocol as any);
+                      setShowSuccessProtocol(true);
+                      setShowReceiptModal(true);
+                      setSelectedOrder(order);
+                    }}
+                    className="w-full py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-[10px] rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 border border-emerald-200/60"
+                  >
+                    <FileText size={12} />
+                    <span>Visualizar Comprovante / Voucher</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    const riderOrders = riderPendingOrders;
 
     if (riderOrders.length === 0) {
       return (
-        <div className="bg-white rounded-2xl p-6 text-center border border-slate-200/50 text-slate-400 space-y-2">
-          <CheckCircle2 size={32} className="text-emerald-500 mx-auto" />
-          <div className="text-xs font-bold text-slate-700">Tudo em dia!</div>
-          <p className="text-[10px]">Nenhuma entrega ativa vinculada ao seu usuário no momento.</p>
+        <div className="bg-white rounded-2xl p-6 text-center border border-slate-200/50 text-slate-400 space-y-3">
+          <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+            <CheckCircle2 size={28} />
+          </div>
+          <div className="space-y-1">
+            <div className="text-xs font-bold text-slate-800">Tudo em dia!</div>
+            <p className="text-[10px] text-slate-500">
+              {riderCompletedOrders.length > 0
+                ? `Você não possui entregas pendentes na fila. Todas as ${riderCompletedOrders.length} entrega(s) de hoje foram concluídas.`
+                : "Nenhuma entrega pendente vinculada ao seu usuário no momento."}
+            </p>
+          </div>
+          {riderCompletedOrders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setDeliveryTabFilter('completed')}
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-[10px] rounded-xl cursor-pointer transition-all inline-flex items-center gap-1 shadow-2xs"
+            >
+              <CheckCircle2 size={12} />
+              <span>Ver Entregas Concluídas ({riderCompletedOrders.length})</span>
+            </button>
+          )}
         </div>
       );
     }
@@ -2193,15 +2309,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       </div>
     );
   };
-
-  // Get active pending orders for this rider
-  const riderPendingOrders = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status !== 'Concluído' && o.status !== 'Cancelado' && o.status !== 'Ocorrência')
-    : [];
-
-  const riderCompletedOrders = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status === 'Concluído')
-    : [];
 
   // Helper coordinate resolution (same coordinates conversion used in main system)
   const getOrderCoords = (order: Order) => {
@@ -2704,8 +2811,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
         orderId: selectedOrder.id
       }]);
 
+      setGeneratedProtocol(newProtocol);
+      setShowSuccessProtocol(true);
       setIsSubmittingDelivery(false);
-      handleCompleteAndCloseModal();
     }, 400);
   };
 
@@ -2721,7 +2829,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     setSignatureImage(null);
     setSelectedOrder(null);
     setCurrentScreen('dashboard');
-    setActiveTab('home');
+    setActiveTab('tasks');
   };
 
   // Report delivery failure
@@ -4554,10 +4662,42 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     {/* VIEW: TASKS QUEUE TAB */}
                     {activeTab === 'tasks' && currentScreen === 'dashboard' && (
                       <div className="p-4 space-y-3">
+                        {/* Tab Selector between Pending and Completed */}
+                        <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryTabFilter('pending')}
+                            className={`flex-1 py-1.5 rounded-lg text-[10.5px] font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              deliveryTabFilter === 'pending'
+                                ? 'bg-white text-blue-700 shadow-xs'
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <Clock size={12} />
+                            <span>Pendentes ({riderPendingOrders.length})</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryTabFilter('completed')}
+                            className={`flex-1 py-1.5 rounded-lg text-[10.5px] font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              deliveryTabFilter === 'completed'
+                                ? 'bg-white text-emerald-700 shadow-xs'
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <CheckCircle2 size={12} />
+                            <span>Concluídas ({riderCompletedOrders.length})</span>
+                          </button>
+                        </div>
+
                         <div className="flex items-center justify-between">
-                          <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">Fila de Entregas ({riderPendingOrders.length})</h4>
+                          <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                            {deliveryTabFilter === 'pending'
+                              ? `Fila de Entregas (${riderPendingOrders.length})`
+                              : `Entregas Concluídas Hoje (${riderCompletedOrders.length})`}
+                          </h4>
                           
-                          {riderPendingOrders.some(o => o.status === 'Não iniciado') && (
+                          {deliveryTabFilter === 'pending' && riderPendingOrders.some(o => o.status === 'Não iniciado') && (
                             <button
                               onClick={handleCollectAtCD}
                               className="px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[9px] font-bold rounded-md cursor-pointer transition-all flex items-center gap-1"

@@ -764,6 +764,113 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     alert(`Sucesso! ${countToMove} pedido(s) vinculados ao condutor ${driverB.name}. A tela de alocação foi atualizada.`);
   };
 
+  // Batch unassign (desalocar) selected orders directly from allocation view
+  const handleBatchUnassignOrders = (overrideOrderIds?: Set<string>) => {
+    const targetIds = overrideOrderIds || selectedOrderIds;
+    if (targetIds.size === 0) {
+      alert('Por favor, selecione ao menos um pedido na lista para desalocar.');
+      return;
+    }
+
+    const assignedOrdersList = orders.filter(o => targetIds.has(o.id) && isAssignedRider(o, riders));
+    const assignedCount = assignedOrdersList.length;
+
+    if (assignedCount === 0) {
+      alert('Nenhum dos pedidos selecionados possui condutor vinculado para desalocar.');
+      return;
+    }
+
+    const isConfirmed = window.confirm(
+      `Confirma a desalocação do condutor de ${assignedCount} pedido(s)? O vínculo com o motorista será removido e o status redefinido para "Não iniciado".`
+    );
+
+    if (!isConfirmed) return;
+
+    const previousRiderIds = new Set<string>();
+    const isoNow = new Date().toISOString();
+
+    const updatedOrders = orders.map(order => {
+      if (targetIds.has(order.id)) {
+        if (order.riderId) {
+          previousRiderIds.add(order.riderId);
+        }
+
+        const isCompleted = order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' || hasOrderCompletionEvidence(order);
+        const preservedStatus = isCompleted ? order.status : ('Não iniciado' as const);
+
+        const cleanedRaw = order.rawData ? { ...order.rawData } : {};
+        delete cleanedRaw.riderId;
+        delete cleanedRaw.Condutor;
+        delete cleanedRaw.condutor;
+        delete cleanedRaw.NomeCondutor;
+        delete cleanedRaw.nomeCondutor;
+        delete cleanedRaw.Entregador;
+        delete cleanedRaw.entregador;
+        delete cleanedRaw.Motorista;
+        delete cleanedRaw.motorista;
+        delete cleanedRaw.DispositivoCondutor;
+        delete cleanedRaw.dispositivoCondutor;
+        delete cleanedRaw.riderName;
+        cleanedRaw['DispositivoCondutor'] = 'Não vinculado';
+        cleanedRaw['Condutor'] = '';
+
+        const currentRiderObj = riders.find(r => r.id === order.riderId);
+        const prevName = currentRiderObj ? currentRiderObj.name : 'Condutor';
+
+        return {
+          ...order,
+          riderId: undefined,
+          driverValue: 0,
+          status: preservedStatus,
+          updatedAt: isoNow,
+          statusUpdatedAt: isoNow,
+          rawData: cleanedRaw,
+          history: [
+            ...(order.history || []),
+            {
+              timestamp: getSaoPauloDateTimeShort(),
+              action: 'Entregador Desalocado',
+              user: 'Operador Central',
+              details: `Condutor "${prevName}" desalocado do pedido através do painel de Alocação.${isCompleted ? ' Status preservado.' : ' Status redefinido para Não iniciado.'}`
+            }
+          ]
+        };
+      }
+      return order;
+    });
+
+    // Update rider statuses who lost their orders
+    const updatedRiders = riders.map(rider => {
+      if (previousRiderIds.has(rider.id)) {
+        const remainingActive = updatedOrders.filter(
+          o => o.riderId === rider.id && o.status !== 'Concluído' && o.status !== 'Cancelado'
+        );
+        const hasRemaining = remainingActive.length > 0;
+        return {
+          ...rider,
+          status: hasRemaining ? rider.status : ('Disponível' as const),
+          currentOrderId: hasRemaining ? remainingActive[0].id : undefined
+        };
+      }
+      return rider;
+    });
+
+    const nowTime = getSaoPauloTime();
+    const logsGenerated = [
+      {
+        time: nowTime,
+        message: `Desalocação concluída: ${assignedCount} pedido(s) foram desvinculados de seus condutores.`,
+        type: 'warning' as const
+      }
+    ];
+
+    realtimeSyncBus.broadcastOrdersBatch(updatedOrders);
+    updatedRiders.forEach(r => realtimeSyncBus.broadcastRiderUpdate(r));
+    onAllocateSuccess(updatedOrders, updatedRiders, logsGenerated);
+    setSelectedOrderIds(new Set());
+    alert(`Sucesso! ${assignedCount} pedido(s) foram desalocados com sucesso.`);
+  };
+
   // Columns Configuration for Allocation Spreadsheet
   const [columnsOrder, setColumnsOrder] = useState<string[]>([
     'Sequencia',
@@ -849,8 +956,13 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       if (baseCommission) return String(baseCommission);
       return '8.50';
     }
-    if (lowerCol === 'dispositivocondutor') {
-      return riders.find(r => r.id === order.riderId)?.name || 'Não vinculado';
+    const isRiderCol = lowerCol === 'dispositivocondutor' || lowerCol === 'condutor' || lowerCol === 'nomecondutor' || lowerCol === 'entregador' || lowerCol === 'motorista' || lowerCol === 'nomemotorista';
+    if (isRiderCol) {
+      if (!isAssignedRider(order, riders)) {
+        return 'Não vinculado';
+      }
+      const assignedRider = getAssignedRider(order, riders);
+      return assignedRider ? assignedRider.name : 'Não vinculado';
     }
     if (lowerCol === 'status') {
       return order.status;
@@ -2451,9 +2563,23 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                                 : `Selecionar Todos (${driverAOrders.length})`}
                             </span>
                           </button>
-                          <span className="text-[10px] text-slate-400">
-                            <strong className="text-indigo-300">{selectedDriverAOrdersCount}</strong> de {driverAOrders.length} marcado(s) para realocação
-                          </span>
+                          
+                          <div className="flex items-center gap-2">
+                            {selectedDriverAOrdersCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleBatchUnassignOrders()}
+                                className="flex items-center gap-1 px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-400/30 rounded-lg text-[10px] font-bold transition-all cursor-pointer shadow-xs"
+                                title="Desalocar pedidos marcados deste condutor"
+                              >
+                                <UserX size={12} />
+                                <span>Desalocar ({selectedDriverAOrdersCount})</span>
+                              </button>
+                            )}
+                            <span className="text-[10px] text-slate-400">
+                              <strong className="text-indigo-300">{selectedDriverAOrdersCount}</strong> de {driverAOrders.length} marcado(s)
+                            </span>
+                          </div>
                         </div>
 
                         {/* Scrollable Order Cards Box */}
@@ -2807,6 +2933,54 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                     </div>
                   )}
 
+                  {/* Batch Selection Action Bar */}
+                  {selectedOrderIds.size > 0 && (
+                    <div className="bg-slate-900 text-white px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-md animate-in fade-in duration-200">
+                      <div className="flex items-center gap-2 text-xs font-bold">
+                        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+                        <span>
+                          <strong className="text-indigo-300">{selectedOrderIds.size}</strong> pedido(s) selecionado(s) na planilha
+                        </span>
+                        <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+                          {orders.filter(o => selectedOrderIds.has(o.id) && isAssignedRider(o, riders)).length} com condutor
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleBatchUnassignOrders()}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-black rounded-lg transition-all shadow-xs cursor-pointer"
+                          title="Remover vínculo com condutor e redefinir status"
+                        >
+                          <UserX size={14} />
+                          <span>Desalocar Condutor ({orders.filter(o => selectedOrderIds.has(o.id) && isAssignedRider(o, riders)).length})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const first = riders[0]?.id || '';
+                            setReallocateDriverBId(first);
+                            setIsReallocateModalOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-black rounded-lg transition-all shadow-xs cursor-pointer"
+                        >
+                          <Users size={14} />
+                          <span>Vincular a Condutor...</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrderIds(new Set())}
+                          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-all border border-slate-700 cursor-pointer"
+                        >
+                          Limpar Seleção
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Standard Orders Spreadsheet/Simplified-style Table */}
                   <div className={`overflow-x-auto overflow-y-auto w-full border-t border-slate-100 ${isFullscreen ? 'flex-1 max-h-[calc(100vh-250px)]' : 'max-h-[580px]'}`}>
                     <table className="orders-table w-full text-xs text-slate-600 border-collapse">
@@ -2945,16 +3119,30 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                                   }
 
                                   if (col === 'DispositivoCondutor') {
-                                    const rider = riders.find(r => r.id === order.riderId);
+                                    const hasAssigned = isAssignedRider(order, riders);
+                                    const rider = hasAssigned ? getAssignedRider(order, riders) : null;
                                     return (
                                       <td key={col} className="px-3 py-2 whitespace-nowrap">
                                         {rider ? (
-                                          <div className="flex items-center gap-1.5">
-                                            <img src={rider.avatar} className="w-4.5 h-4.5 rounded-full object-cover border" />
-                                            <span className="font-bold text-slate-700 text-[11px]">{rider.name}</span>
+                                          <div className="flex items-center justify-between gap-1.5 group/rider-cell">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                              <img src={rider.avatar} className="w-4.5 h-4.5 rounded-full object-cover border shrink-0" />
+                                              <span className="font-bold text-slate-700 text-[11px] truncate">{rider.name}</span>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleBatchUnassignOrders(new Set([order.id]));
+                                              }}
+                                              className="opacity-0 group-hover/rider-cell:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all cursor-pointer"
+                                              title={`Desalocar condutor ${rider.name} deste pedido`}
+                                            >
+                                              <UserX size={12} />
+                                            </button>
                                           </div>
                                         ) : (
-                                          <span className="text-slate-300 italic text-[11px]">Não alocado</span>
+                                          <span className="text-slate-400 font-medium italic text-[11px]">Não alocado</span>
                                         )}
                                       </td>
                                     );
