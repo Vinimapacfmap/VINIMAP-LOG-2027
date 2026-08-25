@@ -248,12 +248,9 @@ export function mapOrderFromDb(row: any): Order {
     resolvedStatus = 'Em rota';
   } else if (cleanStatus === 'não iniciado' || cleanStatus === 'nao iniciado' || cleanStatus === 'pendente') {
     resolvedStatus = 'Não iniciado';
-  } else if (!hasAdminOverride && (protocolNumber || signatureUrl || deliveryPhotoUrl || dataConclusao)) {
-    // Only infer Concluído if there is NO explicit status set in DB/rawData and not admin-overridden
-    resolvedStatus = 'Concluído';
-  } else if (!hasAdminOverride && occurrenceDate) {
-    resolvedStatus = 'Ocorrência';
-  } else if (resolvedRiderId) {
+  } else if (cleanStatus) {
+    resolvedStatus = 'Não iniciado';
+  } else {
     resolvedStatus = 'Não iniciado';
   }
 

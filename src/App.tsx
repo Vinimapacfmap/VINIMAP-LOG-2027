@@ -922,11 +922,8 @@ export default function App() {
           const sbState = await fetchAllStateFromSupabase();
           if (isCancelled) return;
           if (sbState.orders && sbState.orders.length > 0) {
-            const { orders: sanitized, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(sbState.orders);
+            const { orders: sanitized } = sanitizeOrdersListConsistency(sbState.orders);
             setOrders(prev => mergeOrders(prev, sanitized));
-            if (hasModified && modifiedOrders.length > 0) {
-              dbBulkSaveOrders(modifiedOrders).catch(() => {});
-            }
           }
           if (sbState.clients && sbState.clients.length > 0) {
             setClientPartners(prev => mergeClients(prev, sbState.clients));
@@ -949,11 +946,8 @@ export default function App() {
           const parsed = JSON.parse(storedBackup);
           if (isCancelled) return;
           if (parsed.orders && parsed.orders.length > 0) {
-            const { orders: sanitized, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(parsed.orders);
+            const { orders: sanitized } = sanitizeOrdersListConsistency(parsed.orders);
             setOrders(prev => mergeOrders(prev, sanitized));
-            if (hasModified && modifiedOrders.length > 0) {
-              dbBulkSaveOrders(modifiedOrders).catch(() => {});
-            }
           }
           if (parsed.clientPartners && parsed.clientPartners.length > 0) {
             setClientPartners(prev => mergeClients(prev, parsed.clientPartners));
@@ -1059,13 +1053,9 @@ export default function App() {
         snapshot.forEach(doc => {
           docs.push(doc.data() as Order);
         });
-        const { orders: sanitizedDocs, hasModified, modifiedOrders } = sanitizeOrdersListConsistency(docs);
+        const { orders: sanitizedDocs } = sanitizeOrdersListConsistency(docs);
         const filteredDocs = sanitizedDocs.filter(o => !MOCK_ORDER_IDS.includes(o.id));
         setOrders(filteredDocs);
-        if (hasModified && modifiedOrders.length > 0 && !getIsFirestoreQuotaExceeded()) {
-          console.log(`[Order Consistency] Persistindo correção de status para ${modifiedOrders.length} pedido(s) concluído(s) em lote.`);
-          dbBulkSaveOrders(modifiedOrders, 'LOW').catch(() => {});
-        }
       }, (error) => handleListenerError(error, 'orders'))
     );
 

@@ -19,14 +19,10 @@ export function normalizeToISODate(dateStr?: string): string {
 
 /**
  * Checks if an order has physical, digital, or historical evidence of completion.
+ * Used only for informational verification and reporting.
  */
 export function hasOrderCompletionEvidence(order: Order): boolean {
   if (!order) return false;
-
-  // If the admin or user explicitly set the status to something other than Concluído, completion evidence should NOT override it
-  if ((order.adminOverride || order.rawData?.adminOverride === 'true') && order.status !== 'Concluído') {
-    return false;
-  }
 
   // Real digital / physical Proof of Delivery (POD)
   const hasSignature = Boolean(order.signatureUrl && (order.signatureUrl || '').toString().trim() !== '');
@@ -46,34 +42,17 @@ export function hasOrderCompletionEvidence(order: Order): boolean {
     })
   );
 
-  const hasRawPod = Boolean(
-    order.rawData &&
-    (
-      (order.rawData.signatureUrl && String(order.rawData.signatureUrl).trim() !== '') ||
-      (order.rawData.signatureImage && String(order.rawData.signatureImage).trim() !== '') ||
-      (order.rawData.deliveryPhotoUrl && String(order.rawData.deliveryPhotoUrl).trim() !== '') ||
-      (order.rawData.photoImage && String(order.rawData.photoImage).trim() !== '') ||
-      (order.rawData.dataConclusao && String(order.rawData.dataConclusao).trim() !== '') ||
-      (order.rawData.dataHoraConclusao && String(order.rawData.dataHoraConclusao).trim() !== '') ||
-      String(order.rawData.Situacao || '').toLowerCase() === 'baixado' ||
-      String(order.rawData.Situacao || '').toLowerCase() === 'concluído' ||
-      String(order.rawData.Situacao || '').toLowerCase() === 'concluido' ||
-      String(order.rawData.Situacao || '').toLowerCase() === 'entregue'
-    )
-  );
-
   return (
     hasSignature ||
     hasPhoto ||
     hasDataConclusao ||
-    hasCompletionHistory ||
-    hasRawPod
+    hasCompletionHistory
   );
 }
 
 /**
- * Sanitizes a single order to guarantee status consistency across initial load,
- * date closures, and persistent storage.
+ * Sanitizes a single order for structural consistency without modifying its status automatically.
+ * Order status is authoritative and can ONLY be changed via explicit operator or driver action.
  */
 export function sanitizeOrderConsistency(
   order: Order,
@@ -131,82 +110,30 @@ export function sanitizeOrderConsistency(
       updated.driverValue = 0;
       isModified = true;
     }
-    if (updated.rawData) {
-      const driverFieldNorms = new Set([
-        'riderid', 'idcondutor', 'identregador', 'codigocondutor', 'codigoentregador',
-        'condutor', 'nomecondutor', 'entregador', 'nomeentregador', 'motorista', 'nomemotorista',
-        'dispositivocondutor', 'dispositivo', 'dispositivoentregador',
-        'ridername', 'rider'
-      ]);
-
-      for (const k of Object.keys(updated.rawData)) {
-        const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (driverFieldNorms.has(norm)) {
-          delete updated.rawData[k];
-          isModified = true;
-        }
-      }
-    }
   }
 
-  const orderIsoDate = normalizeToISODate(updated.date) || normalizeToISODate(updated.deliveryDate || updated.dataConclusao) || todayIso;
-
-  // IMPORTANT: Administrator Overrides and Explicit Statuses Take Absolute Precedence!
-  // If an administrator or user explicitly set the status (e.g. 'Não iniciado', 'Em rota', 'Entregando', 'Concluído', 'Cancelado', 'Ocorrência'),
-  // or if adminOverride / statusOverride is flagged, NEVER revert or overwrite the status automatically!
-  const hasAdminOverride = Boolean(
-    updated.adminOverride || 
-    (updated.rawData && (updated.rawData.adminOverride === 'true' || updated.rawData.adminOverride === '1'))
-  );
-
+  // Authoritative Status Preservation:
+  // Status MUST NEVER be changed automatically by heuristic analysis or inferences!
   const VALID_STATUSES: OrderStatus[] = ['Não iniciado', 'Em rota', 'Concluído', 'Cancelado', 'Ocorrência'];
-  if ((updated.status as string) === 'Entregando') {
+  
+  if ((updated.status as string) === 'Entregando' || (updated.status as string) === 'Em Trânsito') {
     updated.status = 'Em rota';
     isModified = true;
-  }
-
-  const rawStatus = (
-    updated.rawData?.status ||
-    updated.rawData?.Status ||
-    updated.rawData?.Situacao ||
-    updated.rawData?.situacao ||
-    updated.rawData?.STATUS ||
-    ''
-  ).toString().trim().toLowerCase();
-
-  const isRawCompleted = rawStatus === 'concluído' || rawStatus === 'concluido' || rawStatus === 'entregue' || rawStatus === 'finalizado' || rawStatus === 'baixado' || rawStatus.includes('baixa');
-  const isRawOccurrence = rawStatus === 'ocorrência' || rawStatus === 'ocorrencia' || rawStatus === 'devolvido' || rawStatus === 'falha' || rawStatus === 'insucesso';
-  const isRawCancelled = rawStatus === 'cancelado' || rawStatus === 'cancelada';
-  const isRawEmRota = rawStatus === 'em rota' || rawStatus === 'em trânsito' || rawStatus === 'em transito' || rawStatus === 'entregando';
-
-  const hasCompletion = isRawCompleted || hasOrderCompletionEvidence(updated);
-
-  // If order has completion evidence and is not explicitly canceled or occurrence, enforce Concluído
-  if (hasCompletion && updated.status !== 'Cancelado' && updated.status !== 'Ocorrência') {
-    if (updated.status !== 'Concluído') {
+  } else if (!updated.status || !VALID_STATUSES.includes(updated.status)) {
+    // If status is completely missing or invalid, default to 'Não iniciado'
+    const rawSt = (updated.rawData?.status || updated.rawData?.Status || updated.rawData?.Situacao || '').toString().trim().toLowerCase();
+    if (rawSt === 'concluído' || rawSt === 'concluido' || rawSt === 'entregue') {
       updated.status = 'Concluído';
-      isModified = true;
-    }
-  } else if (!hasAdminOverride) {
-    if (isRawCancelled) {
-      if (updated.status !== 'Cancelado') {
-        updated.status = 'Cancelado';
-        isModified = true;
-      }
-    } else if (isRawOccurrence) {
-      if (updated.status !== 'Ocorrência') {
-        updated.status = 'Ocorrência';
-        isModified = true;
-      }
-    } else if (isRawEmRota && updated.status !== 'Concluído') {
-      if (updated.status !== 'Em rota') {
-        updated.status = 'Em rota';
-        isModified = true;
-      }
-    } else if (!updated.status || !VALID_STATUSES.includes(updated.status)) {
+    } else if (rawSt === 'em rota' || rawSt === 'em trânsito' || rawSt === 'entregando') {
+      updated.status = 'Em rota';
+    } else if (rawSt === 'ocorrência' || rawSt === 'ocorrencia') {
+      updated.status = 'Ocorrência';
+    } else if (rawSt === 'cancelado' || rawSt === 'cancelada') {
+      updated.status = 'Cancelado';
+    } else {
       updated.status = 'Não iniciado';
-      isModified = true;
     }
+    isModified = true;
   }
 
   // Sync rawData status with authoritative order.status so that rawData does not have conflicting stale status
@@ -215,10 +142,6 @@ export function sanitizeOrderConsistency(
       updated.rawData.status = updated.status;
       updated.rawData.Situacao = updated.status;
       updated.rawData.Status = updated.status;
-      isModified = true;
-    }
-    if (hasAdminOverride && updated.rawData.adminOverride !== 'true') {
-      updated.rawData.adminOverride = 'true';
       isModified = true;
     }
   }
@@ -234,7 +157,7 @@ export function sanitizeOrderConsistency(
     }
   }
 
-  // Restore fields from rawData if missing in root
+  // Restore auxiliary fields from rawData if missing in root
   if (updated.rawData) {
     if (!updated.protocolNumber && (updated.rawData.NumeroProtocolo || updated.rawData.protocolNumber || updated.rawData.protocolo)) {
       updated.protocolNumber = updated.rawData.NumeroProtocolo || updated.rawData.protocolNumber || updated.rawData.protocolo;
@@ -257,6 +180,8 @@ export function sanitizeOrderConsistency(
       isModified = true;
     }
   }
+
+  const orderIsoDate = normalizeToISODate(updated.date) || todayIso;
 
   // Rule 1: Populate completion or occurrence dates/times ONLY if status is 'Concluído' or 'Ocorrência'.
   if (updated.status === 'Concluído') {
