@@ -3846,10 +3846,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         localStorage.setItem('vinimap_driver_logged_in', 'true');
                         localStorage.setItem('vinimap_is_driver_app', 'true');
                         localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
-                        localStorage.setItem('vinimap_driver_active_tab', 'tasks');
-                      }
+                        localStorage.setItem('vinimap_driver_active_tab', 'home');
+
                       changeSelectedRiderId(matched.id);
                       setCurrentScreen('dashboard');
+                      setActiveTab('home');
                       setActiveTab('tasks');
                       setPhoneInput('');
                       setPasswordInput('');
