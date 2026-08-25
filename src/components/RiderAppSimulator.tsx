@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -143,7 +143,7 @@ const generateStaticSvgMap = (lat: number, lng: number, address: string) => {
     <text x="20" y="248" font-family="monospace" font-size="7" font-weight="bold" fill="#38bdf8">AUTO-REGISTRO GPS</text>
     <text x="20" y="259" font-family="monospace" font-size="6.5" fill="#94a3b8">LAT: ${lat.toFixed(6)}</text>
     <text x="20" y="269" font-family="monospace" font-size="6.5" fill="#94a3b8">LNG: ${lng.toFixed(6)}</text>
-    <text x="20" y="279" font-family="monospace" font-size="6" font-weight="bold" fill="#10b981">CONFORMIDADE ✓</text>
+    <text x="20" y="279" font-family="monospace" font-size="6" font-weight="bold" fill="#10b981">CONFORMIDADE âœ“</text>
 
     <!-- Target Pin Location Marker -->
     <g transform="translate(140, 110)">
@@ -402,7 +402,7 @@ export default function RiderAppSimulator({
           if (changed.length > 0) onUpdateOrders(changed);
         }
       } catch (error) {
-        console.warn('[RiderRealtime] Supabase fallback indisponível:', error);
+        console.warn('[RiderRealtime] Supabase fallback indisponÃ­vel:', error);
       } finally {
         if (active) timer = setTimeout(syncFromSupabase, 5000);
       }
@@ -453,8 +453,8 @@ export default function RiderAppSimulator({
   };
 
   const handleMoveOrder = (orderId: string, direction: 'up' | 'down') => {
-    // Active orders excluding Concluído, Cancelado, and Ocorrência
-    const activeNotCompleted = driverActiveOrders.filter(o => o.status !== 'Concluído' && o.status !== 'Cancelado' && o.status !== 'Ocorrência');
+    // Active orders excluding ConcluÃ­do, Cancelado, and OcorrÃªncia
+    const activeNotCompleted = driverActiveOrders.filter(o => o.status !== 'ConcluÃ­do' && o.status !== 'Cancelado' && o.status !== 'OcorrÃªncia');
     const index = activeNotCompleted.findIndex(o => o.id === orderId);
     if (index === -1) return;
 
@@ -502,7 +502,7 @@ export default function RiderAppSimulator({
         return savedTab as any;
       }
     }
-    return 'tasks'; // Padrão: tela de pedidos para visualização imediata da fila de entregas
+    return 'tasks'; // PadrÃ£o: tela de pedidos para visualizaÃ§Ã£o imediata da fila de entregas
   });
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -521,7 +521,7 @@ export default function RiderAppSimulator({
         setSelectedOrder(targetOrd);
         localStorage.setItem('vinimap_driver_selected_order_id', targetOrd.id);
       }
-      // Sempre salvar para retornar diretamente à tela de pedidos / entregas
+      // Sempre salvar para retornar diretamente Ã  tela de pedidos / entregas
       localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
       localStorage.setItem('vinimap_driver_active_tab', 'tasks');
     }
@@ -729,7 +729,7 @@ export default function RiderAppSimulator({
     // Filter active orders assigned to selected driver
     const currentRiderOrders = orders.filter(o =>
       isOrderMatchingRider(o, selectedRiderId || selectedRider?.id, riders) &&
-      o.status !== 'Concluído' && o.status !== 'Cancelado'
+      o.status !== 'ConcluÃ­do' && o.status !== 'Cancelado'
     );
     const currentIds = new Set(currentRiderOrders.map(o => o.id));
 
@@ -758,8 +758,8 @@ export default function RiderAppSimulator({
 
         // Push notification on simulator screen
         setPhoneNotification({
-          title: `🔔 Novo${newlyAddedCount > 1 ? 's' : ''} Pedido${newlyAddedCount > 1 ? 's' : ''} Recebido${newlyAddedCount > 1 ? 's' : ''}!`,
-          body: `Você recebeu ${newlyAddedCount} novo${newlyAddedCount > 1 ? 's' : ''} pedido${newlyAddedCount > 1 ? 's' : ''} de entrega.`
+          title: `ðŸ”” Novo${newlyAddedCount > 1 ? 's' : ''} Pedido${newlyAddedCount > 1 ? 's' : ''} Recebido${newlyAddedCount > 1 ? 's' : ''}!`,
+          body: `VocÃª recebeu ${newlyAddedCount} novo${newlyAddedCount > 1 ? 's' : ''} pedido${newlyAddedCount > 1 ? 's' : ''} de entrega.`
         });
         setTimeout(() => setPhoneNotification(null), 6000);
       }
@@ -817,8 +817,8 @@ export default function RiderAppSimulator({
 
   const handleTriggerInstallPwa = async () => {
     triggerPhoneNotification(
-      "Instalação do App",
-      "Siga as instruções na tela para fixar o atalho no seu celular.",
+      "InstalaÃ§Ã£o do App",
+      "Siga as instruÃ§Ãµes na tela para fixar o atalho no seu celular.",
       "info"
     );
 
@@ -828,7 +828,7 @@ export default function RiderAppSimulator({
         const { outcome } = await deferredPrompt.userChoice;
         if (outcome === 'accepted') {
           setIsAppInstalled(true);
-          triggerPhoneNotification("App Instalado!", "O atalho da Vinimap foi adicionado à sua tela inicial.", "success");
+          triggerPhoneNotification("App Instalado!", "O atalho da Vinimap foi adicionado Ã  sua tela inicial.", "success");
         }
         setDeferredPrompt(null);
       } catch (err) {
@@ -909,7 +909,7 @@ export default function RiderAppSimulator({
               ...(recipientName ? { recipientName } : {}),
               ...(recipientDoc ? { recipientDoc } : {}),
               ...(observations ? { notes: observations, observations } : {}),
-              ...(status === 'Concluído' ? {
+              ...(status === 'ConcluÃ­do' ? {
                 deliveryDate: o.deliveryDate || todayIso,
                 dataConclusao: o.dataConclusao || todayIso,
                 deliveryTime: o.deliveryTime || timeNow,
@@ -935,8 +935,8 @@ export default function RiderAppSimulator({
       );
 
       triggerPhoneNotification(
-        "💾 Salvo no Cache Local",
-        `Pedido #${orderId} alterado para "${status}" em modo offline. O status será transmitido automaticamente ao recuperar sinal.`,
+        "ðŸ’¾ Salvo no Cache Local",
+        `Pedido #${orderId} alterado para "${status}" em modo offline. O status serÃ¡ transmitido automaticamente ao recuperar sinal.`,
         'info'
       );
     } else {
@@ -980,8 +980,8 @@ export default function RiderAppSimulator({
 
       playChimeSuccess();
       triggerPhoneNotification(
-        "⚡ Sincronização Concluída!",
-        `${syncedCount} atualização(ões) de entregas salvas no cache local foram enviadas com sucesso ao servidor!`,
+        "âš¡ SincronizaÃ§Ã£o ConcluÃ­da!",
+        `${syncedCount} atualizaÃ§Ã£o(Ãµes) de entregas salvas no cache local foram enviadas com sucesso ao servidor!`,
         'success'
       );
 
@@ -989,12 +989,12 @@ export default function RiderAppSimulator({
         id: `log-sync-${Date.now()}`,
         time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         type: 'success',
-        message: `App do Condutor: Sincronização offline automática concluída! ${syncedCount} atualizações salvas localmente foram transmitidas ao painel principal.`,
+        message: `App do Condutor: SincronizaÃ§Ã£o offline automÃ¡tica concluÃ­da! ${syncedCount} atualizaÃ§Ãµes salvas localmente foram transmitidas ao painel principal.`,
       }]);
     } catch (err) {
       console.error("Falha ao sincronizar fila offline:", err);
       triggerPhoneNotification(
-        "Erro na Sincronização",
+        "Erro na SincronizaÃ§Ã£o",
         "Falha ao transmitir dados do cache. Os itens foram mantidos salvos no dispositivo.",
         'failure'
       );
@@ -1103,8 +1103,8 @@ export default function RiderAppSimulator({
 
       playChimeSuccess();
       triggerPhoneNotification(
-        "🔄 Sincronização Concluída!",
-        `Sistema sincronizado com sucesso! ${activeCount} lançamento(s) do dia atualizados no seu dispositivo.`,
+        "ðŸ”„ SincronizaÃ§Ã£o ConcluÃ­da!",
+        `Sistema sincronizado com sucesso! ${activeCount} lanÃ§amento(s) do dia atualizados no seu dispositivo.`,
         'success'
       );
 
@@ -1112,14 +1112,14 @@ export default function RiderAppSimulator({
         id: `log-sync-manual-${Date.now()}`,
         time: getSaoPauloTime(),
         type: 'success',
-        message: `App do Condutor (${selectedRider?.name || 'Condutor'}): Sincronização manual dos lançamentos do dia realizada com sucesso (${activeCount} pedidos ativos).`
+        message: `App do Condutor (${selectedRider?.name || 'Condutor'}): SincronizaÃ§Ã£o manual dos lanÃ§amentos do dia realizada com sucesso (${activeCount} pedidos ativos).`
       }]);
     } catch (error) {
-      console.error("Erro ao sincronizar lançamentos:", error);
+      console.error("Erro ao sincronizar lanÃ§amentos:", error);
       playChimeFailure();
       triggerPhoneNotification(
-        "Aviso de Sincronização",
-        "Sincronização concluída com base nos dados locais.",
+        "Aviso de SincronizaÃ§Ã£o",
+        "SincronizaÃ§Ã£o concluÃ­da com base nos dados locais.",
         'info'
       );
     } finally {
@@ -1228,7 +1228,7 @@ export default function RiderAppSimulator({
     setIsProcessingPhotoQueue(true);
 
     nextTask.status = 'compressing';
-    nextTask.progressMessage = 'Comprimindo foto (Otimizando memória)...';
+    nextTask.progressMessage = 'Comprimindo foto (Otimizando memÃ³ria)...';
     setPhotoQueue(photoQueueTasksRef.current.map(t => ({
       id: t.id,
       source: t.source,
@@ -1319,7 +1319,7 @@ export default function RiderAppSimulator({
       const task = {
         id: taskId,
         source,
-        label: label || (typeof source === 'string' ? 'Foto da Câmera' : source.name),
+        label: label || (typeof source === 'string' ? 'Foto da CÃ¢mera' : source.name),
         status: 'pending' as const,
         progressMessage: 'Aguardando na fila...',
         createdAt: Date.now(),
@@ -1369,7 +1369,7 @@ export default function RiderAppSimulator({
   const [realGpsErrorMessage, setRealGpsErrorMessage] = useState<string>('');
   const realGpsWatchRef = useRef<number | null>(null);
   const gpsRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const gpsFallbackModeRef = useRef<boolean>(false); // false: highAccuracy (satélites), true: balanced (rede/Wi-Fi)
+  const gpsFallbackModeRef = useRef<boolean>(false); // false: highAccuracy (satÃ©lites), true: balanced (rede/Wi-Fi)
 
   // Stable references for closures to prevent stale state issues
   const selectedRiderRef = useRef<DeliveryRider | undefined>(selectedRider);
@@ -1476,7 +1476,7 @@ export default function RiderAppSimulator({
     }
 
     setSimulationLog(prev => [
-      `📡 GPS REAL CELULAR: Lat ${latitude.toFixed(6)}, Lng ${longitude.toFixed(6)} (±${Math.round(accuracy || 0)}m) às ${nowTime}`,
+      `ðŸ“¡ GPS REAL CELULAR: Lat ${latitude.toFixed(6)}, Lng ${longitude.toFixed(6)} (Â±${Math.round(accuracy || 0)}m) Ã s ${nowTime}`,
       ...prev
     ].slice(0, 10));
   };
@@ -1485,8 +1485,8 @@ export default function RiderAppSimulator({
   const startRealGpsTracking = (forceHighAccuracy: boolean = true) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setRealGpsStatus('error');
-      setRealGpsErrorMessage('Navegador não possui suporte ao GPS Geolocation.');
-      triggerPhoneNotification('GPS Indisponível', 'Seu dispositivo ou navegador não suporta a API de Geolocalização.', 'failure');
+      setRealGpsErrorMessage('Navegador nÃ£o possui suporte ao GPS Geolocation.');
+      triggerPhoneNotification('GPS IndisponÃ­vel', 'Seu dispositivo ou navegador nÃ£o suporta a API de GeolocalizaÃ§Ã£o.', 'failure');
       return;
     }
 
@@ -1531,9 +1531,9 @@ export default function RiderAppSimulator({
         
         if (err.code === err.PERMISSION_DENIED) {
           setRealGpsStatus('denied');
-          errorMsg = 'Permissão de localização negada no navegador. Habilite o GPS no ícone de configurações da barra de endereços.';
+          errorMsg = 'PermissÃ£o de localizaÃ§Ã£o negada no navegador. Habilite o GPS no Ã­cone de configuraÃ§Ãµes da barra de endereÃ§os.';
           setIsRealGpsActive(false);
-          triggerPhoneNotification('GPS Negado', 'Permita o acesso à localização nas configurações do navegador.', 'failure');
+          triggerPhoneNotification('GPS Negado', 'Permita o acesso Ã  localizaÃ§Ã£o nas configuraÃ§Ãµes do navegador.', 'failure');
           return;
         }
 
@@ -1576,8 +1576,8 @@ export default function RiderAppSimulator({
     realGpsWatchRef.current = watchId;
 
     triggerPhoneNotification(
-      '📡 Conectando GPS...',
-      forceHighAccuracy ? 'Capturando sinal de satélite de alta precisão.' : 'Capturando coordenadas do dispositivo.',
+      'ðŸ“¡ Conectando GPS...',
+      forceHighAccuracy ? 'Capturando sinal de satÃ©lite de alta precisÃ£o.' : 'Capturando coordenadas do dispositivo.',
       'info'
     );
   };
@@ -1609,13 +1609,13 @@ export default function RiderAppSimulator({
       );
     }
 
-    setSimulationLog(prev => ['🔴 Transmissão de GPS Real do Celular pausada.', ...prev]);
-    triggerPhoneNotification('GPS Pausado', 'Transmissão do GPS do celular foi interrompida.', 'info');
+    setSimulationLog(prev => ['ðŸ”´ TransmissÃ£o de GPS Real do Celular pausada.', ...prev]);
+    triggerPhoneNotification('GPS Pausado', 'TransmissÃ£o do GPS do celular foi interrompida.', 'info');
   };
 
   const captureInstantLocation = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      triggerPhoneNotification('GPS Indisponível', 'Navegador sem suporte a geolocalização.', 'failure');
+      triggerPhoneNotification('GPS IndisponÃ­vel', 'Navegador sem suporte a geolocalizaÃ§Ã£o.', 'failure');
       return;
     }
 
@@ -1627,16 +1627,16 @@ export default function RiderAppSimulator({
       (pos) => {
         handleGpsCoordinateUpdate(pos.coords, pos.timestamp);
         triggerPhoneNotification(
-          '📍 GPS Capturado com Sucesso!',
-          `Coordenadas: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${Math.round(pos.coords.accuracy || 0)}m)`,
+          'ðŸ“ GPS Capturado com Sucesso!',
+          `Coordenadas: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (Â±${Math.round(pos.coords.accuracy || 0)}m)`,
           'success'
         );
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
           setRealGpsStatus('denied');
-          setRealGpsErrorMessage('Permissão de GPS negada.');
-          triggerPhoneNotification('GPS Negado', 'Permita o acesso à localização no navegador.', 'failure');
+          setRealGpsErrorMessage('PermissÃ£o de GPS negada.');
+          triggerPhoneNotification('GPS Negado', 'Permita o acesso Ã  localizaÃ§Ã£o no navegador.', 'failure');
           return;
         }
         // Fallback to low-accuracy/cached network coordinate
@@ -1644,15 +1644,15 @@ export default function RiderAppSimulator({
           (fallbackPos) => {
             handleGpsCoordinateUpdate(fallbackPos.coords, fallbackPos.timestamp);
             triggerPhoneNotification(
-              '📍 GPS Capturado (Modo Rede)',
-              `Coordenadas: ${fallbackPos.coords.latitude.toFixed(5)}, ${fallbackPos.coords.longitude.toFixed(5)} (±${Math.round(fallbackPos.coords.accuracy || 0)}m)`,
+              'ðŸ“ GPS Capturado (Modo Rede)',
+              `Coordenadas: ${fallbackPos.coords.latitude.toFixed(5)}, ${fallbackPos.coords.longitude.toFixed(5)} (Â±${Math.round(fallbackPos.coords.accuracy || 0)}m)`,
               'success'
             );
           },
           (finalErr) => {
             setRealGpsStatus('error');
-            setRealGpsErrorMessage('Não foi possível obter a posição atual do GPS.');
-            triggerPhoneNotification('GPS Falhou', 'Verifique o sensor de localização do aparelho.', 'failure');
+            setRealGpsErrorMessage('NÃ£o foi possÃ­vel obter a posiÃ§Ã£o atual do GPS.');
+            triggerPhoneNotification('GPS Falhou', 'Verifique o sensor de localizaÃ§Ã£o do aparelho.', 'failure');
           },
           { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
         );
@@ -1713,28 +1713,28 @@ export default function RiderAppSimulator({
       return;
     }
 
-    if (focusedOrder.status === 'Concluído') {
+    if (focusedOrder.status === 'ConcluÃ­do') {
       triggerPhoneNotification(
-        'Ação Restrita',
-        `O pedido #${focusedOrder.id} já foi concluído e seu status só pode ser alterado pelo Administrador.`,
+        'AÃ§Ã£o Restrita',
+        `O pedido #${focusedOrder.id} jÃ¡ foi concluÃ­do e seu status sÃ³ pode ser alterado pelo Administrador.`,
         'failure'
       );
       return;
     }
     
     if (focusedOrder.status === targetStatus) {
-      triggerPhoneNotification('Status Igual', `O pedido já está com o status "${targetStatus}".`, 'info');
+      triggerPhoneNotification('Status Igual', `O pedido jÃ¡ estÃ¡ com o status "${targetStatus}".`, 'info');
       return;
     }
 
-    if (targetStatus === 'Não iniciado') {
-      handleUpdateOrderStatus(focusedOrder.id, 'Não iniciado');
-      triggerPhoneNotification('Status Atualizado', `Pedido #${focusedOrder.id} marcado como "Não iniciado".`, 'info');
+    if (targetStatus === 'NÃ£o iniciado') {
+      handleUpdateOrderStatus(focusedOrder.id, 'NÃ£o iniciado');
+      triggerPhoneNotification('Status Atualizado', `Pedido #${focusedOrder.id} marcado como "NÃ£o iniciado".`, 'info');
       onSaveLogs([{
         id: `log-sim-ni-${Date.now()}`,
         time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         type: 'info',
-        message: `App do Condutor: Pedido #${focusedOrder.id} marcado como "Não iniciado" por ${selectedRider?.name || 'Condutor'}.`,
+        message: `App do Condutor: Pedido #${focusedOrder.id} marcado como "NÃ£o iniciado" por ${selectedRider?.name || 'Condutor'}.`,
         orderId: focusedOrder.id
       }]);
       return;
@@ -1750,25 +1750,25 @@ export default function RiderAppSimulator({
         message: `App do Condutor: Pedido #${focusedOrder.id} marcado como "Em Rota" por ${selectedRider?.name || 'Condutor'}.`,
         orderId: focusedOrder.id
       }]);
-    } else if (targetStatus === 'Concluído') {
+    } else if (targetStatus === 'ConcluÃ­do') {
       // Open the receiver confirmation subform
       setShowReceiverInputId(focusedOrder.id);
       setShowIncidentInputId(null);
       setReceiverNameInput(focusedOrder.clientName);
       setExpandedOrderId(focusedOrder.id);
       triggerPhoneNotification('Dar Baixa', 'Digite o nome do recebedor abaixo para concluir.', 'info');
-    } else if (targetStatus === 'Ocorrência') {
+    } else if (targetStatus === 'OcorrÃªncia') {
       // Open the incident description subform
       setShowIncidentInputId(focusedOrder.id);
       setShowReceiverInputId(null);
       setIncidentReasonInput('');
       setExpandedOrderId(focusedOrder.id);
-      triggerPhoneNotification('Ocorrência', 'Descreva o motivo da ocorrência no campo abaixo.', 'info');
+      triggerPhoneNotification('OcorrÃªncia', 'Descreva o motivo da ocorrÃªncia no campo abaixo.', 'info');
     }
   };
 
   // Filter orders for the active driver:
-  // PREVIOUS-DAY ORDERS: ONLY displayed if their status is still OPEN/PENDING in the Admin dashboard ('Não iniciado', 'Em rota').
+  // PREVIOUS-DAY ORDERS: ONLY displayed if their status is still OPEN/PENDING in the Admin dashboard ('NÃ£o iniciado', 'Em rota').
   // COMPLETED/CANCELED orders from previous days are permanently excluded from the driver's active route screen.
   // TODAY'S ORDERS: Open orders are shown to follow the route, and today's completed/occurrence orders are displayed for daily totals.
   const todayIso = getSaoPauloISODate();
@@ -1789,18 +1789,18 @@ export default function RiderAppSimulator({
 
     // Check if the order was genuinely completed
     const hasCompletion = hasOrderCompletionEvidence(order) || 
-      normalizedStatus === 'concluído' ||
+      normalizedStatus === 'concluÃ­do' ||
       normalizedStatus === 'concluido' ||
       normalizedStatus === 'entregue' ||
       normalizedStatus === 'baixado' ||
       (order.rawData && (
         String(order.rawData.Situacao || '').toLowerCase() === 'baixado' ||
-        String(order.rawData.Situacao || '').toLowerCase() === 'concluído' ||
+        String(order.rawData.Situacao || '').toLowerCase() === 'concluÃ­do' ||
         String(order.rawData.Situacao || '').toLowerCase() === 'concluido' ||
         String(order.rawData.Situacao || '').toLowerCase() === 'entregue'
       ));
 
-    const isOccurrence = normalizedStatus === 'ocorrência' || normalizedStatus === 'ocorrencia';
+    const isOccurrence = normalizedStatus === 'ocorrÃªncia' || normalizedStatus === 'ocorrencia';
     const isCanceled = normalizedStatus === 'cancelado' || normalizedStatus === 'cancelada';
     const isCompleted = hasCompletion;
 
@@ -1865,16 +1865,16 @@ export default function RiderAppSimulator({
 
   // Dynamic KPIs synchronized with dashboard
   const completedCount = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status === 'Concluído').length
+    ? driverActiveOrders.filter(o => o.status === 'ConcluÃ­do').length
     : 0;
   const pendingCount = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status !== 'Concluído' && o.status !== 'Cancelado' && o.status !== 'Ocorrência').length
+    ? driverActiveOrders.filter(o => o.status !== 'ConcluÃ­do' && o.status !== 'Cancelado' && o.status !== 'OcorrÃªncia').length
     : 0;
   const occurrenceCount = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status === 'Ocorrência').length
+    ? driverActiveOrders.filter(o => o.status === 'OcorrÃªncia').length
     : 0;
   const naoIniciadoCount = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status === 'Não iniciado').length
+    ? driverActiveOrders.filter(o => o.status === 'NÃ£o iniciado').length
     : 0;
   const emRotaCount = selectedRiderId
     ? driverActiveOrders.filter(o => o.status === 'Em rota' || (o.status as string) === 'Entregando').length
@@ -1887,7 +1887,7 @@ export default function RiderAppSimulator({
     : 100;
   const shiftEarnings = selectedRiderId
     ? driverActiveOrders
-        .filter(o => o.status === 'Concluído')
+        .filter(o => o.status === 'ConcluÃ­do')
         .reduce((sum, o) => sum + (o.driverValue || 0), 0)
     : 0;
 
@@ -1931,7 +1931,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
   const completedOrdersFingerprint = useMemo(() => {
     if (!orders || orders.length === 0) return '';
     return orders
-      .filter(o => o.status === 'Concluído' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o))
+      .filter(o => o.status === 'ConcluÃ­do' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o))
       .map(o => `${o.id}:${o.status}:${o.riderId || ''}:${o.deliveryDate || ''}:${o.protocolNumber || ''}`)
       .join('|');
   }, [orders]);
@@ -1941,7 +1941,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     
     // Find completed orders for this driver or all drivers if no specific rider selected (default today)
     const completed = orders.filter(o => {
-      const isConclued = o.status === 'Concluído' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o);
+      const isConclued = o.status === 'ConcluÃ­do' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o);
       if (!isConclued) return false;
       if (selectedRiderId) {
         const matchesRider = o.riderId === selectedRiderId || (selectedRider && (o.riderId === selectedRider.id || o.riderId === selectedRider.name));
@@ -1978,7 +1978,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
         }
 
         const timestamp = order.deliveryDate
-          ? `${order.deliveryDate} às ${order.deliveryTime || ''}`.trim()
+          ? `${order.deliveryDate} Ã s ${order.deliveryTime || ''}`.trim()
           : (existing?.timestamp || order.createdAt || new Date().toLocaleString('pt-BR'));
 
         return {
@@ -2003,11 +2003,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
   // Get active pending orders for this rider
   const riderPendingOrders = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status !== 'Concluído' && o.status !== 'Cancelado' && o.status !== 'Ocorrência')
+    ? driverActiveOrders.filter(o => o.status !== 'ConcluÃ­do' && o.status !== 'Cancelado' && o.status !== 'OcorrÃªncia')
     : [];
 
   const riderCompletedOrders = selectedRiderId
-    ? driverActiveOrders.filter(o => o.status === 'Concluído')
+    ? driverActiveOrders.filter(o => o.status === 'ConcluÃ­do')
     : [];
 
   // Render Expandable Delivery Cards with status transition options
@@ -2017,8 +2017,8 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
         return (
           <div className="bg-white rounded-2xl p-6 text-center border border-slate-200/50 text-slate-400 space-y-2">
             <CheckCircle2 size={32} className="text-slate-300 mx-auto" />
-            <div className="text-xs font-bold text-slate-700">Nenhuma entrega concluída hoje</div>
-            <p className="text-[10px]">As entregas baixadas no dia atual ficarão listadas aqui com seus respectivos protocolos.</p>
+            <div className="text-xs font-bold text-slate-700">Nenhuma entrega concluÃ­da hoje</div>
+            <p className="text-[10px]">As entregas baixadas no dia atual ficarÃ£o listadas aqui com seus respectivos protocolos.</p>
           </div>
         );
       }
@@ -2031,14 +2031,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               orderId: order.id,
               clientName: order.clientName,
               address: order.address,
-              timestamp: order.deliveryTime ? `${order.deliveryDate || todayFormatted} às ${order.deliveryTime}` : (order.deliveryDate || todayFormatted),
+              timestamp: order.deliveryTime ? `${order.deliveryDate || todayFormatted} Ã s ${order.deliveryTime}` : (order.deliveryDate || todayFormatted),
               receiverName: order.recipientName || 'Recebedor Titular',
               signatureImage: order.signatureUrl || `typed:${order.recipientName || 'Recebedor'}`,
               photoImage: order.deliveryPhotoUrl || '',
               hash: order.protocolNumber || `HASH-${order.id}`,
               lat: 0,
               lng: 0,
-              observations: (order as any).observations || (order as any).notes || order.rawData?.observations || order.rawData?.notes || 'Entrega concluída com sucesso.'
+              observations: (order as any).observations || (order as any).notes || order.rawData?.observations || order.rawData?.notes || 'Entrega concluÃ­da com sucesso.'
             };
 
             return (
@@ -2051,11 +2051,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     <span className="font-mono text-[10px] font-extrabold text-slate-700">#{order.id}</span>
                     <span className="text-[9px] px-2 py-0.5 rounded-full font-black border uppercase tracking-wider bg-emerald-100 text-emerald-800 border-emerald-200 flex items-center gap-1">
                       <CheckCircle2 size={10} className="text-emerald-600" />
-                      <span>Concluído</span>
+                      <span>ConcluÃ­do</span>
                     </span>
                   </div>
                   <span className="text-[9px] font-mono font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md">
-                    {order.deliveryTime ? `Entregue às ${order.deliveryTime}` : (order.deliveryDate || 'Hoje')}
+                    {order.deliveryTime ? `Entregue Ã s ${order.deliveryTime}` : (order.deliveryDate || 'Hoje')}
                   </span>
                 </div>
 
@@ -2114,8 +2114,8 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
             <div className="text-xs font-bold text-slate-800">Tudo em dia!</div>
             <p className="text-[10px] text-slate-500">
               {riderCompletedOrders.length > 0
-                ? `Você não possui entregas pendentes na fila. Todas as ${riderCompletedOrders.length} entrega(s) de hoje foram concluídas.`
-                : "Nenhuma entrega pendente vinculada ao seu usuário no momento."}
+                ? `VocÃª nÃ£o possui entregas pendentes na fila. Todas as ${riderCompletedOrders.length} entrega(s) de hoje foram concluÃ­das.`
+                : "Nenhuma entrega pendente vinculada ao seu usuÃ¡rio no momento."}
             </p>
           </div>
           {riderCompletedOrders.length > 0 && (
@@ -2125,7 +2125,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-[10px] rounded-xl cursor-pointer transition-all inline-flex items-center gap-1 shadow-2xs"
             >
               <CheckCircle2 size={12} />
-              <span>Ver Entregas Concluídas ({riderCompletedOrders.length})</span>
+              <span>Ver Entregas ConcluÃ­das ({riderCompletedOrders.length})</span>
             </button>
           )}
         </div>
@@ -2139,10 +2139,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
           
           // Badge styling
           let badgeColor = "bg-slate-100 text-slate-600";
-          if (order.status === 'Não iniciado') badgeColor = "bg-amber-100 text-amber-800 border-amber-200";
+          if (order.status === 'NÃ£o iniciado') badgeColor = "bg-amber-100 text-amber-800 border-amber-200";
           else if (order.status === 'Em rota' || (order.status as string) === 'Entregando') badgeColor = "bg-indigo-100 text-indigo-800 border-indigo-200";
-          else if (order.status === 'Concluído') badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
-          else if (order.status === 'Ocorrência') badgeColor = "bg-rose-100 text-rose-800 border-rose-200";
+          else if (order.status === 'ConcluÃ­do') badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+          else if (order.status === 'OcorrÃªncia') badgeColor = "bg-rose-100 text-rose-800 border-rose-200";
           else if (order.status === 'Cancelado') badgeColor = "bg-slate-100 text-slate-800 border-slate-200";
 
           return (
@@ -2188,7 +2188,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   </button>
                   
                   <span className="font-mono font-black text-[10px] text-blue-600 tracking-tighter leading-none select-none">
-                    {index + 1}º
+                    {index + 1}Âº
                   </span>
                   
                   <button
@@ -2269,7 +2269,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       
                       {/* Delivery Reading / Metadata Block */}
                       <div className="bg-white border border-slate-300 rounded-xl p-3 space-y-2.5 shadow-xs">
-                        <span className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider block">📄 Dados para Leitura da Entrega</span>
+                        <span className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider block">ðŸ“„ Dados para Leitura da Entrega</span>
                         
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[10.5px]">
                           <div>
@@ -2286,7 +2286,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <span className="font-mono font-black text-slate-950">{order.cep || '01000-000'}</span>
                           </div>
                           <div className="col-span-2">
-                            <span className="text-slate-600 block font-bold">ENDEREÇO DE ENTREGA:</span>
+                            <span className="text-slate-600 block font-bold">ENDEREÃ‡O DE ENTREGA:</span>
                             <span className="font-black text-slate-950 leading-snug">{order.address}</span>
                           </div>
                           <div>
@@ -2304,24 +2304,24 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                       {/* Interactive Status Transition Actions */}
                       <div className="space-y-2">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">⚡ Opções de Despacho / Ações</span>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">âš¡ OpÃ§Ãµes de Despacho / AÃ§Ãµes</span>
 
                         {/* Standard action options grids */}
-                        {(order.status as string) === 'Concluído' ? (
+                        {(order.status as string) === 'ConcluÃ­do' ? (
                           <div className="bg-slate-100 border border-slate-200/80 rounded-xl p-3 text-center space-y-1">
                             <div className="flex items-center justify-center gap-1.5 font-bold text-xs text-slate-700">
                               <Shield size={14} className="text-slate-500" />
-                              <span>Pedido Concluído (Status Travado)</span>
+                              <span>Pedido ConcluÃ­do (Status Travado)</span>
                             </div>
                             <p className="m-0 text-[10px] text-slate-500 font-medium">
-                              Este pedido já foi finalizado. O condutor pode visualizar o protocolo mas não pode alterar o status. Alterações são permitidas apenas ao Administrador.
+                              Este pedido jÃ¡ foi finalizado. O condutor pode visualizar o protocolo mas nÃ£o pode alterar o status. AlteraÃ§Ãµes sÃ£o permitidas apenas ao Administrador.
                             </p>
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 gap-2">
                           
                           {/* OPTION 1: COLOCAR EM ROTA */}
-                          {order.status === 'Não iniciado' ? (
+                          {order.status === 'NÃ£o iniciado' ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -2343,14 +2343,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           ) : (
                             <div className="col-span-2 flex items-center gap-2 px-3 py-1.5 bg-sky-50 border border-sky-100 rounded-xl text-sky-700 text-[11px] font-bold">
                               <Truck size={13} className="shrink-0 animate-bounce" />
-                              <span>Pedido em Rota / Trânsito</span>
+                              <span>Pedido em Rota / TrÃ¢nsito</span>
                             </div>
                           )}
 
-                          {/* OPTION 2: CONCLUÍDO (dar baixa) */}
+                          {/* OPTION 2: CONCLUÃDO (dar baixa) */}
                           <button
                             type="button"
-                            disabled={(order.status as string) === 'Concluído'}
+                            disabled={(order.status as string) === 'ConcluÃ­do'}
                             onClick={() => {
                               setSelectedOrder(order);
                               setReceiverName(order.clientName);
@@ -2367,7 +2367,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               setShowReceiptModal(true);
                             }}
                             className={`py-2 px-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-all border shadow-3xs cursor-pointer ${
-                              (order.status as string) === 'Concluído'
+                              (order.status as string) === 'ConcluÃ­do'
                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
                                 : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
                             }`}
@@ -2376,22 +2376,22 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <span>Dar Baixa (Concluir)</span>
                           </button>
 
-                          {/* OPTION 3: OCORRÊNCIA */}
+                          {/* OPTION 3: OCORRÃŠNCIA */}
                           <button
                             type="button"
-                            disabled={(order.status as string) === 'Concluído'}
+                            disabled={(order.status as string) === 'ConcluÃ­do'}
                             onClick={() => {
                               setShowIncidentInputId(showIncidentInputId === order.id ? null : order.id);
                               setIncidentReasonInput('');
                             }}
                             className={`py-2 px-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-all border shadow-3xs cursor-pointer ${
-                              (order.status as string) === 'Concluído'
+                              (order.status as string) === 'ConcluÃ­do'
                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
                                 : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
                             }`}
                           >
                             <AlertTriangle size={12} className="text-rose-600" />
-                            <span>Registrar Ocorrência</span>
+                            <span>Registrar OcorrÃªncia</span>
                           </button>
 
                           {/* OPTION 5: ABRIR NO GOOGLE MAPS */}
@@ -2418,9 +2418,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             animate={{ height: "auto", opacity: 1 }}
                             className="bg-rose-50/50 border border-rose-100 rounded-xl p-3 space-y-2"
                           >
-                            <span className="text-[9px] font-black text-rose-800 uppercase block">⚠️ Relatório da Ocorrência:</span>
+                            <span className="text-[9px] font-black text-rose-800 uppercase block">âš ï¸ RelatÃ³rio da OcorrÃªncia:</span>
                             <textarea 
-                              placeholder="Descreva o ocorrido (Ex: cliente ausente, endereço não localizado, pedido recusado, pneu furado...)"
+                              placeholder="Descreva o ocorrido (Ex: cliente ausente, endereÃ§o nÃ£o localizado, pedido recusado, pneu furado...)"
                               value={incidentReasonInput}
                               onChange={(e) => setIncidentReasonInput(e.target.value)}
                               rows={2}
@@ -2432,29 +2432,29 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 onClick={() => {
                                   const reason = incidentReasonInput.trim();
                                   if (!reason) {
-                                    triggerPhoneNotification('Aviso', 'Descreva o motivo da ocorrência.', 'failure');
+                                    triggerPhoneNotification('Aviso', 'Descreva o motivo da ocorrÃªncia.', 'failure');
                                     return;
                                   }
 
-                                  // Update order status to Ocorrência with reason
-                                  handleUpdateOrderStatus(order.id, 'Ocorrência', undefined, undefined, undefined, undefined, undefined, reason);
+                                  // Update order status to OcorrÃªncia with reason
+                                  handleUpdateOrderStatus(order.id, 'OcorrÃªncia', undefined, undefined, undefined, undefined, undefined, reason);
                                   
                                   setShowIncidentInputId(null);
                                   setExpandedOrderId(null);
 
-                                  triggerPhoneNotification('Ocorrência Registrada!', `Pedido #${order.id} marcado como ocorrência.`, 'failure');
+                                  triggerPhoneNotification('OcorrÃªncia Registrada!', `Pedido #${order.id} marcado como ocorrÃªncia.`, 'failure');
 
                                   onSaveLogs([{
                                     id: `log-sim-fail-${Date.now()}`,
                                     time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                                     type: 'danger',
-                                    message: `App do Condutor: Pedido #${order.id} teve OCORRÊNCIA registrada por ${selectedRider?.name}. Motivo: ${reason}.`,
+                                    message: `App do Condutor: Pedido #${order.id} teve OCORRÃŠNCIA registrada por ${selectedRider?.name}. Motivo: ${reason}.`,
                                     orderId: order.id
                                   }]);
                                 }}
                                 className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] rounded-lg shadow-sm transition-all cursor-pointer"
                               >
-                                Salvar Ocorrência
+                                Salvar OcorrÃªncia
                               </button>
                             </div>
                           </motion.div>
@@ -2689,8 +2689,8 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
       // Play sound notification and trigger live banner
       triggerPhoneNotification(
-        "Destino Alcançado!",
-        `Você chegou ao endereço de ${currentNextOrder.clientName}. Colha a assinatura para dar baixa.`,
+        "Destino AlcanÃ§ado!",
+        `VocÃª chegou ao endereÃ§o de ${currentNextOrder.clientName}. Colha a assinatura para dar baixa.`,
         'success'
       );
 
@@ -2711,7 +2711,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     }
 
     // Move step closer
-    // 1 deg Lat ≈ 111km, 1 deg Lng ≈ 102km
+    // 1 deg Lat â‰ˆ 111km, 1 deg Lng â‰ˆ 102km
     // We want to move at simulated speed of around 40km/h
     // Speed * multiplier. Speed = 40km/h => 0.011km per second.
     const stepDist = (0.008 * simSpeed) / 100; // in degrees representation
@@ -2746,7 +2746,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     }
 
     setSimulationLog(prev => [
-      `Pos GPS: ${nextGeoLat.toFixed(5)}, ${nextGeoLng.toFixed(5)} • Distância restante: ${distanceLeft.toFixed(2)} km`,
+      `Pos GPS: ${nextGeoLat.toFixed(5)}, ${nextGeoLng.toFixed(5)} â€¢ DistÃ¢ncia restante: ${distanceLeft.toFixed(2)} km`,
       ...prev
     ].slice(0, 5));
   };
@@ -2768,7 +2768,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       id: `log-sim-tel-${Date.now()}`,
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       type: 'info',
-      message: `Simulador GPS: Condutor ${selectedRider.name} avançou rapidamente para o destino de ${currentNextOrder.clientName}.`,
+      message: `Simulador GPS: Condutor ${selectedRider.name} avanÃ§ou rapidamente para o destino de ${currentNextOrder.clientName}.`,
       orderId: currentNextOrder.id
     }]);
 
@@ -2783,7 +2783,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     if (riderPendingOrders.length === 0) return;
 
     riderPendingOrders.forEach(order => {
-      if (order.status === 'Não iniciado') {
+      if (order.status === 'NÃ£o iniciado') {
         handleUpdateOrderStatus(order.id, 'Em rota');
       }
     });
@@ -2795,7 +2795,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       message: `Simulador Celular: Condutor ${selectedRider?.name} retirou as encomendas na Sede ViniMap. Entregas em rota!`,
     }]);
 
-    alert("Sucesso! Todos os pedidos pendentes foram faturados e estão 'Em rota'!");
+    alert("Sucesso! Todos os pedidos pendentes foram faturados e estÃ£o 'Em rota'!");
   };
 
   // Confirm delivery with simulated photo, digital signature, and protocol generation
@@ -2809,7 +2809,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     }
 
     if (!currentPhoto) {
-      alert("A foto do comprovante é obrigatória para concluir o protocolo de entrega!");
+      alert("A foto do comprovante Ã© obrigatÃ³ria para concluir o protocolo de entrega!");
       return;
     }
 
@@ -2901,7 +2901,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
       let obsToSave = receiptObservations.trim();
       if (!obsToSave) {
-        obsToSave = 'Deixado sem observações pendentes (Conformidade 100%).';
+        obsToSave = 'Deixado sem observaÃ§Ãµes pendentes (Conformidade 100%).';
       }
       if (finalDoc && !obsToSave.includes('Documento:')) {
         obsToSave = `Documento: ${finalDoc}. ${obsToSave}`;
@@ -2927,7 +2927,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
       const completionPayload = {
         orderId: selectedOrder.id,
-        nextStatus: 'Concluído' as const,
+        nextStatus: 'ConcluÃ­do' as const,
         protocolNumber: protocolHash,
         signatureUrl: finalSignature,
         deliveryPhotoUrl: newProtocol.photoImage,
@@ -2961,7 +2961,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       );
       
       triggerPhoneNotification(
-        "Entrega Concluída! ✓",
+        "Entrega ConcluÃ­da! âœ“",
         `Pedido #${selectedOrder.id} finalizado com sucesso para o cliente ${selectedOrder.clientName}.`,
         'success'
       );
@@ -2999,13 +2999,13 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
   const handleReportFailure = () => {
     if (!selectedOrder || !failureReason) return;
 
-    if (selectedOrder.status === 'Concluído') {
-      alert("Este pedido já foi concluído! Alterações de status são restritas ao Administrador.");
+    if (selectedOrder.status === 'ConcluÃ­do') {
+      alert("Este pedido jÃ¡ foi concluÃ­do! AlteraÃ§Ãµes de status sÃ£o restritas ao Administrador.");
       setShowFailureModal(false);
       return;
     }
 
-    handleUpdateOrderStatus(selectedOrder.id, 'Ocorrência', undefined, undefined, undefined, undefined, undefined, failureReason); // Reverts with incident status
+    handleUpdateOrderStatus(selectedOrder.id, 'OcorrÃªncia', undefined, undefined, undefined, undefined, undefined, failureReason); // Reverts with incident status
 
     onSaveLogs([{
       id: `log-sim-fail-${Date.now()}`,
@@ -3021,7 +3021,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     setCurrentScreen('dashboard');
     setActiveTab('home');
 
-    alert("Ocorrência registrada! O pedido foi removido da sua lista de entregas ativas e encaminhado para tratativa operacional.");
+    alert("OcorrÃªncia registrada! O pedido foi removido da sua lista de entregas ativas e encaminhado para tratativa operacional.");
   };
 
   // Rear camera stream handlers
@@ -3097,7 +3097,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               preview: dataUrl.substring(0, 60) + '...'
             });
             stopWebcam();
-            enqueuePhotoProcessing(dataUrl, 'Foto da Câmera').then(compressed => {
+            enqueuePhotoProcessing(dataUrl, 'Foto da CÃ¢mera').then(compressed => {
               if (compressed) setReceiptPhoto(compressed);
             }).catch(e => console.warn("Camera photo queue error:", e));
             return dataUrl;
@@ -3158,7 +3158,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 24px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('COMPROVANTE FOTOGRÁFICO DE ENTREGA', 400, 78);
+      ctx.fillText('COMPROVANTE FOTOGRÃFICO DE ENTREGA', 400, 78);
 
       // Draw isometric parcel box
       ctx.fillStyle = '#d97706'; // Amber 600
@@ -3337,21 +3337,21 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
   const handleStatusToggle = () => {
     if (!selectedRider) return;
-    const nextStatus = selectedRider.status === 'Offline' ? 'Disponível' : 'Offline';
+    const nextStatus = selectedRider.status === 'Offline' ? 'DisponÃ­vel' : 'Offline';
     
     // Updates status directly in list
     selectedRider.status = nextStatus;
 
-    if (nextStatus === 'Disponível') {
+    if (nextStatus === 'DisponÃ­vel') {
       triggerPhoneNotification(
-        "Você está Online! 🔋",
+        "VocÃª estÃ¡ Online! ðŸ”‹",
         "Pronto para receber ordens de entrega da Sede ViniMap.",
         'success'
       );
     } else {
       triggerPhoneNotification(
         "Modo Offline",
-        "Você pausou seu plantão operacional.",
+        "VocÃª pausou seu plantÃ£o operacional.",
         'info'
       );
     }
@@ -3380,7 +3380,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               </h2>
             </div>
             <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
-              Inspecione a experiência de campo do motorista ou instale o aplicativo oficial de campo diretamente no celular do condutor (PWA / APK).
+              Inspecione a experiÃªncia de campo do motorista ou instale o aplicativo oficial de campo diretamente no celular do condutor (PWA / APK).
             </p>
           </div>
 
@@ -3416,7 +3416,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
             </button>
 
             <div className="text-right hidden sm:block">
-              <span className="text-[10px] text-slate-400 block font-semibold">INTEGRAÇÃO COM RASTREADOR</span>
+              <span className="text-[10px] text-slate-400 block font-semibold">INTEGRAÃ‡ÃƒO COM RASTREADOR</span>
               <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 text-[10px] px-2 py-0.5 rounded-full font-bold">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
                 Sincronizado via WebSockets
@@ -3439,7 +3439,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   Painel do Administrador
                 </span>
                 <h3 className="text-sm font-extrabold text-white">
-                  Selecionar Condutor Cadastrado para Simulação
+                  Selecionar Condutor Cadastrado para SimulaÃ§Ã£o
                 </h3>
               </div>
             </div>
@@ -3449,11 +3449,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 <img src={selectedRider.avatar} className="w-6 h-6 rounded-full object-cover border border-sky-400" />
                 <div className="text-left">
                   <span className="text-[10px] font-extrabold text-white block leading-tight">{selectedRider.name}</span>
-                  <span className="text-[8px] font-bold text-sky-300 uppercase">{selectedRider.vehicle || 'Veículo'}</span>
+                  <span className="text-[8px] font-bold text-sky-300 uppercase">{selectedRider.vehicle || 'VeÃ­culo'}</span>
                 </div>
                 <span className={`ml-2 text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
                   selectedRider.status === 'Em rota' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                  selectedRider.status === 'Disponível' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                  selectedRider.status === 'DisponÃ­vel' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
                   'bg-slate-700 text-slate-300'
                 }`}>
                   {selectedRider.status}
@@ -3486,10 +3486,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 >
                   <option value="" className="bg-slate-900 text-slate-400">-- Selecione um Condutor da Frota --</option>
                   {riders.map((r) => {
-                    const pendingCount = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                    const pendingCount = orders.filter(o => o.riderId === r.id && o.status !== 'ConcluÃ­do' && o.status !== 'Cancelado').length;
                     return (
                       <option key={r.id} value={r.id} className="bg-slate-900 text-white font-semibold">
-                        {r.name} ({r.vehicle || 'Moto'}) — Dispositivo: {r.deviceNumber || r.phone || 'Geral'} [{pendingCount} entregas]
+                        {r.name} ({r.vehicle || 'Moto'}) â€” Dispositivo: {r.deviceNumber || r.phone || 'Geral'} [{pendingCount} entregas]
                       </option>
                     );
                   })}
@@ -3537,7 +3537,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   </button>
                 </>
               ) : (
-                <span className="text-xs text-slate-400 italic">Selecione um condutor acima para iniciar a simulação no dispositivo.</span>
+                <span className="text-xs text-slate-400 italic">Selecione um condutor acima para iniciar a simulaÃ§Ã£o no dispositivo.</span>
               )}
             </div>
           </div>
@@ -3545,12 +3545,12 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
           {/* Quick Rider Selection Cards */}
           <div className="pt-2 border-t border-slate-800">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">
-              ⚡ Clique em um condutor para alternar a simulação instantaneamente:
+              âš¡ Clique em um condutor para alternar a simulaÃ§Ã£o instantaneamente:
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {riders.map((r) => {
                 const isSelected = selectedRiderId === r.id;
-                const pendingCount = orders.filter(o => o.riderId === r.id && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                const pendingCount = orders.filter(o => o.riderId === r.id && o.status !== 'ConcluÃ­do' && o.status !== 'Cancelado').length;
                 return (
                   <button
                     key={r.id}
@@ -3647,14 +3647,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       const nextOffline = !isNetworkOffline;
                       setIsNetworkOffline(nextOffline);
                       if (nextOffline) {
-                        triggerPhoneNotification("Modo Off-Grid", "Conexão desligada. Entregas serão salvas no cache do dispositivo.", "info");
+                        triggerPhoneNotification("Modo Off-Grid", "ConexÃ£o desligada. Entregas serÃ£o salvas no cache do dispositivo.", "info");
                       } else {
-                        triggerPhoneNotification("Sinal Restabelecido", "Conexão online ativa.", "success");
+                        triggerPhoneNotification("Sinal Restabelecido", "ConexÃ£o online ativa.", "success");
                       }
                     }}
                     className="px-1.5 py-0.5 rounded text-[7.5px] font-bold uppercase transition-all bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer border border-slate-700"
                   >
-                    {isNetworkOffline ? '⚡ Conectar' : '📴 Testar Offline'}
+                    {isNetworkOffline ? 'âš¡ Conectar' : 'ðŸ“´ Testar Offline'}
                   </button>
                 </div>
               </>
@@ -3668,7 +3668,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 <div className="bg-amber-500 text-slate-950 px-3 py-1.5 text-[9px] font-black flex items-center justify-between shrink-0 z-30 shadow-xs">
                   <div className="flex items-center gap-1.5 truncate">
                     <CloudOff size={11} className="shrink-0 text-slate-950" />
-                    <span className="truncate">MODO SEM CONEXÃO — CACHE LOCAL ATIVO</span>
+                    <span className="truncate">MODO SEM CONEXÃƒO â€” CACHE LOCAL ATIVO</span>
                   </div>
                   <span className="bg-slate-950 text-amber-400 px-1.5 py-0.2 rounded font-mono text-[8px] shrink-0 font-bold">
                     {offlineQueue.length} em cache
@@ -3680,14 +3680,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 <div className="bg-blue-600 text-white px-3 py-1.5 text-[9px] font-extrabold flex items-center justify-between shrink-0 z-30 shadow-xs">
                   <div className="flex items-center gap-1.5">
                     <RefreshCw size={11} className={`shrink-0 ${isSyncingOfflineQueue ? 'animate-spin' : ''}`} />
-                    <span>Sinal Ok! {offlineQueue.length} atualização(ões) no cache</span>
+                    <span>Sinal Ok! {offlineQueue.length} atualizaÃ§Ã£o(Ãµes) no cache</span>
                   </div>
                   <button
                     onClick={syncOfflineQueue}
                     disabled={isSyncingOfflineQueue}
                     className="px-2 py-0.5 bg-white text-blue-700 rounded text-[8px] font-black hover:bg-blue-50 cursor-pointer shadow-3xs"
                   >
-                    {isSyncingOfflineQueue ? 'Enviando...' : 'Sincronizar Já'}
+                    {isSyncingOfflineQueue ? 'Enviando...' : 'Sincronizar JÃ¡'}
                   </button>
                 </div>
               )}
@@ -3762,7 +3762,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         <span>Dispositivo Vinculado Exclusivo</span>
                       </div>
                       <p className="text-[10px] text-emerald-100 font-medium leading-relaxed">
-                        Este link foi gerado exclusivamente para o condutor <strong className="text-white font-bold">{riders.find(r => r.id === lockedRiderId)?.name || 'Atribuído'}</strong> ({riders.find(r => r.id === lockedRiderId)?.vehicle || 'Veículo'}).
+                        Este link foi gerado exclusivamente para o condutor <strong className="text-white font-bold">{riders.find(r => r.id === lockedRiderId)?.name || 'AtribuÃ­do'}</strong> ({riders.find(r => r.id === lockedRiderId)?.vehicle || 'VeÃ­culo'}).
                       </p>
                     </div>
                   )}
@@ -3807,7 +3807,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       });
 
                       if (!matched) {
-                        setLoginError('Dispositivo ou telefone não cadastrado no Vinimap.');
+                        setLoginError('Dispositivo ou telefone nÃ£o cadastrado no Vinimap.');
                         return;
                       }
 
@@ -3819,7 +3819,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                       const expectedPassword = matched.password || '1234';
                       if (passwordInput !== expectedPassword) {
-                        setLoginError(`Senha incorreta. ${matched.password ? 'Verifique suas credenciais.' : 'Sua senha padrão é: 1234'}`);
+                        setLoginError(`Senha incorreta. ${matched.password ? 'Verifique suas credenciais.' : 'Sua senha padrÃ£o Ã©: 1234'}`);
                         return;
                       }
 
@@ -3847,11 +3847,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         localStorage.setItem('vinimap_is_driver_app', 'true');
                         localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
                         localStorage.setItem('vinimap_driver_active_tab', 'home');
-
+                       }
                       changeSelectedRiderId(matched.id);
                       setCurrentScreen('dashboard');
                       setActiveTab('home');
-                      setActiveTab('tasks');
                       setPhoneInput('');
                       setPasswordInput('');
                       setLoginError(null);
@@ -3865,8 +3864,8 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       // Welcome alert notification
                       setTimeout(() => {
                         triggerPhoneNotification(
-                          `Olá, ${matched.name}! 👋`,
-                          `GPS do dispositivo ativado por padrão. Plantão iniciado no veículo ${matched.vehicle}.`,
+                          `OlÃ¡, ${matched.name}! ðŸ‘‹`,
+                          `GPS do dispositivo ativado por padrÃ£o. PlantÃ£o iniciado no veÃ­culo ${matched.vehicle}.`,
                           'success'
                         );
                       }, 500);
@@ -3885,7 +3884,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       {lockedRiderId ? (
                         <div>
                           <label className="text-[9.5px] font-bold text-emerald-300 uppercase tracking-wider block mb-1">
-                            🔒 Condutor Exclusivo do Dispositivo
+                            ðŸ”’ Condutor Exclusivo do Dispositivo
                           </label>
                           <div className="bg-slate-800/90 border border-emerald-500/40 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-inner">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -3897,7 +3896,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                   {riders.find(r => r.id === lockedRiderId)?.name || 'Condutor Cadastrado'}
                                 </div>
                                 <div className="text-[9.5px] text-emerald-200 font-medium truncate">
-                                  {riders.find(r => r.id === lockedRiderId)?.vehicle || 'Veículo'} — Acesso Restrito
+                                  {riders.find(r => r.id === lockedRiderId)?.vehicle || 'VeÃ­culo'} â€” Acesso Restrito
                                 </div>
                               </div>
                             </div>
@@ -3906,7 +3905,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       ) : (
                         <div>
                           <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">
-                            Identificação do Condutor
+                            IdentificaÃ§Ã£o do Condutor
                           </label>
                           <div className="relative">
                             <span className="absolute left-3 top-2.5 text-blue-300">
@@ -3914,7 +3913,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             </span>
                             <input 
                               type="text"
-                              placeholder="Dispositivo, Telefone, CPF ou Matrícula"
+                              placeholder="Dispositivo, Telefone, CPF ou MatrÃ­cula"
                               value={phoneInput}
                               onChange={(e) => setPhoneInput(e.target.value)}
                               className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/15 focus:border-white/35 rounded-xl py-2 pl-8 pr-3 text-xs text-white placeholder-blue-300/60 focus:outline-none transition-all"
@@ -3949,7 +3948,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           </span>
                           <input 
                             type="password"
-                            placeholder="••••••"
+                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢"
                             value={passwordInput}
                             onChange={(e) => setPasswordInput(e.target.value)}
                             className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/15 focus:border-white/35 rounded-xl py-2 pl-8 pr-3 text-xs text-white placeholder-blue-300/60 focus:outline-none transition-all"
@@ -3979,7 +3978,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       className="w-full py-2.5 bg-emerald-600/90 hover:bg-emerald-600 active:bg-emerald-700 text-white font-extrabold text-[11px] rounded-xl shadow-md border border-emerald-400/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <Download size={14} className="animate-bounce" />
-                      <span>{deferredPrompt ? '⚡ Instalar App no Celular' : '📱 Instalar / Baixar Aplicativo'}</span>
+                      <span>{deferredPrompt ? 'âš¡ Instalar App no Celular' : 'ðŸ“± Instalar / Baixar Aplicativo'}</span>
                     </button>
 
                   </form>
@@ -3987,7 +3986,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   {/* Footer Terms */}
                   <div className="space-y-2 pt-1 pb-1 text-center">
                     <div className="text-[8.5px] text-blue-300/80">
-                      Ao conectar, você aceita os termos operacionais do Vinimap OS.
+                      Ao conectar, vocÃª aceita os termos operacionais do Vinimap OS.
                     </div>
                   </div>
 
@@ -4024,13 +4023,13 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         disabled={isSyncingWithSystem}
                         onClick={handleManualSyncTodayOrders}
                         className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 font-extrabold text-[9.5px] rounded-lg border border-sky-200 transition-all flex items-center gap-1 cursor-pointer"
-                        title="Sincronizar Lançamentos do Dia com o Sistema"
+                        title="Sincronizar LanÃ§amentos do Dia com o Sistema"
                       >
                         <RefreshCw size={11} className={`text-sky-600 ${isSyncingWithSystem ? "animate-spin" : ""}`} />
                         <span>{isSyncingWithSystem ? 'Sinc...' : 'Sinc'}</span>
                       </button>
 
-                      {/* GPS Localização Button */}
+                      {/* GPS LocalizaÃ§Ã£o Button */}
                       <button
                         type="button"
                         onClick={() => {
@@ -4161,7 +4160,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                           {/* Drawer Menu Navigation Items */}
                           <div className="p-3 space-y-1.5 flex-1 overflow-y-auto">
-                            {/* Botão de Sincronizar Lançamentos do Dia */}
+                            {/* BotÃ£o de Sincronizar LanÃ§amentos do Dia */}
                             <button
                               type="button"
                               disabled={isSyncingWithSystem}
@@ -4169,7 +4168,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 await handleManualSyncTodayOrders();
                               }}
                               className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-950/80 to-slate-900 border border-sky-500/40 text-sky-300 hover:border-sky-400 hover:bg-sky-900/30 transition-all cursor-pointer shadow-sm group mb-2"
-                              title="Sincronizar Lançamentos do Dia com o Sistema"
+                              title="Sincronizar LanÃ§amentos do Dia com o Sistema"
                             >
                               <div className="flex items-center gap-2.5 min-w-0">
                                 <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30 shrink-0">
@@ -4177,7 +4176,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 </div>
                                 <div className="flex flex-col text-left min-w-0">
                                   <span className="font-black text-white text-[11px] truncate">Sincronizar com o Sistema</span>
-                                  <span className="text-[9px] font-medium text-sky-300/80 truncate">Atualizar Lançamentos do Dia</span>
+                                  <span className="text-[9px] font-medium text-sky-300/80 truncate">Atualizar LanÃ§amentos do Dia</span>
                                 </div>
                               </div>
                               {isSyncingWithSystem ? (
@@ -4243,7 +4242,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               }`}
                             >
                               <Volume2 size={15} />
-                              <span>Áudio & Notificações</span>
+                              <span>Ãudio & NotificaÃ§Ãµes</span>
                             </button>
 
                             <button
@@ -4353,7 +4352,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               <div className="flex items-start gap-2">
                                 <MapPin size={18} className="text-blue-700 shrink-0 mt-0.5" />
                                 <div className="space-y-0.5">
-                                  <span className="text-[9.5px] font-extrabold text-slate-700 uppercase block">Endereço Completo de Entrega</span>
+                                  <span className="text-[9.5px] font-extrabold text-slate-700 uppercase block">EndereÃ§o Completo de Entrega</span>
                                   <p className="text-sm font-black text-slate-950 leading-relaxed">{fullScreenOrder.address}</p>
                                   {fullScreenOrder.cep && (
                                     <span className="text-[11px] font-mono font-extrabold text-slate-800 block">CEP: {fullScreenOrder.cep}</span>
@@ -4374,7 +4373,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                             <div className="grid grid-cols-2 gap-2.5">
                               <div className="bg-slate-50 border border-slate-300 rounded-xl p-2.5">
-                                <span className="text-[9px] text-slate-700 font-extrabold uppercase block">Região</span>
+                                <span className="text-[9px] text-slate-700 font-extrabold uppercase block">RegiÃ£o</span>
                                 <span className="text-xs font-black text-slate-950 uppercase">{fullScreenOrder.region}</span>
                               </div>
                               <div className="bg-slate-50 border border-slate-300 rounded-xl p-2.5">
@@ -4394,14 +4393,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                             {fullScreenOrder.protocolNumber && (
                               <div className="bg-slate-50 border border-slate-300 rounded-xl p-2.5 space-y-0.5">
-                                <span className="text-[9px] font-extrabold text-slate-700 uppercase block">Número do Protocolo</span>
+                                <span className="text-[9px] font-extrabold text-slate-700 uppercase block">NÃºmero do Protocolo</span>
                                 <span className="text-xs font-mono font-black text-blue-800">{fullScreenOrder.protocolNumber}</span>
                               </div>
                             )}
 
                             {/* Fullscreen Actions */}
                             <div className="space-y-2 pt-2 border-t border-slate-100">
-                              {(fullScreenOrder.status === 'Não iniciado' || (fullScreenOrder.status as string) === 'Pendente') && (
+                              {(fullScreenOrder.status === 'NÃ£o iniciado' || (fullScreenOrder.status as string) === 'Pendente') && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -4427,7 +4426,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                     className="py-2.5 border border-rose-200 hover:bg-rose-50 text-rose-600 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                                   >
                                     <AlertTriangle size={14} />
-                                    <span>Ocorrência</span>
+                                    <span>OcorrÃªncia</span>
                                   </button>
 
                                   <button
@@ -4473,9 +4472,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <div className="mx-3.5 mt-2.5 p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 shadow-xs text-rose-800">
                         <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                          <h5 className="font-extrabold text-xs text-rose-950 mb-0.5">Permissão do GPS Bloqueada</h5>
+                          <h5 className="font-extrabold text-xs text-rose-950 mb-0.5">PermissÃ£o do GPS Bloqueada</h5>
                           <p className="text-[10px] text-rose-700 leading-tight mb-2">
-                            O navegador não tem permissão para acessar o sensor de localização. Habilite a localização nas configurações do navegador para que o rastreamento funcione.
+                            O navegador nÃ£o tem permissÃ£o para acessar o sensor de localizaÃ§Ã£o. Habilite a localizaÃ§Ã£o nas configuraÃ§Ãµes do navegador para que o rastreamento funcione.
                           </p>
                           <button
                             type="button"
@@ -4495,7 +4494,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         <div className="flex-1 min-w-0">
                           <h5 className="font-extrabold text-xs text-amber-950 mb-0.5">Sinal de GPS em Busca</h5>
                           <p className="text-[10px] text-amber-700 leading-tight mb-2">
-                            {realGpsErrorMessage || 'Sinal de satélite fraco. O sistema está buscando novas coordenadas automaticamente.'}
+                            {realGpsErrorMessage || 'Sinal de satÃ©lite fraco. O sistema estÃ¡ buscando novas coordenadas automaticamente.'}
                           </p>
                           <div className="flex items-center gap-2">
                             <button
@@ -4552,10 +4551,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           </div>
                         </div>
 
-                        {/* STATUS DAS ENTREGAS GRIDS - 5 CARDS: TOTAL GERAL, NÃO INICIADO, EM ROTA, CONCLUÍDO, OCORRÊNCIA */}
+                        {/* STATUS DAS ENTREGAS GRIDS - 5 CARDS: TOTAL GERAL, NÃƒO INICIADO, EM ROTA, CONCLUÃDO, OCORRÃŠNCIA */}
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">📊 Resumo das Entregas</span>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">ðŸ“Š Resumo das Entregas</span>
                             {focusedOrder && (
                               <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 animate-pulse">
                                 Toque no card p/ mudar status
@@ -4563,7 +4562,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             )}
                           </div>
                           
-                          {/* Top Row: Total Geral & Não Iniciado */}
+                          {/* Top Row: Total Geral & NÃ£o Iniciado */}
                           <div className="grid grid-cols-2 gap-1.5">
                             {/* 1. Total Geral */}
                             <div className="bg-gradient-to-br from-indigo-50/90 to-blue-50/70 border border-indigo-200/80 rounded-xl p-2 flex flex-col justify-between shadow-3xs">
@@ -4571,7 +4570,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 <div className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center shadow-xs">
                                   <Package size={11} />
                                 </div>
-                                <span className="text-[7.5px] font-bold text-indigo-600 uppercase bg-indigo-100/70 px-1.5 py-0.2 rounded">Plantão</span>
+                                <span className="text-[7.5px] font-bold text-indigo-600 uppercase bg-indigo-100/70 px-1.5 py-0.2 rounded">PlantÃ£o</span>
                               </div>
                               <div>
                                 <span className="text-[8.5px] font-bold text-indigo-900 uppercase block truncate">Total Geral</span>
@@ -4579,10 +4578,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               </div>
                             </div>
 
-                            {/* 2. Não Iniciado */}
+                            {/* 2. NÃ£o Iniciado */}
                             <button
                               type="button"
-                              onClick={() => handleCardStatusClick('Não iniciado')}
+                              onClick={() => handleCardStatusClick('NÃ£o iniciado')}
                               className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
                                   ? 'bg-amber-50/90 border-amber-300 hover:border-amber-500 hover:bg-amber-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
@@ -4600,13 +4599,13 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 )}
                               </div>
                               <div>
-                                <span className="text-[8.5px] font-bold text-amber-800 uppercase block truncate">Não Iniciado</span>
+                                <span className="text-[8.5px] font-bold text-amber-800 uppercase block truncate">NÃ£o Iniciado</span>
                                 <span className="text-base font-black text-amber-900 font-mono leading-none">{naoIniciadoCount}</span>
                               </div>
                             </button>
                           </div>
 
-                          {/* Bottom Row: Em Rota, Concluído, Ocorrência */}
+                          {/* Bottom Row: Em Rota, ConcluÃ­do, OcorrÃªncia */}
                           <div className="grid grid-cols-3 gap-1.5">
                             {/* 3. Em Rota */}
                             <button
@@ -4632,10 +4631,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               </div>
                             </button>
 
-                            {/* 4. Concluído */}
+                            {/* 4. ConcluÃ­do */}
                             <button
                               type="button"
-                              onClick={() => handleCardStatusClick('Concluído')}
+                              onClick={() => handleCardStatusClick('ConcluÃ­do')}
                               className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
                                   ? 'bg-emerald-50/90 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
@@ -4651,15 +4650,15 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 ) : null}
                               </div>
                               <div>
-                                <span className="text-[8px] font-bold text-emerald-800 uppercase block truncate">Concluído</span>
+                                <span className="text-[8px] font-bold text-emerald-800 uppercase block truncate">ConcluÃ­do</span>
                                 <span className="text-sm font-black text-emerald-950 font-mono leading-none">{completedCount}</span>
                               </div>
                             </button>
 
-                            {/* 5. Ocorrência */}
+                            {/* 5. OcorrÃªncia */}
                             <button
                               type="button"
-                              onClick={() => handleCardStatusClick('Ocorrência')}
+                              onClick={() => handleCardStatusClick('OcorrÃªncia')}
                               className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
                                 focusedOrder
                                   ? 'bg-rose-50/90 border-rose-300 hover:border-rose-500 hover:bg-rose-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
@@ -4675,7 +4674,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 ) : null}
                               </div>
                               <div>
-                                <span className="text-[8px] font-bold text-rose-800 uppercase block truncate">Ocorrência</span>
+                                <span className="text-[8px] font-bold text-rose-800 uppercase block truncate">OcorrÃªncia</span>
                                 <span className="text-sm font-black text-rose-950 font-mono leading-none">{occurrenceCount}</span>
                               </div>
                             </button>
@@ -4687,14 +4686,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           <div className="bg-blue-50 border border-blue-100 rounded-xl p-2.5 flex items-center gap-2 text-blue-700 animate-pulse">
                             <Sparkles size={13} className="shrink-0 text-blue-500" />
                             <p className="text-[9.5px] leading-tight m-0 font-bold">
-                              Pedido <span className="font-mono text-xs">#{focusedOrder.id}</span> está selecionado! Clique nos botões acima para alterar seu status rápido.
+                              Pedido <span className="font-mono text-xs">#{focusedOrder.id}</span> estÃ¡ selecionado! Clique nos botÃµes acima para alterar seu status rÃ¡pido.
                             </p>
                           </div>
                         )}
 
                         {/* CO-PILOT DELIVERIES CARDS DASHBOARD */}
                         <div className="space-y-2.5">
-                          <span className="text-[9.5px] font-black text-slate-400 uppercase tracking-wider block">📋 Minhas Entregas (Plantão Individual)</span>
+                          <span className="text-[9.5px] font-black text-slate-400 uppercase tracking-wider block">ðŸ“‹ Minhas Entregas (PlantÃ£o Individual)</span>
                           {renderDeliveryCards()}
                         </div>
 
@@ -4702,7 +4701,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         <div className="p-3 bg-slate-100 rounded-xl flex items-center gap-2.5 text-slate-500">
                           <Shield size={14} className="text-slate-400 shrink-0" />
                           <p className="text-[9px] leading-relaxed m-0 font-medium">
-                            GPS ativo com precisão de ±4m. As transações são transmitidas de forma segura criptografadas em tempo real ao painel administrador.
+                            GPS ativo com precisÃ£o de Â±4m. As transaÃ§Ãµes sÃ£o transmitidas de forma segura criptografadas em tempo real ao painel administrador.
                           </p>
                         </div>
 
@@ -4755,7 +4754,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-extrabold flex items-center gap-1 border border-white/10 cursor-pointer"
                               >
                                 <MapPin size={11} className="text-amber-400" />
-                                <span>Capturar Posição</span>
+                                <span>Capturar PosiÃ§Ã£o</span>
                               </button>
                             )}
                           </div>
@@ -4779,7 +4778,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           {isRealGpsActive && realGpsData && (
                             <div className="bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-[9px] px-3 py-1 rounded-xl font-mono flex items-center justify-between backdrop-blur-md shadow-md">
                               <span>Lat: {realGpsData.lat.toFixed(5)}, Lng: {realGpsData.lng.toFixed(5)}</span>
-                              <span className="font-bold text-emerald-400">±{Math.round(realGpsData.accuracy)}m</span>
+                              <span className="font-bold text-emerald-400">Â±{Math.round(realGpsData.accuracy)}m</span>
                             </div>
                           )}
 
@@ -4802,7 +4801,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-                                <span className="text-[9.5px] font-black text-slate-700 uppercase">GPS Ativo: Próxima Entrega</span>
+                                <span className="text-[9.5px] font-black text-slate-700 uppercase">GPS Ativo: PrÃ³xima Entrega</span>
                               </div>
                               <h5 className="font-black text-xs truncate mt-0.5 text-slate-950">{currentNextOrder.clientName}</h5>
                               <p className="text-[10.5px] font-bold text-slate-900 truncate">{currentNextOrder.address}</p>
@@ -4850,7 +4849,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             }`}
                           >
                             <CheckCircle2 size={12} />
-                            <span>Concluídas ({riderCompletedOrders.length})</span>
+                            <span>ConcluÃ­das ({riderCompletedOrders.length})</span>
                           </button>
                         </div>
 
@@ -4858,10 +4857,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
                             {deliveryTabFilter === 'pending'
                               ? `Fila de Entregas (${riderPendingOrders.length})`
-                              : `Entregas Concluídas Hoje (${riderCompletedOrders.length})`}
+                              : `Entregas ConcluÃ­das Hoje (${riderCompletedOrders.length})`}
                           </h4>
                           
-                          {deliveryTabFilter === 'pending' && riderPendingOrders.some(o => o.status === 'Não iniciado') && (
+                          {deliveryTabFilter === 'pending' && riderPendingOrders.some(o => o.status === 'NÃ£o iniciado') && (
                             <button
                               onClick={handleCollectAtCD}
                               className="px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[9px] font-bold rounded-md cursor-pointer transition-all flex items-center gap-1"
@@ -4888,7 +4887,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           }}
                           className="flex items-center gap-1 text-[10px] font-extrabold text-blue-600 hover:text-blue-700 cursor-pointer uppercase tracking-wider"
                         >
-                          ← Voltar para Fila
+                          â† Voltar para Fila
                         </button>
 
                         {/* Order Header info */}
@@ -4904,7 +4903,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <h4 className="font-black text-base text-slate-950">{selectedOrder.clientName}</h4>
                             <p className="text-[11px] font-bold text-slate-900 leading-relaxed">{selectedOrder.address}</p>
                             <span className="text-[9.5px] bg-slate-200 text-slate-900 font-extrabold px-2 py-0.5 rounded inline-block uppercase border border-slate-300">
-                              Região: {selectedOrder.region}
+                              RegiÃ£o: {selectedOrder.region}
                             </span>
                           </div>
 
@@ -4928,7 +4927,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         <div className="space-y-2.5">
                           
                           {/* If not collected/started yet */}
-                          {((selectedOrder.status as string) === 'Pendente' || (selectedOrder.status as string) === 'Aguardando' || selectedOrder.status === 'Não iniciado') && (
+                          {((selectedOrder.status as string) === 'Pendente' || (selectedOrder.status as string) === 'Aguardando' || selectedOrder.status === 'NÃ£o iniciado') && (
                             <button
                               onClick={() => {
                                 handleUpdateOrderStatus(selectedOrder.id, 'Em rota');
@@ -4936,7 +4935,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                   id: `log-sim-start-${Date.now()}`,
                                   time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                                   type: 'info',
-                                  message: `App do Condutor: Início de viagem para entregar pedido #${selectedOrder.id}.`,
+                                  message: `App do Condutor: InÃ­cio de viagem para entregar pedido #${selectedOrder.id}.`,
                                   orderId: selectedOrder.id
                                 }]);
                               }}
@@ -4955,7 +4954,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 className="py-2 px-3 border border-rose-200 hover:bg-rose-50 text-rose-600 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                               >
                                 <AlertTriangle size={13} />
-                                <span>Ocorrência</span>
+                                <span>OcorrÃªncia</span>
                               </button>
 
                               <button
@@ -4969,14 +4968,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           )}
 
                           {/* If order is already completed */}
-                          {selectedOrder.status === 'Concluído' && (
+                          {selectedOrder.status === 'ConcluÃ­do' && (
                             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1 text-amber-900 shadow-2xs">
                               <div className="flex items-center gap-1.5 font-black text-xs text-amber-800">
                                 <LockIcon size={14} className="text-amber-700" />
-                                <span>Pedido Concluído (Status Travado)</span>
+                                <span>Pedido ConcluÃ­do (Status Travado)</span>
                               </div>
                               <p className="m-0 text-[10px] text-amber-700/90 leading-relaxed font-medium">
-                                Este pedido já foi finalizado. Alterações de status ou reaberturas são restritas ao Administrador no painel principal.
+                                Este pedido jÃ¡ foi finalizado. AlteraÃ§Ãµes de status ou reaberturas sÃ£o restritas ao Administrador no painel principal.
                               </p>
                             </div>
                           )}
@@ -5000,14 +4999,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <div className="p-4 space-y-3 flex-1 flex flex-col h-full overflow-hidden">
                         <div className="space-y-1 shrink-0">
                           <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">Protocolos Digitalizados</h4>
-                          <p className="text-[9px] text-slate-400">Histórico de comprovantes e assinaturas digitais do condutor.</p>
+                          <p className="text-[9px] text-slate-400">HistÃ³rico de comprovantes e assinaturas digitais do condutor.</p>
                         </div>
 
                         {/* Search input */}
                         <div className="relative shrink-0">
                           <input
                             type="text"
-                            placeholder="Buscar por cliente, endereço ou PRT..."
+                            placeholder="Buscar por cliente, endereÃ§o ou PRT..."
                             value={protocolsSearchQuery}
                             onChange={(e) => setProtocolsSearchQuery(e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-[10px] text-slate-800 focus:outline-hidden focus:border-blue-400 shadow-2xs"
@@ -5063,7 +5062,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                           {deliveryProtocols.length === 0 && (
                             <div className="py-12 text-center text-slate-400 text-xs">
-                              Nenhuma baixa realizada até o momento. Realize uma entrega para confirmar no sistema!
+                              Nenhuma baixa realizada atÃ© o momento. Realize uma entrega para confirmar no sistema!
                             </div>
                           )}
                         </div>
@@ -5074,7 +5073,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     {activeTab === 'help' && (
                       <div className="p-4 space-y-4">
                         <div className="space-y-1">
-                          <h4 className="font-extrabold text-xs text-slate-800">Guia de Instalação no Celular</h4>
+                          <h4 className="font-extrabold text-xs text-slate-800">Guia de InstalaÃ§Ã£o no Celular</h4>
                           <p className="text-[10px] text-slate-400">Instale este aplicativo diretamente no dispositivo de campo.</p>
                         </div>
 
@@ -5090,14 +5089,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           <div className="space-y-1">
                             <span className="text-[10px] font-bold text-slate-700">QR Code de Campo</span>
                             <p className="text-[9px] text-slate-400 max-w-xs">
-                              Escaneie com a câmera do celular para abrir o portal de instalação do entregador e salvar na tela de início como aplicativo nativo.
+                              Escaneie com a cÃ¢mera do celular para abrir o portal de instalaÃ§Ã£o do entregador e salvar na tela de inÃ­cio como aplicativo nativo.
                             </p>
                           </div>
                         </div>
 
                         {/* Direct installation instructions */}
                         <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-xs space-y-3">
-                          <h5 className="font-bold text-[10px] text-slate-700 uppercase tracking-wider">Passo a Passo de Configuração</h5>
+                          <h5 className="font-bold text-[10px] text-slate-700 uppercase tracking-wider">Passo a Passo de ConfiguraÃ§Ã£o</h5>
                           
                           <div className="space-y-2.5 text-[9px] font-medium text-slate-500">
                             <div className="flex gap-2">
@@ -5106,11 +5105,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             </div>
                             <div className="flex gap-2">
                               <span className="w-4 h-4 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shrink-0 font-black">2</span>
-                              <p className="m-0">Clique no botão de opções e selecione <strong>"Adicionar à Tela de Início"</strong> ou <strong>"Instalar App"</strong>.</p>
+                              <p className="m-0">Clique no botÃ£o de opÃ§Ãµes e selecione <strong>"Adicionar Ã  Tela de InÃ­cio"</strong> ou <strong>"Instalar App"</strong>.</p>
                             </div>
                             <div className="flex gap-2">
                               <span className="w-4 h-4 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shrink-0 font-black">3</span>
-                              <p className="m-0">Insira a chave do CD de despacho informada pelo despachante para ativar a simulação GPS.</p>
+                              <p className="m-0">Insira a chave do CD de despacho informada pelo despachante para ativar a simulaÃ§Ã£o GPS.</p>
                             </div>
                           </div>
                         </div>
@@ -5123,7 +5122,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         <div className="space-y-1">
                           <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                             <Volume2 size={16} className="text-blue-600" />
-                            <span>Configurações de Áudio</span>
+                            <span>ConfiguraÃ§Ãµes de Ãudio</span>
                           </h4>
                           <p className="text-[10px] text-slate-400">Configure os alertas sonoros de novos pedidos recebidos no seu celular.</p>
                         </div>
@@ -5134,7 +5133,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <div className="space-y-0.5">
                               <span className="text-xs font-extrabold text-slate-800 block">Alerta Sonoro de Novos Pedidos</span>
                               <span className="text-[9.5px] text-slate-500 block leading-tight">
-                                Tocar som automaticamente quando um novo pedido for atribuído a você pelo despacho.
+                                Tocar som automaticamente quando um novo pedido for atribuÃ­do a vocÃª pelo despacho.
                               </span>
                             </div>
                             <button
@@ -5169,7 +5168,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-2xs space-y-3">
                             <div className="space-y-1">
                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                                Tipo de Som da Notificação
+                                Tipo de Som da NotificaÃ§Ã£o
                               </label>
                               <select
                                 value={selectedRider.soundType || 'alerta_padrao'}
@@ -5188,10 +5187,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 }}
                                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden focus:border-blue-500 cursor-pointer"
                               >
-                                <option value="alerta_padrao">🔔 Sinal Clássico (Padrão)</option>
-                                <option value="sinal_suave">🎵 Chime Melódico (Suave)</option>
-                                <option value="sinal_urgente">🚨 Sirene Dupla (Urgente)</option>
-                                <option value="pop_moderno">✨ Pop Digital (Moderno)</option>
+                                <option value="alerta_padrao">ðŸ”” Sinal ClÃ¡ssico (PadrÃ£o)</option>
+                                <option value="sinal_suave">ðŸŽµ Chime MelÃ³dico (Suave)</option>
+                                <option value="sinal_urgente">ðŸš¨ Sirene Dupla (Urgente)</option>
+                                <option value="pop_moderno">âœ¨ Pop Digital (Moderno)</option>
                               </select>
                             </div>
 
@@ -5201,14 +5200,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               className="w-full py-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 text-xs font-bold rounded-xl border border-blue-200/80 transition-all cursor-pointer flex items-center justify-center gap-2"
                             >
                               <Volume2 size={15} />
-                              <span>Ouvir Demonstração (Testar Som)</span>
+                              <span>Ouvir DemonstraÃ§Ã£o (Testar Som)</span>
                             </button>
                           </div>
                         )}
 
                         <div className="p-3 bg-slate-100/70 border border-slate-200/80 rounded-xl text-[9.5px] text-slate-500 leading-relaxed">
-                          <span className="font-bold text-slate-700 block mb-0.5">💡 Observação do Dispositivo:</span>
-                          Certifique-se de que o volume de mídia do celular está ativado para ouvir as notificações sonoras durante as entregas.
+                          <span className="font-bold text-slate-700 block mb-0.5">ðŸ’¡ ObservaÃ§Ã£o do Dispositivo:</span>
+                          Certifique-se de que o volume de mÃ­dia do celular estÃ¡ ativado para ouvir as notificaÃ§Ãµes sonoras durante as entregas.
                         </div>
                       </div>
                     )}
@@ -5226,7 +5225,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       className={`flex flex-col items-center gap-0.5 cursor-pointer flex-1 py-1 ${activeTab === 'home' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <User size={15} />
-                      <span className="text-[7.5px] font-bold uppercase">Início</span>
+                      <span className="text-[7.5px] font-bold uppercase">InÃ­cio</span>
                     </button>
 
                     <button
@@ -5262,10 +5261,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         setActiveTab('audio');
                       }}
                       className={`flex flex-col items-center gap-0.5 cursor-pointer flex-1 py-1 ${activeTab === 'audio' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
-                      title="Configurações de Áudio e Notificações"
+                      title="ConfiguraÃ§Ãµes de Ãudio e NotificaÃ§Ãµes"
                     >
                       <Volume2 size={15} />
-                      <span className="text-[7.5px] font-bold uppercase">Áudio</span>
+                      <span className="text-[7.5px] font-bold uppercase">Ãudio</span>
                     </button>
 
                     <button
@@ -5300,13 +5299,13 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       className="bg-white rounded-t-3xl rounded-b-xl w-full max-h-[92%] flex flex-col overflow-hidden text-slate-800 shadow-xl"
                     >
                       {showSuccessProtocol && generatedProtocol ? (
-                        /* SUCCESS SCREEN - CONFIRMAÇÃO DE BAIXA (Dispositivo Móvel) */
+                        /* SUCCESS SCREEN - CONFIRMAÃ‡ÃƒO DE BAIXA (Dispositivo MÃ³vel) */
                         <div className="flex-1 flex flex-col overflow-hidden">
                           {/* Header */}
                           <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-emerald-50">
                             <div className="flex items-center gap-1.5">
                               <CheckCircle2 size={18} className="text-emerald-600" />
-                              <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">Confirmação de Baixa</h5>
+                              <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">ConfirmaÃ§Ã£o de Baixa</h5>
                             </div>
                             <span className="text-[8px] bg-emerald-600 text-white font-extrabold px-2 py-0.5 rounded-full">BAIXA REGISTRADA</span>
                           </div>
@@ -5318,9 +5317,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             </div>
 
                             <div className="space-y-1 max-w-xs">
-                              <h4 className="font-extrabold text-sm text-slate-800">Baixa Concluída com Sucesso!</h4>
+                              <h4 className="font-extrabold text-sm text-slate-800">Baixa ConcluÃ­da com Sucesso!</h4>
                               <p className="text-[10px] text-slate-500 leading-relaxed">
-                                A confirmação de baixa do pedido foi enviada e registrada com sucesso no sistema.
+                                A confirmaÃ§Ã£o de baixa do pedido foi enviada e registrada com sucesso no sistema.
                               </p>
                             </div>
 
@@ -5329,7 +5328,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               <div className="border-b border-slate-100 pb-2 flex items-start justify-between">
                                 <div className="space-y-0.5">
                                   <span className="text-[7.5px] font-extrabold tracking-widest text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded-full inline-block">
-                                    VOUCHER DE COMPROVAÇÃO LOGÍSTICA
+                                    VOUCHER DE COMPROVAÃ‡ÃƒO LOGÃSTICA
                                   </span>
                                   <h4 className="font-extrabold text-slate-800 text-xs">Vinimap Logistics OS</h4>
                                   <p className="text-[9px] text-slate-400 font-semibold uppercase">
@@ -5340,7 +5339,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                   <span className="text-[10px] font-mono font-extrabold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg block">
                                     {generatedProtocol.id}
                                   </span>
-                                  <p className="text-[8px] text-emerald-600 font-bold uppercase mt-0.5">Status: Concluído</p>
+                                  <p className="text-[8px] text-emerald-600 font-bold uppercase mt-0.5">Status: ConcluÃ­do</p>
                                 </div>
                               </div>
                               <div className="flex justify-between items-center text-[10px]">
@@ -5352,13 +5351,13 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 <span className="font-medium text-slate-700">{generatedProtocol.timestamp}</span>
                               </div>
                               <div className="flex justify-between items-center text-[10px]">
-                                <span className="text-slate-400 font-semibold">DESTINATÁRIO:</span>
+                                <span className="text-slate-400 font-semibold">DESTINATÃRIO:</span>
                                 <span className="font-bold text-slate-800 truncate max-w-[150px]">{generatedProtocol.clientName}</span>
                               </div>
                               <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[9px]">
                                 <span className="text-slate-400 font-semibold">STATUS DO PEDIDO:</span>
                                 <span className="font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                  CONCLUÍDO / BAIXADO
+                                  CONCLUÃDO / BAIXADO
                                 </span>
                               </div>
                             </div>
@@ -5392,7 +5391,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50">
                             <div className="flex items-center gap-2">
                               <Camera size={16} className="text-emerald-600 animate-pulse" />
-                              <h5 className="font-extrabold text-xs text-slate-800">Dar Baixa Eletrônica</h5>
+                              <h5 className="font-extrabold text-xs text-slate-800">Dar Baixa EletrÃ´nica</h5>
                             </div>
                             <button
                               onClick={() => {
@@ -5422,7 +5421,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 <span className="flex items-center gap-1">
                                   <span className="text-rose-500 font-bold">*</span>
                                   <Camera size={12} className="text-blue-600" />
-                                  <span>Foto do Comprovante (Obrigatório):</span>
+                                  <span>Foto do Comprovante (ObrigatÃ³rio):</span>
                                 </span>
                                 {!receiptPhoto && (
                                   <span className="text-[8px] text-rose-600 font-extrabold bg-rose-50 border border-rose-200/50 px-1 rounded animate-pulse">
@@ -5438,9 +5437,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                     <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
                                     <div className="flex flex-col">
                                       <span className="font-extrabold text-[10px] leading-tight">
-                                        {photoQueue.find(t => t.status === 'compressing' || t.status === 'syncing')?.progressMessage || 'Fila de otimização de foto ativa...'}
+                                        {photoQueue.find(t => t.status === 'compressing' || t.status === 'syncing')?.progressMessage || 'Fila de otimizaÃ§Ã£o de foto ativa...'}
                                       </span>
-                                      <span className="text-[8.5px] text-blue-600 font-medium">Compressão sequencial antes do envio ao Firestore</span>
+                                      <span className="text-[8.5px] text-blue-600 font-medium">CompressÃ£o sequencial antes do envio ao Firestore</span>
                                     </div>
                                   </div>
                                   <span className="text-[9px] bg-blue-100 text-blue-700 font-black px-2 py-0.5 rounded-full shrink-0">
@@ -5473,7 +5472,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                       className="py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white text-[9.5px] font-extrabold rounded-lg shadow-xs border border-blue-500 text-center cursor-pointer flex items-center justify-center gap-1.5 transition-all active:scale-95"
                                     >
                                       <Camera size={13} />
-                                      <span>Tirar Foto (Câmera)</span>
+                                      <span>Tirar Foto (CÃ¢mera)</span>
                                     </label>
                                     <input
                                       type="file"
@@ -5485,7 +5484,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                         if (e.target.files && e.target.files[0]) {
                                           const file = e.target.files[0];
                                           try {
-                                            const compressed = await enqueuePhotoProcessing(file, 'Câmera');
+                                            const compressed = await enqueuePhotoProcessing(file, 'CÃ¢mera');
                                             if (compressed) setReceiptPhoto(compressed);
                                           } catch (err) {
                                             console.warn("Camera photo compression queue error:", err);
@@ -5499,7 +5498,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                       htmlFor="delivery-file-upload"
                                       className="py-2 px-2 bg-white hover:bg-slate-50 text-[9px] font-extrabold text-slate-700 rounded-lg shadow-2xs border border-slate-200 text-center cursor-pointer flex items-center justify-center gap-1 transition-all"
                                     >
-                                      📁 Galeria / Arquivo
+                                      ðŸ“ Galeria / Arquivo
                                     </label>
                                     <input
                                       type="file"
@@ -5537,7 +5536,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                     }}
                                     className="w-full py-1 px-2 bg-slate-50 hover:bg-slate-100 text-[8.5px] font-bold text-slate-500 rounded-lg border border-slate-200 text-center cursor-pointer transition-all flex items-center justify-center gap-1"
                                   >
-                                    <span>⚡ Gerar Comprovante Fotográfico de Teste</span>
+                                    <span>âš¡ Gerar Comprovante FotogrÃ¡fico de Teste</span>
                                   </button>
                                 </div>
                               )}
@@ -5600,7 +5599,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                     />
                                     {signatureImage && (
                                       <span className="absolute bottom-1 left-2 text-[7px] font-mono text-emerald-600 font-bold bg-white/75 px-1 rounded border">
-                                        Capturado ✓
+                                        Capturado âœ“
                                       </span>
                                     )}
                                     <button
@@ -5611,7 +5610,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                       Limpar
                                     </button>
                                   </div>
-                                  <p className="m-0 text-[7.5px] text-slate-400 text-center italic">Colha a assinatura arrastando o mouse ou usando a tela sensível ao toque.</p>
+                                  <p className="m-0 text-[7.5px] text-slate-400 text-center italic">Colha a assinatura arrastando o mouse ou usando a tela sensÃ­vel ao toque.</p>
                                 </div>
                               ) : (
                                 <div className="space-y-1.5">
@@ -5631,7 +5630,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                         {receiptSignature}
                                       </div>
                                     ) : (
-                                      <span className="text-slate-300 text-[10px] italic">Digite o nome para pré-visualizar a assinatura cursiva...</span>
+                                      <span className="text-slate-300 text-[10px] italic">Digite o nome para prÃ©-visualizar a assinatura cursiva...</span>
                                     )}
                                   </div>
                                 </div>
@@ -5642,7 +5641,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <div className="space-y-1.5">
                               <label className="font-bold text-slate-700 flex items-center gap-1">
                                 <span className="text-rose-500 font-bold">*</span>
-                                <span>Nome Completo & RG do Recebedor (Obrigatório):</span>
+                                <span>Nome Completo & RG do Recebedor (ObrigatÃ³rio):</span>
                               </label>
                               <input
                                 type="text"
@@ -5660,7 +5659,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                             {/* Observations textarea */}
                             <div className="space-y-1.5">
-                              <label className="font-bold text-slate-700">Observações adicionais (Opcional):</label>
+                              <label className="font-bold text-slate-700">ObservaÃ§Ãµes adicionais (Opcional):</label>
                               <textarea
                                 placeholder="Ex: Campainha quebrada, pacote entregue ao vizinho de frente..."
                                 rows={2}
@@ -5722,7 +5721,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                         <div className="flex items-center gap-2">
                           <AlertTriangle size={15} className="text-rose-600 animate-pulse" />
-                          <h5 className="font-extrabold text-xs text-slate-800">Registrar Ocorrência</h5>
+                          <h5 className="font-extrabold text-xs text-slate-800">Registrar OcorrÃªncia</h5>
                         </div>
                         <button
                           onClick={() => setShowFailureModal(false)}
@@ -5738,11 +5737,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         
                         <div className="space-y-2">
                           {[
-                            'Cliente ausente / ninguém atendeu',
-                            'Endereço não encontrado ou CEP incorreto',
+                            'Cliente ausente / ninguÃ©m atendeu',
+                            'EndereÃ§o nÃ£o encontrado ou CEP incorreto',
                             'Portaria recusou recebimento',
-                            'Problema mecânico com o veículo do condutor',
-                            'Condições climáticas adversas ou alagamento'
+                            'Problema mecÃ¢nico com o veÃ­culo do condutor',
+                            'CondiÃ§Ãµes climÃ¡ticas adversas ou alagamento'
                           ].map(reason => (
                             <button
                               key={reason}
@@ -5872,7 +5871,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           <div className="flex items-start justify-between border-b border-slate-100 pb-3 relative z-10 text-left">
                             <div className="space-y-1">
                               <span className="text-[8px] font-extrabold tracking-widest text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded-full inline-block">
-                                VOUCHER DE COMPROVAÇÃO LOGÍSTICA
+                                VOUCHER DE COMPROVAÃ‡ÃƒO LOGÃSTICA
                               </span>
                               <h3 className="font-extrabold text-slate-800 text-sm">Vinimap Logistics OS</h3>
                               <p className="text-[9px] text-slate-500 font-semibold uppercase">
@@ -5883,7 +5882,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               <span className="text-xs font-mono font-extrabold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg block">
                                 {selectedProtocol.id}
                               </span>
-                              <p className="text-[9px] text-emerald-600 font-bold uppercase mt-1">Status: Concluído</p>
+                              <p className="text-[9px] text-emerald-600 font-bold uppercase mt-1">Status: ConcluÃ­do</p>
                             </div>
                           </div>
 
@@ -5907,7 +5906,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           {/* Detail rows */}
                           <div className="space-y-2 pt-2 text-[9px]">
                             <div className="flex justify-between">
-                              <span className="text-slate-400 font-semibold font-mono">CÓD. PROTOCOLO:</span>
+                              <span className="text-slate-400 font-semibold font-mono">CÃ“D. PROTOCOLO:</span>
                               <span className="font-mono font-black text-slate-800">{selectedProtocol.id}</span>
                             </div>
                             <div className="flex justify-between">
@@ -5915,7 +5914,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                               <span className="font-black text-slate-800">{selectedProtocol.timestamp}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-400 font-semibold font-mono">CÓD. PEDIDO:</span>
+                              <span className="text-slate-400 font-semibold font-mono">CÃ“D. PEDIDO:</span>
                               <span className="font-mono font-bold text-slate-600">#{selectedProtocol.orderId}</span>
                             </div>
                             <div className="flex justify-between">
@@ -5926,7 +5925,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                           {/* Client Details */}
                           <div className="space-y-1 pt-2 border-t border-slate-100 text-[9px]">
-                            <span className="text-slate-400 font-semibold block uppercase font-mono">Destinatário:</span>
+                            <span className="text-slate-400 font-semibold block uppercase font-mono">DestinatÃ¡rio:</span>
                             <span className="font-bold text-slate-800 block leading-tight">{selectedProtocol.clientName}</span>
                             <p className="m-0 text-slate-500 leading-normal">{selectedProtocol.address}</p>
                           </div>
@@ -5934,7 +5933,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           {/* Observations */}
                           {selectedProtocol.observations && (
                             <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 text-[9px] text-slate-500 italic">
-                              <span className="font-bold text-[8px] text-slate-400 block not-italic uppercase tracking-wider font-mono">OBSERVAÇÕES DO OPERADOR:</span>
+                              <span className="font-bold text-[8px] text-slate-400 block not-italic uppercase tracking-wider font-mono">OBSERVAÃ‡Ã•ES DO OPERADOR:</span>
                               "{selectedProtocol.observations}"
                             </div>
                           )}
@@ -5962,7 +5961,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                         Lng: {selectedProtocol.lng.toFixed(5)}
                                       </span>
                                       <span className="text-[6px] text-emerald-600 font-extrabold border border-emerald-200 bg-emerald-50 px-1 rounded-full uppercase mt-1">
-                                        Localização Auditada
+                                        LocalizaÃ§Ã£o Auditada
                                       </span>
                                     </div>
                                   </div>
@@ -6038,7 +6037,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-slate-800 text-sm">Painel de Sinal e Localização GPS Real</h3>
+                    <h3 className="font-bold text-slate-800 text-sm">Painel de Sinal e LocalizaÃ§Ã£o GPS Real</h3>
                     {isRealGpsActive ? (
                       <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[9px] font-black font-mono animate-pulse flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -6050,7 +6049,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Captura e transmissão de coordenadas geográficas reais diretamente do celular cadastrado.</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Captura e transmissÃ£o de coordenadas geogrÃ¡ficas reais diretamente do celular cadastrado.</p>
                 </div>
 
                 <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/50">
@@ -6070,7 +6069,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     onClick={() => setSimSpeed(6)}
                     className={`px-2 py-1 text-[9px] font-bold rounded ${simSpeed === 6 ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-400'}`}
                   >
-                    6x (Rápido)
+                    6x (RÃ¡pido)
                   </button>
                 </div>
               </div>
@@ -6090,12 +6089,12 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-black uppercase tracking-wider block">Transmissão GPS Real do Celular ({selectedRider?.name || 'Condutor'})</span>
+                        <span className="text-xs font-black uppercase tracking-wider block">TransmissÃ£o GPS Real do Celular ({selectedRider?.name || 'Condutor'})</span>
                       </div>
                       <p className={`text-[11px] font-medium mt-0.5 ${isRealGpsActive ? 'text-emerald-300' : 'text-slate-500'}`}>
                         {isRealGpsActive 
-                          ? `Capturando satélite GPS do dispositivo cadastrado (${selectedRider?.phone || 'Celular'})` 
-                          : 'Clique abaixo para ativar a leitura contínua do GPS do celular em tempo real.'}
+                          ? `Capturando satÃ©lite GPS do dispositivo cadastrado (${selectedRider?.phone || 'Celular'})` 
+                          : 'Clique abaixo para ativar a leitura contÃ­nua do GPS do celular em tempo real.'}
                       </p>
                     </div>
                   </div>
@@ -6145,11 +6144,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <span className="font-bold text-emerald-300">{realGpsData.lat.toFixed(6)}, {realGpsData.lng.toFixed(6)}</span>
                     </div>
                     <div className="bg-slate-900 p-2 rounded-lg border border-emerald-500/20">
-                      <span className="text-slate-400 block font-sans text-[8px] uppercase">Precisão do Sinal</span>
-                      <span className="font-bold text-emerald-300">±{Math.round(realGpsData.accuracy)} metros</span>
+                      <span className="text-slate-400 block font-sans text-[8px] uppercase">PrecisÃ£o do Sinal</span>
+                      <span className="font-bold text-emerald-300">Â±{Math.round(realGpsData.accuracy)} metros</span>
                     </div>
                     <div className="bg-slate-900 p-2 rounded-lg border border-emerald-500/20">
-                      <span className="text-slate-400 block font-sans text-[8px] uppercase">Última Transmissão</span>
+                      <span className="text-slate-400 block font-sans text-[8px] uppercase">Ãšltima TransmissÃ£o</span>
                       <span className="font-bold text-emerald-300">{new Date(realGpsData.timestamp).toLocaleTimeString('pt-BR')}</span>
                     </div>
                   </div>
@@ -6165,7 +6164,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     </div>
                     <div>
                       <h4 className="font-extrabold text-xs text-slate-800 m-0">Sistema de Cache Local Offline</h4>
-                      <span className="text-[10px] text-slate-500 block">Fila em localStorage com auto-sincronização</span>
+                      <span className="text-[10px] text-slate-500 block">Fila em localStorage com auto-sincronizaÃ§Ã£o</span>
                     </div>
                   </div>
 
@@ -6175,9 +6174,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       const nextOffline = !isNetworkOffline;
                       setIsNetworkOffline(nextOffline);
                       if (nextOffline) {
-                        triggerPhoneNotification("Modo Off-Grid", "Conexão desligada. Entregas serão salvas no cache do dispositivo.", "info");
+                        triggerPhoneNotification("Modo Off-Grid", "ConexÃ£o desligada. Entregas serÃ£o salvas no cache do dispositivo.", "info");
                       } else {
-                        triggerPhoneNotification("Sinal Restabelecido", "Conexão online ativa.", "success");
+                        triggerPhoneNotification("Sinal Restabelecido", "ConexÃ£o online ativa.", "success");
                       }
                     }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
@@ -6257,7 +6256,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 
                 {/* ACTION TRIGGER BUTTONS */}
                 <div className="space-y-3.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Mapear Corrida Física (Simulador):</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Mapear Corrida FÃ­sica (Simulador):</span>
                   
                   <div className="flex gap-2.5">
                     <button
@@ -6286,7 +6285,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       onClick={handleTeleportToNext}
                       disabled={riderPendingOrders.length === 0}
                       className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
-                      title="Simular chegada rápida pulando trecho de trânsito"
+                      title="Simular chegada rÃ¡pida pulando trecho de trÃ¢nsito"
                     >
                       <Navigation size={13} />
                       <span>Chegar no Destino</span>
@@ -6296,10 +6295,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl space-y-1">
                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-700">
                       <Sparkles size={11} className="animate-spin" />
-                      <span>Rastreamento Híbrido Real + Simulação</span>
+                      <span>Rastreamento HÃ­brido Real + SimulaÃ§Ã£o</span>
                     </div>
                     <p className="text-[10px] text-blue-600/90 leading-relaxed font-medium m-0">
-                      Ative o <strong>"GPS Real do Celular"</strong> para transmitir a localização exata do seu dispositivo físico, ou utilize o <strong>"Simulador"</strong> para testar rotas e deslocamentos pré-programados no mapa da Central.
+                      Ative o <strong>"GPS Real do Celular"</strong> para transmitir a localizaÃ§Ã£o exata do seu dispositivo fÃ­sico, ou utilize o <strong>"Simulador"</strong> para testar rotas e deslocamentos prÃ©-programados no mapa da Central.
                     </p>
                   </div>
                 </div>
@@ -6310,11 +6309,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                   
                   <div className="bg-slate-900 text-slate-300 font-mono text-[9px] p-3 rounded-xl min-h-[105px] max-h-[110px] overflow-y-auto space-y-1">
                     {simulationLog.length === 0 ? (
-                      <span className="text-slate-500 italic block">Transmissão GPS inativa. Aguardando comando...</span>
+                      <span className="text-slate-500 italic block">TransmissÃ£o GPS inativa. Aguardando comando...</span>
                     ) : (
                       simulationLog.map((log, idx) => (
                         <div key={idx} className="flex gap-1">
-                          <span className="text-blue-400">⚡</span>
+                          <span className="text-blue-400">âš¡</span>
                           <span>{log}</span>
                         </div>
                       ))
@@ -6329,14 +6328,14 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
             <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
               <div>
                 <h3 className="font-bold text-slate-800 text-sm">Performance Consolidada de Campo</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">Indicadores do condutor selecionado no plantão operacional.</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Indicadores do condutor selecionado no plantÃ£o operacional.</p>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 
                 {/* Completed */}
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 space-y-1">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Total Concluído (Hoje)</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Total ConcluÃ­do (Hoje)</span>
                   <span className="text-lg font-black text-slate-800 font-mono">
                     {completedCount} bipes
                   </span>
@@ -6352,7 +6351,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                 {/* SLA Score */}
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 space-y-1">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Tempo SLA Médio</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Tempo SLA MÃ©dio</span>
                   <span className="text-lg font-black text-slate-800 font-mono">
                     18.5 min / parada
                   </span>
@@ -6360,9 +6359,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                 {/* Rating */}
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 space-y-1">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Avaliação Clientes</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block">AvaliaÃ§Ã£o Clientes</span>
                   <span className="text-lg font-black text-slate-800 font-mono">
-                    ★ 4.98 / 5.0
+                    â˜… 4.98 / 5.0
                   </span>
                 </div>
 
@@ -6457,7 +6456,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     <span>Navegador do WhatsApp Detectado</span>
                   </div>
                   <p className="text-[11px] text-amber-800 font-medium leading-relaxed m-0">
-                    O WhatsApp impede a instalação automática de aplicativos. Toque no menu <strong>(⋮)</strong> no canto superior do WhatsApp e escolha <strong>"Abrir no Chrome"</strong> ou <strong>"Abrir no Safari"</strong> para instalar o ícone oficial na tela do celular.
+                    O WhatsApp impede a instalaÃ§Ã£o automÃ¡tica de aplicativos. Toque no menu <strong>(â‹®)</strong> no canto superior do WhatsApp e escolha <strong>"Abrir no Chrome"</strong> ou <strong>"Abrir no Safari"</strong> para instalar o Ã­cone oficial na tela do celular.
                   </p>
                 </div>
               )}
@@ -6466,12 +6465,12 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
               <div className="p-3.5 bg-slate-900 text-white rounded-2xl space-y-1.5 shadow-md border border-slate-800">
                 <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-xs">
                   <Sparkles size={16} className="animate-spin" />
-                  <span>Aplicativo Web PWA Pronto para Instalação!</span>
+                  <span>Aplicativo Web PWA Pronto para InstalaÃ§Ã£o!</span>
                 </div>
                 <p className="text-[11px] text-slate-300 font-medium leading-relaxed m-0">
                   {isAppInstalled ? 
-                    'O aplicativo Vinimap Condutor já está instalado e ativo no seu dispositivo.' : 
-                    'Este é um aplicativo PWA oficial. Ele instala o ícone direto na Tela de Início do celular sem precisar baixar arquivo de loja (.APK).'}
+                    'O aplicativo Vinimap Condutor jÃ¡ estÃ¡ instalado e ativo no seu dispositivo.' : 
+                    'Este Ã© um aplicativo PWA oficial. Ele instala o Ã­cone direto na Tela de InÃ­cio do celular sem precisar baixar arquivo de loja (.APK).'}
                 </p>
               </div>
 
@@ -6488,9 +6487,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     <span>No Android (Google Chrome)</span>
                   </div>
                   <p className="text-[11px] text-slate-600 font-medium leading-relaxed m-0">
-                    1. Toque no menu de três pontos <strong>(⋮)</strong> no canto superior do Chrome.<br />
-                    2. Selecione a opção <strong>"Adicionar à tela inicial"</strong> ou <strong>"Instalar aplicativo"</strong>.<br />
-                    3. Confirme e o ícone oficial aparecerá na sua tela de aplicativos.
+                    1. Toque no menu de trÃªs pontos <strong>(â‹®)</strong> no canto superior do Chrome.<br />
+                    2. Selecione a opÃ§Ã£o <strong>"Adicionar Ã  tela inicial"</strong> ou <strong>"Instalar aplicativo"</strong>.<br />
+                    3. Confirme e o Ã­cone oficial aparecerÃ¡ na sua tela de aplicativos.
                   </p>
                 </div>
 
@@ -6501,8 +6500,8 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     <span>No iPhone / iPad (Safari)</span>
                   </div>
                   <p className="text-[11px] text-slate-600 font-medium leading-relaxed m-0">
-                    1. Toque no botão de Compartilhar <strong>(Compartilhar)</strong> na barra inferior do Safari.<br />
-                    2. Role para baixo e selecione <strong>"Adicionar à Tela de Início"</strong>.<br />
+                    1. Toque no botÃ£o de Compartilhar <strong>(Compartilhar)</strong> na barra inferior do Safari.<br />
+                    2. Role para baixo e selecione <strong>"Adicionar Ã  Tela de InÃ­cio"</strong>.<br />
                     3. Toque em <strong>"Adicionar"</strong> no canto superior direito.
                   </p>
                 </div>
@@ -6518,7 +6517,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       deferredPrompt.userChoice.then((choice: any) => {
                         if (choice.outcome === 'accepted') {
                           setIsAppInstalled(true);
-                          triggerPhoneNotification("App Instalado!", "O atalho da Vinimap foi adicionado à sua tela inicial.", "success");
+                          triggerPhoneNotification("App Instalado!", "O atalho da Vinimap foi adicionado Ã  sua tela inicial.", "success");
                         }
                         setDeferredPrompt(null);
                       });
@@ -6526,7 +6525,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider"
                   >
                     <Download size={16} className="animate-bounce" />
-                    <span>Confirmar Instalação no Navegador</span>
+                    <span>Confirmar InstalaÃ§Ã£o no Navegador</span>
                   </button>
                 )}
 
@@ -6561,3 +6560,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     </div>
   );
 }
+
+
+
