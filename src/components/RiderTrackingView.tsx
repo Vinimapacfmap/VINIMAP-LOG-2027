@@ -14,6 +14,7 @@ import { getSaoPauloDateTimeShort, getSaoPauloISODate, isOrderInDatePeriod } fro
 import { getCoordinatesFromCep } from '../utils/locationUtils';
 import SafeMapWrapper from './SafeMapWrapper';
 import { fetchOsrmMultiStopRoute, getCachedOsrmRoute } from '../utils/osrmService';
+import { realtimeSyncBus } from '../utils/realtimeSync';
 import { RiderSelectDropdown } from './RiderSelectDropdown';
 import { 
   MapPin, 
@@ -208,17 +209,72 @@ export default function RiderTrackingView({
   const [lastGpsUpdateTimestamp, setLastGpsUpdateTimestamp] = useState<number>(Date.now());
   const [gpsElapsedSeconds, setGpsElapsedSeconds] = useState<number>(0);
 
+  // Live GPS simulation loop (moves riders along their route when simulated GPS is active)
   useEffect(() => {
-    setLastGpsUpdateTimestamp(Date.now());
-    setGpsElapsedSeconds(0);
-  }, [selectedRiderId]);
+    if (!isSimulating) return;
 
+    const simInterval = setInterval(() => {
+      setSimulationOffsets(prev => {
+        const next = { ...prev };
+        riders.forEach(rider => {
+          // If rider is already using real GPS device, don't simulate artificial offset
+          if (rider.isGpsRealActive) return;
+          
+          const current = next[rider.id] || { latOffset: 0, lngOffset: 0 };
+          const stepLat = (Math.random() - 0.48) * 0.4;
+          const stepLng = (Math.random() - 0.48) * 0.4;
+          
+          next[rider.id] = {
+            latOffset: Math.max(-15, Math.min(15, current.latOffset + stepLat)),
+            lngOffset: Math.max(-15, Math.min(15, current.lngOffset + stepLng))
+          };
+
+          // Generate simulated speed between 25 and 45 km/h
+          const simulatedSpeed = Math.floor(25 + Math.random() * 20);
+          setRiderSpeeds(s => ({ ...s, [rider.id]: simulatedSpeed }));
+
+          // Notify parent if handler is available
+          if (onUpdateRiderCoords) {
+            const coords = getRiderGeoCoords({ ...rider });
+            onUpdateRiderCoords(
+              rider.id,
+              coords[0],
+              coords[1],
+              coords[0],
+              coords[1],
+              5,
+              getSaoPauloDateTimeShort(),
+              false
+            );
+          }
+        });
+        return next;
+      });
+
+      setLastGpsUpdateTimestamp(Date.now());
+      setGpsElapsedSeconds(0);
+    }, 3000);
+
+    return () => clearInterval(simInterval);
+  }, [isSimulating, riders, onUpdateRiderCoords]);
+
+  // Realtime Sync Bus listener: automatically sync rider GPS from mobile PWA / driver simulator
   useEffect(() => {
-    const timer = setInterval(() => {
-      setGpsElapsedSeconds(Math.floor((Date.now() - lastGpsUpdateTimestamp) / 1000));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [lastGpsUpdateTimestamp]);
+    const unsub = realtimeSyncBus.subscribe('*', (msg) => {
+      const { type, payload } = msg;
+      if (type === 'RIDER_GPS_UPDATE' && payload?.riderId) {
+        setLastGpsUpdateTimestamp(Date.now());
+        setGpsElapsedSeconds(0);
+        if (payload.speedKmH !== undefined) {
+          setRiderSpeeds(prev => ({ ...prev, [payload.riderId]: payload.speedKmH }));
+        }
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, []);
 
   // Leaflet Interactive Map State & Refs
   const [leafletLoaded, setLeafletLoaded] = useState<boolean>(true);
@@ -229,6 +285,7 @@ export default function RiderTrackingView({
   const tileLayerRef = useRef<any>(null);
   const lastFittedRiderIdRef = useRef<string | null>(null);
   const riderMarkersRef = useRef<Record<string, any>>({});
+  const hubMarkerRef = useRef<any>(null);
 
   // Convert map percentages / SVG coordinates to real latitude and longitude
   const convertToGeoLat = (svgLatPercent: number) => -23.52 - (svgLatPercent / 100) * 0.12;
@@ -507,6 +564,7 @@ export default function RiderTrackingView({
         markersGroupRef.current = null;
         routesGroupRef.current = null;
         riderMarkersRef.current = {};
+        hubMarkerRef.current = null;
       }
     };
   }, [recalibrateKey]);
@@ -536,7 +594,8 @@ export default function RiderTrackingView({
       map.invalidateSize();
       markersGroup.eachLayer((layer: any) => {
         const isRiderMarker = Object.values(riderMarkersRef.current).includes(layer);
-        if (!isRiderMarker) {
+        const isHubMarker = hubMarkerRef.current === layer;
+        if (!isRiderMarker && !isHubMarker) {
           markersGroup.removeLayer(layer);
         }
       });
@@ -567,7 +626,12 @@ export default function RiderTrackingView({
       iconAnchor: [16, 16]
     });
 
-    L.marker(hubLatLng, { icon: hubIcon }).addTo(markersGroup);
+    if (hubMarkerRef.current && markersGroup.hasLayer(hubMarkerRef.current)) {
+      hubMarkerRef.current.setLatLng(hubLatLng);
+      hubMarkerRef.current.setIcon(hubIcon);
+    } else {
+      hubMarkerRef.current = L.marker(hubLatLng, { icon: hubIcon }).addTo(markersGroup);
+    }
 
     // Render riders and their route polylines
     riders.forEach((rider) => {

@@ -31,6 +31,7 @@ import { motion, AnimatePresence } from 'motion/react';
 // Retrieve Leaflet L from the window context safely inside component/effects to avoid race conditions.
 
 import { getCoordinatesFromCep } from '../utils/locationUtils';
+import { initLeafletPosGuard } from '../utils/leafletPatch';
 import OrderQuickViewTooltip from './OrderQuickViewTooltip';
 
 interface OtimizadorRotasInteligenteProps {
@@ -270,10 +271,13 @@ export default function OtimizadorRotasInteligente({
 
   // Render Leaflet Map
   useEffect(() => {
+    initLeafletPosGuard();
     if (!leafletLoaded || !mapContainerRef.current || !selectedRider) return;
 
     const L = (window as any).L;
     if (!L) return;
+
+    const container = mapContainerRef.current;
 
     // Reset Map instance if already created
     if (mapInstanceRef.current) {
@@ -285,10 +289,14 @@ export default function OtimizadorRotasInteligente({
       mapInstanceRef.current = null;
     }
 
+    if ((container as any)._leaflet_id && !mapInstanceRef.current) {
+      delete (container as any)._leaflet_id;
+    }
+
     const riderCoords = getRiderGeoCoords(selectedRider);
     
     // Create Map
-    const map = L.map(mapContainerRef.current, {
+    const map = L.map(container, {
       center: riderCoords,
       zoom: 13,
       zoomControl: false,

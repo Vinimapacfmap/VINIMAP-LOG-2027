@@ -241,16 +241,26 @@ export async function testSupabaseConnection(): Promise<SupabaseTestResult> {
       };
     }
 
+    const is504 = status === 504 || status === 502 || status === 503 || error.message?.includes('504') || error.message?.toLowerCase().includes('gateway') || error.message?.toLowerCase().includes('timeout');
     const is401 = status === 401 || error.message?.toLowerCase().includes('api key') || error.message?.toLowerCase().includes('jwt');
-    const errCode = error.code || (is401 ? '401_UNAUTHORIZED' : 'API_ERROR');
+    const errCode = error.code || (is504 ? '504_GATEWAY_TIMEOUT' : (is401 ? '401_UNAUTHORIZED' : 'API_ERROR'));
     const clientName = isSupabaseConfigured ? 'DefaultViteClient' : 'LocalStorageClient';
+
+    let customDetails = error.details || error.hint;
+    if (is504) {
+      customDetails = 'O servidor do Supabase está temporariamente pausado, hibernando ou com lentidão de rede (HTTP 504 Gateway Timeout). O sistema continuará operando via contingência local.';
+    } else if (is401) {
+      customDetails = 'A chave apikey/Bearer foi rejeitada pelo servidor Supabase.';
+    }
 
     return {
       success: false,
-      message: `[${clientName}] Erro ${status || 401}: ${error.message || 'Invalid API key'}`,
+      message: is504 
+        ? `[${clientName}] Servidor Supabase temporariamente indisponível (HTTP 504 Gateway Timeout).`
+        : `[${clientName}] Erro ${status || 401}: ${error.message || 'Invalid API key'}`,
       code: errCode,
       clientSource: source,
-      details: error.details || error.hint || (is401 ? 'A chave apikey/Bearer foi rejeitada pelo servidor Supabase.' : undefined),
+      details: customDetails,
     };
   } catch (err: any) {
     console.error('[SupabaseDiagnostic:Exception]', err);

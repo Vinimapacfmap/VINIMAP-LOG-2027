@@ -14,6 +14,8 @@ export const INITIAL_RIDERS: DeliveryRider[] = [
     rating: 5.0,
     status: 'Em rota',
     phone: '(11) 97079-1804',
+    deviceNumber: '11970791804',
+    password: '1234',
     lat: 38,
     lng: 42,
     realGeoLat: -23.5385556,

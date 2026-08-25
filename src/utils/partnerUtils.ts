@@ -217,18 +217,25 @@ export function getCachedDeliveryRiders(): DeliveryRider[] {
 }
 
 /**
- * Checks if two phone numbers or numeric identifiers match, considering optional country code '55' and suffix matching.
+ * Checks if two phone numbers or numeric identifiers match, considering optional country code '55', DDD, and 8/9 digit suffix matching.
  */
-function areDigitsMatching(digitsA: string, digitsB: string): boolean {
+export function areDigitsMatching(digitsA: string, digitsB: string): boolean {
   if (!digitsA || !digitsB) return false;
   if (digitsA === digitsB) return true;
 
-  const shortA = digitsA.length >= 10 && digitsA.startsWith('55') ? digitsA.substring(2) : digitsA;
-  const shortB = digitsB.length >= 10 && digitsB.startsWith('55') ? digitsB.substring(2) : digitsB;
+  const cleanA = String(digitsA).replace(/\D/g, '');
+  const cleanB = String(digitsB).replace(/\D/g, '');
+  if (!cleanA || !cleanB) return false;
+  if (cleanA === cleanB) return true;
+
+  const shortA = cleanA.length >= 10 && cleanA.startsWith('55') ? cleanA.substring(2) : cleanA;
+  const shortB = cleanB.length >= 10 && cleanB.startsWith('55') ? cleanB.substring(2) : cleanB;
 
   if (shortA === shortB) return true;
   if (shortA.length >= 8 && shortB.length >= 8) {
     if (shortA.endsWith(shortB) || shortB.endsWith(shortA)) return true;
+    if (shortA.slice(-8) === shortB.slice(-8)) return true;
+    if (shortA.slice(-9) === shortB.slice(-9)) return true;
   }
   return false;
 }
@@ -253,17 +260,23 @@ export function findRiderByIdentifier(
   return list.find(r => {
     if (String(r.id || '').trim().toLowerCase() === clean) return true;
     if (String(r.name || '').trim().toLowerCase() === clean) return true;
+    if (r.name && clean.length >= 4 && r.name.toLowerCase().includes(clean)) return true;
     if (r.deviceNumber && String(r.deviceNumber).trim().toLowerCase() === clean) return true;
 
-    if (digits.length >= 8) {
+    if (digits.length >= 6) {
+      if (r.id && r.id.replace(/\D/g, '') === digits) return true;
+
       const rPhoneDigits = String(r.phone || '').replace(/\D/g, '');
       if (rPhoneDigits && areDigitsMatching(rPhoneDigits, digits)) return true;
 
       const rDeviceDigits = String(r.deviceNumber || '').replace(/\D/g, '');
-      if (rDeviceDigits && areDigitsMatching(rDeviceDigits, digits)) return true;
+      if (rDeviceDigits && (rDeviceDigits === digits || areDigitsMatching(rDeviceDigits, digits))) return true;
 
       const rCpfDigits = String(r.cpfCnpj || '').replace(/\D/g, '');
       if (rCpfDigits && areDigitsMatching(rCpfDigits, digits)) return true;
+
+      const rNameDigits = String(r.name || '').replace(/\D/g, '');
+      if (rNameDigits && areDigitsMatching(rNameDigits, digits)) return true;
     }
 
     return false;

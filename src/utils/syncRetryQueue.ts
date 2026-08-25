@@ -44,16 +44,7 @@ export interface SyncQueueState {
 
 const STORAGE_KEY = 'vinimap_sync_retry_queue_v1';
 const LAST_SYNC_KEY = 'vinimap_last_cloud_sync_timestamp';
-const MOCK_ORDER_IDS = [
-  'ped-101',
-  'ped-102',
-  'ped-103',
-  'ped-104',
-  'ped-105',
-  'ped-106',
-  'ped-107',
-  'ped-108',
-];
+
 // Helper to remove undefined fields before Firestore write
 function cleanPayload(obj: any): any {
   if (obj === null || obj === undefined) return null;
@@ -183,10 +174,6 @@ class SyncRetryQueueManager {
    * Enqueues an order save operation with priority and attempts execution.
    */
   public async enqueueSave(order: Order, explicitPriority?: QueuePriority, target: QueueTarget = 'ALL'): Promise<boolean> {
-    if (MOCK_ORDER_IDS.includes(String(order.id))) {
-  console.log(`[SyncRetryQueue] Pedido demo ignorado: ${order.id}`);
-  return true;
-}
     const priority = calculateOrderPriority(order, explicitPriority);
     const orderId = String(order.id);
     const now = Date.now();
