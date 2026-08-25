@@ -403,6 +403,59 @@ export default function RiderAppSimulator({
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
+  // Immediate non-blocking driver logout (returns to driver login screen)
+  const handleDriverLogout = () => {
+    setIsDrawerMenuOpen(false);
+    setSelectedOrder(null);
+    setCurrentScreen('login');
+    setPhoneInput('');
+    setPasswordInput('');
+    setLoginError(null);
+
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('vinimap_driver_logged_in');
+      localStorage.removeItem('vinimap_driver_active_screen');
+      localStorage.removeItem('vinimap_driver_active_tab');
+      localStorage.removeItem('vinimap_driver_selected_order_id');
+      localStorage.removeItem('vinimap_locked_rider_id');
+    }
+
+    if (selectedRider) {
+      const loggedOutRider: DeliveryRider = {
+        ...selectedRider,
+        isLoggedIn: false,
+        activeDeviceId: undefined
+      };
+      // Non-blocking fire-and-forget sync so connection latency or remote delay never freezes the UI
+      dbSaveDeliveryRider(loggedOutRider).catch((err) => {
+        console.warn('[RiderAppSimulator] Logout sync warning (non-blocking):', err);
+      });
+    }
+  };
+
+  // Immediate exit to main admin panel / close simulator
+  const handleExitAppOrSystem = () => {
+    handleDriverLogout();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('vinimap_is_driver_app');
+      localStorage.removeItem('vinimap_driver_id');
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('view');
+        url.searchParams.delete('rider');
+        url.searchParams.delete('mode');
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+      } catch (e) {
+        console.warn('Could not clean URL parameters:', e);
+      }
+    }
+    if (onExitToAdmin) {
+      onExitToAdmin();
+    } else if (onCloseFloating) {
+      onCloseFloating();
+    }
+  };
+
   // Helper to persist driver session and selected order before external map navigation (e.g. Google Maps, Waze)
   const prepareExternalMapNavigation = (orderToNavigate?: Order | null) => {
     if (typeof window !== 'undefined') {
@@ -469,8 +522,8 @@ export default function RiderAppSimulator({
           }
         }
 
-        // Auto restore logged-in screen (tela de pedidos) instead of resetting to login
-        if (savedLoggedIn || targetRider.isLoggedIn || isStandalone || isEffectiveRealDevice) {
+        // Auto restore logged-in screen (tela de pedidos) only when explicitly logged in
+        if (savedLoggedIn) {
           if (savedScreen === 'details' && savedOrderId) {
             setCurrentScreen('details');
             setActiveTab('tasks');
@@ -3633,8 +3686,22 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 <div className="flex-1 p-4 sm:p-5 flex flex-col justify-between bg-gradient-to-b from-blue-950 via-slate-900 to-slate-950 text-white overflow-y-auto">
                   <div className="max-w-xs sm:max-w-sm mx-auto w-full flex flex-col justify-between h-full min-h-0 space-y-3.5 my-auto py-1">
                     
+                    {/* Top Bar with Quick Exit Action */}
+                    <div className="flex items-center justify-between w-full pt-1 pb-1">
+                      <span className="text-[9px] font-mono font-bold text-blue-300/60 uppercase tracking-wider">Vinimap Mobile</span>
+                      <button
+                        type="button"
+                        onClick={handleExitAppOrSystem}
+                        className="px-2.5 py-1 bg-white/10 hover:bg-rose-600/80 active:bg-rose-700 text-blue-100 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-white/15 shadow-xs"
+                        title="Fechar Aplicativo / Voltar ao Painel Geral"
+                      >
+                        <X size={13} />
+                        <span>Sair / Fechar</span>
+                      </button>
+                    </div>
+
                     {/* Branding Header */}
-                  <div className="space-y-1.5 text-center pt-2">
+                  <div className="space-y-1.5 text-center pt-1">
                     <div className="w-16 h-16 rounded-2xl mx-auto shadow-xl border-2 border-white/30 overflow-hidden bg-slate-900 flex items-center justify-center p-0.5">
                       <img 
                         src={effectiveLogo} 
@@ -3941,6 +4008,16 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <span>{deferredPrompt ? '⚡ Instalar App no Celular' : '📱 Instalar / Baixar Aplicativo'}</span>
                     </button>
 
+                    {/* Exit / Return to Main System Button */}
+                    <button
+                      type="button"
+                      onClick={handleExitAppOrSystem}
+                      className="w-full py-2 bg-slate-800/80 hover:bg-slate-800 active:bg-slate-900 text-slate-300 hover:text-white font-bold text-[11px] rounded-xl border border-slate-700/60 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <ArrowLeft size={13} />
+                      <span>Sair para o Painel Geral / Admin</span>
+                    </button>
+
                   </form>
 
                   {/* Footer Terms */}
@@ -4032,30 +4109,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       </button>
 
                       <button
-                        onClick={async () => {
-                          if (selectedRider) {
-                            const loggedOutRider: DeliveryRider = {
-                              ...selectedRider,
-                              isLoggedIn: false,
-                              activeDeviceId: undefined
-                            };
-                            try {
-                              await dbSaveDeliveryRider(loggedOutRider);
-                            } catch (e) {
-                              console.warn('Error saving logout state:', e);
-                            }
-                          }
-                          if (typeof window !== 'undefined') {
-                            localStorage.removeItem('vinimap_driver_logged_in');
-                            localStorage.removeItem('vinimap_driver_active_screen');
-                            localStorage.removeItem('vinimap_driver_active_tab');
-                            localStorage.removeItem('vinimap_driver_selected_order_id');
-                          }
-                          setSelectedOrder(null);
-                          setCurrentScreen('login');
-                        }}
-                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
-                        title="Sair / Desconectar"
+                        type="button"
+                        onClick={handleExitAppOrSystem}
+                        className="p-1.5 hover:bg-slate-100 active:bg-rose-100 rounded-lg text-slate-400 hover:text-rose-600 transition-all cursor-pointer"
+                        title="Sair / Fechar Aplicativo"
                       >
                         <X size={15} />
                       </button>
@@ -4218,37 +4275,24 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             </button>
                           </div>
 
-                          {/* Drawer Footer Logout */}
+                          {/* Drawer Footer Logout & Exit Actions */}
                           <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0 space-y-2">
                             <button
                               type="button"
-                              onClick={async () => {
-                                setIsDrawerMenuOpen(false);
-                                if (selectedRider) {
-                                  const loggedOutRider: DeliveryRider = {
-                                    ...selectedRider,
-                                    isLoggedIn: false,
-                                    activeDeviceId: undefined
-                                  };
-                                  try {
-                                    await dbSaveDeliveryRider(loggedOutRider);
-                                  } catch (e) {
-                                    console.warn('Error saving logout state:', e);
-                                  }
-                                }
-                                if (typeof window !== 'undefined') {
-                                  localStorage.removeItem('vinimap_driver_logged_in');
-                                  localStorage.removeItem('vinimap_driver_active_screen');
-                                  localStorage.removeItem('vinimap_driver_active_tab');
-                                  localStorage.removeItem('vinimap_driver_selected_order_id');
-                                }
-                                setSelectedOrder(null);
-                                setCurrentScreen('login');
-                              }}
-                              className="w-full py-2.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                              onClick={handleDriverLogout}
+                              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer"
                             >
                               <LogOut size={15} />
-                              <span>Sair do Aplicativo</span>
+                              <span>Desconectar Condutor</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={handleExitAppOrSystem}
+                              className="w-full py-2.5 bg-rose-600/20 hover:bg-rose-600 active:bg-rose-700 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                            >
+                              <ArrowLeft size={15} />
+                              <span>Sair para o Painel Geral</span>
                             </button>
                           </div>
                         </motion.div>

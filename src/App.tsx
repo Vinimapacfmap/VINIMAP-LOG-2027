@@ -2080,18 +2080,17 @@ export default function App() {
     }
   }, [activeSection]);
 
-  // Filtered orders to be used across the entire system (memoized for instantaneous UI response)
+  // Filtered orders to be used across the entire system (memoized for instantaneous UI response with full synchronization)
   const filteredOrders = useMemo(() => {
     const isSearching = searchQuery.trim() !== '';
 
-    if (isSearching) {
-      // Universal search: matches IDs, names, addresses, CEP, partners, riders, dates (e.g. 14-08), DANFE, documents & status aliases
-      const matches = orders.filter((order) => isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners));
-      return sortOrdersByLexicographicSearch(matches, searchQuery, riders, clientPartners);
-    }
+    const results = orders.filter((order) => {
+      // 1. Universal text search match (if user typed any query)
+      if (isSearching && !isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners)) {
+        return false;
+      }
 
-    return orders.filter((order) => {
-      // Default filters when not searching
+      // 2. Date period filter
       if (filterShowDelayed) {
         const isDelayed = order.date < todayStr && order.status !== 'Concluído' && order.status !== 'Cancelado';
         const isToday = order.date === todayStr;
@@ -2103,15 +2102,22 @@ export default function App() {
         }
       }
 
+      // 3. Partner filter
       if (filterPartner && !isOrderMatchingPartner(order, filterPartner, clientPartners)) {
         return false;
       }
+
+      // 4. Rider filter
       if (filterRiderId && !isOrderMatchingRider(order, filterRiderId, riders)) {
         return false;
       }
+
+      // 5. Status filter
       if (filterStatus && order.status !== filterStatus) {
         return false;
       }
+
+      // 6. CEP filter
       if (filterCep) {
         const cleanCep = filterCep.replace('-', '').trim();
         const cleanOrderCep = order.cep.replace('-', '').trim();
@@ -2119,16 +2125,23 @@ export default function App() {
           return false;
         }
       }
+
       return true;
     });
+
+    if (isSearching) {
+      return sortOrdersByLexicographicSearch(results, searchQuery, riders, clientPartners);
+    }
+
+    return results;
   }, [orders, searchQuery, riders, clientPartners, filterShowDelayed, todayStr, filterDateFrom, filterDateTo, filterPartner, filterRiderId, filterStatus, filterCep]);
 
-  // KPI orders computed matching the date period, partner, rider, and CEP filters (without status restriction so status cards reflect actual counts for the active period/rider)
+  // KPI orders computed matching all filters except status (so status cards reflect actual counts for the active period/partner/rider/search)
   const kpiOrders = useMemo(() => {
     return orders.filter((order) => {
       const isSearching = searchQuery.trim() !== '';
-      if (isSearching) {
-        return isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners);
+      if (isSearching && !isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners)) {
+        return false;
       }
 
       if (filterShowDelayed) {
@@ -4184,11 +4197,32 @@ export default function App() {
               isStandalone={true}
               isRealDevice={isRealDeviceMode}
               onExitToAdmin={() => {
-                localStorage.removeItem('vinimap_is_driver_app');
-                localStorage.removeItem('vinimap_driver_id');
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('vinimap_is_driver_app');
+                  localStorage.removeItem('vinimap_driver_id');
+                  localStorage.removeItem('vinimap_driver_logged_in');
+                  localStorage.removeItem('vinimap_driver_active_screen');
+                  localStorage.removeItem('vinimap_driver_active_tab');
+                  localStorage.removeItem('vinimap_driver_selected_order_id');
+                  localStorage.removeItem('vinimap_locked_rider_id');
+                  try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('view');
+                    url.searchParams.delete('rider');
+                    url.searchParams.delete('mode');
+                    window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+                  } catch (e) {
+                    console.warn(e);
+                  }
+                }
                 setIsStandaloneRider(false);
                 setIsRealDeviceMode(false);
                 setIsAdminAuthenticated(false);
+                setActiveSection('dashboard');
+              }}
+              onCloseFloating={() => {
+                setIsStandaloneRider(false);
+                setIsRealDeviceMode(false);
                 setActiveSection('dashboard');
               }}
             />
@@ -6927,6 +6961,8 @@ export default function App() {
                   onActiveRiderChange={setSelectedRiderId}
                   isStandalone={isStandaloneRider}
                   isRealDevice={isRealDeviceMode}
+                  onExitToAdmin={() => setActiveSection('dashboard')}
+                  onCloseFloating={() => setActiveSection('dashboard')}
                 />
               </motion.div>
             )}
