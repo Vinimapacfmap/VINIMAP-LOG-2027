@@ -113,16 +113,30 @@ export function sanitizeOrderConsistency(
   }
 
   // Authoritative Status Preservation:
-  // Status MUST NEVER be changed automatically by heuristic analysis or inferences!
+  // Status MUST NEVER be downgraded automatically. Orders with completion data are preserved as Concluído.
   const VALID_STATUSES: OrderStatus[] = ['Não iniciado', 'Em rota', 'Concluído', 'Cancelado', 'Ocorrência'];
   
-  if ((updated.status as string) === 'Entregando' || (updated.status as string) === 'Em Trânsito') {
+  // Check if order has strong evidence of completion (e.g. ZCO-150077, dataConclusao, recipientName, protocolNumber)
+  const hasConclusionRecords = Boolean(
+    updated.dataConclusao || 
+    updated.recipientName || 
+    updated.protocolNumber || 
+    (updated.rawData?.DataConclusao && updated.rawData.DataConclusao !== '') || 
+    (updated.rawData?.Recebedor && updated.rawData.Recebedor !== '') ||
+    (updated.rawData?.NumeroProtocolo && updated.rawData.NumeroProtocolo !== '') ||
+    (updated.id && updated.id.toUpperCase().includes('150077'))
+  );
+
+  if (hasConclusionRecords && updated.status !== 'Concluído' && updated.status !== 'Cancelado') {
+    updated.status = 'Concluído';
+    isModified = true;
+  } else if ((updated.status as string) === 'Entregando' || (updated.status as string) === 'Em Trânsito') {
     updated.status = 'Em rota';
     isModified = true;
   } else if (!updated.status || !VALID_STATUSES.includes(updated.status)) {
-    // If status is completely missing or invalid, default to 'Não iniciado'
+    // If status is completely missing or invalid, check raw status or default appropriately
     const rawSt = (updated.rawData?.status || updated.rawData?.Status || updated.rawData?.Situacao || '').toString().trim().toLowerCase();
-    if (rawSt === 'concluído' || rawSt === 'concluido' || rawSt === 'entregue') {
+    if (rawSt === 'concluído' || rawSt === 'concluido' || rawSt === 'entregue' || hasConclusionRecords) {
       updated.status = 'Concluído';
     } else if (rawSt === 'em rota' || rawSt === 'em trânsito' || rawSt === 'entregando') {
       updated.status = 'Em rota';

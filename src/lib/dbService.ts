@@ -952,20 +952,7 @@ export async function dbDeleteFinancialTransaction(txId: string) {
 }
 
 // Company Hub CRUD operations
-export const INITIAL_COMPANY_HUBS: CompanyHub[] = [
-  {
-    id: 'hub-main',
-    name: 'Sede Ativa Vinimap Principal',
-    cnpj: '98.765.432/0001-99',
-    address: 'Rua Cerro Corá, 385, Vila Romana',
-    cep: '05061-050',
-    lat: -23.5385556,
-    lng: -46.70118,
-    phone: '(11) 3222-1111',
-    logoUrl: vinimapLogo,
-    active: true
-  }
-];
+export const INITIAL_COMPANY_HUBS: CompanyHub[] = [];
 
 export async function dbSaveCompanyHub(hub: CompanyHub) {
   try {

@@ -67,7 +67,10 @@ import {
   Phone,
   MoreVertical,
   UserX,
-  Server
+  Server,
+  Zap,
+  CheckSquare,
+  Activity
 } from 'lucide-react';
 import { 
   getNotificationSettings, 
@@ -1048,41 +1051,46 @@ function OrdersTable({
       }
 
       // 3. Is it a sequence/index column?
-      if (keyLower === 'sequencia') {
+      if (keyLower === 'sequencia' || keyLower === 'sequência') {
         const numA = parseInt(valA, 10) || 0;
         const numB = parseInt(valB, 10) || 0;
         return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
       }
 
-      // 4. Robust numeric, currency, and alphanumeric prefix parsing
-      const extractNumber = (str: string): number | null => {
-        if (!str) return null;
-        let clean = (str || '').toString().trim();
+      // 4. Dedicated numeric & currency columns only
+      const numericColumns = [
+        'valor', 'valornotafiscal', 'valorentrega', 'valorcondutor', 'valorreceber',
+        'itens', 'items', 'itenscount', 'itemscount',
+        'latitude', 'longitude', 'lat', 'lng'
+      ];
+      const isNumericCol = numericColumns.includes(keyLower);
 
-        // Handle Brazilian currency, e.g., R$ 1.250,50 or R$ 12,50
-        if (clean.includes('R$') || (clean.includes(',') && !clean.includes('/'))) {
-          clean = clean.replace(/R\$\s*/gi, '');
-          clean = clean.replace(/\./g, ''); // remove thousands separators
-          clean = clean.replace(/,/g, '.'); // replace decimal comma with dot
+      if (isNumericCol) {
+        const extractNumber = (str: string): number | null => {
+          if (!str) return null;
+          let clean = (str || '').toString().trim();
+          if (clean.includes('R$') || (clean.includes(',') && !clean.includes('/'))) {
+            clean = clean.replace(/R\$\s*/gi, '');
+            clean = clean.replace(/\./g, '');
+            clean = clean.replace(/,/g, '.');
+          }
+          clean = clean.replace(/[^\d.-]/g, '');
+          const parsed = parseFloat(clean);
+          return isNaN(parsed) ? null : parsed;
+        };
+
+        const numA = extractNumber(valA);
+        const numB = extractNumber(valB);
+
+        if (numA !== null && numB !== null) {
+          return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
         }
-
-        // Filter out other characters except numbers, minus sign, and dots
-        clean = clean.replace(/[^\d.-]/g, '');
-        const parsed = parseFloat(clean);
-        return isNaN(parsed) ? null : parsed;
-      };
-
-      const numA = extractNumber(valA);
-      const numB = extractNumber(valB);
-
-      if (numA !== null && numB !== null) {
-        return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
       }
 
-      // 5. Default natural Portuguese alphanumeric comparison (lexicographical)
+      // 5. Pure Dictionary Lexicographical Comparison for all text columns (Avenida vem antes de Rua, etc.)
       return sortConfig.direction === 'asc' 
-        ? String(valA || '').localeCompare(String(valB || ''), 'pt-BR', { sensitivity: 'base', numeric: true }) 
-        : String(valB || '').localeCompare(String(valA || ''), 'pt-BR', { sensitivity: 'base', numeric: true });
+        ? String(valA || '').localeCompare(String(valB || ''), 'pt-BR', { sensitivity: 'base' }) 
+        : String(valB || '').localeCompare(String(valA || ''), 'pt-BR', { sensitivity: 'base' });
     });
   }, [filteredOrders, sortConfig, viewMode, searchQuery, riders, clientPartners]);
 
@@ -2348,7 +2356,7 @@ function OrdersTable({
       </div>
 
       {/* 1. COMPACT STATUS TABS FILTER BAR */}
-      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 rounded-t-2xl">
+      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 rounded-t-2xl flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" id="orders-status-tabs">
           {[
             { key: 'Todos', label: 'Todos os Pedidos', activeColor: 'bg-blue-600 text-white shadow-sm shadow-blue-200', count: orders.length },
@@ -2383,6 +2391,33 @@ function OrdersTable({
               </button>
             );
           })}
+        </div>
+
+        {/* Quick Batch Selection Button for Current Filter */}
+        <div className="flex items-center gap-2">
+          {sortedOrders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const allIds = sortedOrders.map(o => o.id);
+                if (allIds.every(id => selectedIds.has(id))) {
+                  const nextSet = new Set(selectedIds);
+                  allIds.forEach(id => nextSet.delete(id));
+                  setSelectedIds(nextSet);
+                } else {
+                  setSelectedIds(new Set([...selectedIds, ...allIds]));
+                }
+              }}
+              className="px-3 py-1.5 bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+            >
+              <CheckSquare size={13} className="text-blue-600" />
+              <span>
+                {sortedOrders.every(o => selectedIds.has(o.id))
+                  ? `Desmarcar ${activeTab === 'Todos' ? 'todos' : activeTab} (${sortedOrders.length})`
+                  : `Selecionar todos ${activeTab === 'Todos' ? 'pedidos' : activeTab} (${sortedOrders.length})`}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2918,6 +2953,20 @@ function OrdersTable({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* Quick End-of-Day Complete Action */}
+            <button
+              onClick={() => {
+                if (window.confirm(`Deseja concluir todos os ${selectedIds.size} pedidos selecionados para o Encerramento do Dia operacional?`)) {
+                  handleBulkStatusChange('Concluído');
+                }
+              }}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10.5px] font-black flex items-center gap-1.5 cursor-pointer transition-all shadow-sm shadow-emerald-200"
+              title="Concluir todos os pedidos selecionados para encerramento do dia operacional"
+            >
+              <Zap size={13} className="text-amber-300 fill-amber-300 animate-bounce" />
+              <span>Concluir em Lote ({selectedIds.size})</span>
+            </button>
+
             {/* Bulk Status Dropdown */}
             <div className="relative" ref={bulkStatusRef}>
               <button

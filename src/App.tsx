@@ -2022,24 +2022,14 @@ export default function App() {
     clearAllPanelFilters();
   };
 
-  // Instant Partner and Rider Selection Handlers (Independent of Status)
+  // Instant Partner and Rider Selection Handlers (respects active status and period filters)
   const handleSelectPartner = useCallback((partnerVal: string) => {
     setFilterPartner(partnerVal);
-    // When selecting a partner, instantly display orders independent of status
-    setActiveOrderTab('Todos');
-    if (filterStatus) {
-      setFilterStatus('');
-    }
-  }, [filterStatus]);
+  }, []);
 
   const handleSelectRider = useCallback((riderVal: string) => {
     setFilterRiderId(riderVal);
-    // When selecting a rider, instantly display orders independent of status
-    setActiveOrderTab('Todos');
-    if (filterStatus) {
-      setFilterStatus('');
-    }
-  }, [filterStatus]);
+  }, []);
 
   // Redirect old individual sections to unified administrative panel tabs
   useEffect(() => {
@@ -2407,6 +2397,12 @@ export default function App() {
     try {
       const currentOrder = orders.find(o => o.id === orderId);
       if (!currentOrder) return;
+
+      // Security check: Prevent system or non-admin from automatically altering a Concluído order
+      if (currentOrder.status === 'Concluído' && nextStatus !== 'Concluído' && !isAdminAuthenticated) {
+        console.warn(`[Segurança] Alteração de status bloqueada para o pedido concluído #${orderId}. Somente ação explícita e autenticada de Administrador pode alterar.`);
+        return;
+      }
 
       let updatedRiderObj: DeliveryRider | null = null;
 
@@ -3073,6 +3069,21 @@ export default function App() {
       
       // Dynamic recalculation of freight whenever CEP or partnerName is modified
       const existingOrder = orders.find(o => o.id === finalOrder.id);
+
+      // Security check: Prevent system or non-admin from downgrading an already Concluído order
+      if (existingOrder && existingOrder.status === 'Concluído' && finalOrder.status !== 'Concluído' && !isAdminAuthenticated) {
+        console.warn(`[Segurança] Alteração de status bloqueada para o pedido concluído #${finalOrder.id}. Somente ação explícita e autenticada de Administrador pode alterar.`);
+        finalOrder.status = 'Concluído';
+        finalOrder.recipientName = existingOrder.recipientName || finalOrder.recipientName;
+        finalOrder.recipientDoc = existingOrder.recipientDoc || finalOrder.recipientDoc;
+        finalOrder.dataConclusao = existingOrder.dataConclusao || finalOrder.dataConclusao;
+        finalOrder.deliveryDate = existingOrder.deliveryDate || finalOrder.deliveryDate;
+        finalOrder.deliveryTime = existingOrder.deliveryTime || finalOrder.deliveryTime;
+        finalOrder.horarioFinal = existingOrder.horarioFinal || finalOrder.horarioFinal;
+        finalOrder.protocolNumber = existingOrder.protocolNumber || finalOrder.protocolNumber;
+        finalOrder.signatureUrl = existingOrder.signatureUrl || finalOrder.signatureUrl;
+        finalOrder.deliveryPhotoUrl = existingOrder.deliveryPhotoUrl || finalOrder.deliveryPhotoUrl;
+      }
 
       // Verify if caller already appended a new history entry; if not, calculate diff and append entry with timestamp
       if (existingOrder) {
