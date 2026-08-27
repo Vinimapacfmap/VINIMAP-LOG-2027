@@ -1736,24 +1736,12 @@ export default function RiderAppSimulator({
     const currentStatus = String(order.status || '').trim();
     const normalizedStatus = currentStatus.toLowerCase();
 
-    // Check if the order was genuinely completed
-    const hasCompletion = hasOrderCompletionEvidence(order) || 
-      normalizedStatus === 'concluído' ||
-      normalizedStatus === 'concluido' ||
-      normalizedStatus === 'entregue' ||
-      normalizedStatus === 'baixado' ||
-      (order.rawData && (
-        String(order.rawData.Situacao || '').toLowerCase() === 'baixado' ||
-        String(order.rawData.Situacao || '').toLowerCase() === 'concluído' ||
-        String(order.rawData.Situacao || '').toLowerCase() === 'concluido' ||
-        String(order.rawData.Situacao || '').toLowerCase() === 'entregue'
-      ));
-
+    // Check if the order is completed, occurrence, or canceled
+    const isCompleted = normalizedStatus === 'concluído' || normalizedStatus === 'concluido' || normalizedStatus === 'entregue' || normalizedStatus === 'baixado';
     const isOccurrence = normalizedStatus === 'ocorrência' || normalizedStatus === 'ocorrencia';
     const isCanceled = normalizedStatus === 'cancelado' || normalizedStatus === 'cancelada';
-    const isCompleted = hasCompletion;
 
-    // Any assigned order that has not been finalized (completed/canceled/occurrence) is considered open
+    // Any assigned order that has not been finalized (completed/canceled/occurrence) is strictly OPEN
     const isExplicitlyOpen = !isCompleted && !isOccurrence && !isCanceled;
 
     // Extract true operational / creation date of the order
@@ -1772,12 +1760,12 @@ export default function RiderAppSimulator({
     const orderIsoDate = extractISODateFromTimestamp(rawOrderDate) || (order.date ? String(order.date).split('T')[0] : '');
     const isFromToday = !orderIsoDate || orderIsoDate === todayIso;
 
-    // 1. If the order is open and assigned to this driver, ALWAYS display it for delivery
+    // 1. If the order is open and assigned to this driver, ALWAYS display it for delivery (regardless of creation date)
     if (isExplicitlyOpen) {
       return true;
     }
 
-    // 2. Completed orders: include if completed today, or if completion date matches today, or recently updated
+    // 2. Completed orders: include if completed today, or if completion date matches today, or recently updated today
     if (isCompleted) {
       const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || (order as any).statusUpdatedAt || (order as any).updatedAt || order.date);
       return !completionDate || completionDate === todayIso || isFromToday;
@@ -3686,18 +3674,20 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 <div className="flex-1 p-4 sm:p-5 flex flex-col justify-between bg-gradient-to-b from-blue-950 via-slate-900 to-slate-950 text-white overflow-y-auto">
                   <div className="max-w-xs sm:max-w-sm mx-auto w-full flex flex-col justify-between h-full min-h-0 space-y-3.5 my-auto py-1">
                     
-                    {/* Top Bar with Quick Exit Action */}
+                    {/* Top Bar (Only shows close button if running in floating preview panel inside admin) */}
                     <div className="flex items-center justify-between w-full pt-1 pb-1">
                       <span className="text-[9px] font-mono font-bold text-blue-300/60 uppercase tracking-wider">Vinimap Mobile</span>
-                      <button
-                        type="button"
-                        onClick={handleExitAppOrSystem}
-                        className="px-2.5 py-1 bg-white/10 hover:bg-rose-600/80 active:bg-rose-700 text-blue-100 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-white/15 shadow-xs"
-                        title="Fechar Aplicativo / Voltar ao Painel Geral"
-                      >
-                        <X size={13} />
-                        <span>Sair / Fechar</span>
-                      </button>
+                      {isFloating && onCloseFloating && (
+                        <button
+                          type="button"
+                          onClick={onCloseFloating}
+                          className="px-2 py-1 bg-white/10 hover:bg-rose-600/80 active:bg-rose-700 text-blue-100 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-white/15 shadow-xs"
+                          title="Fechar Janela"
+                        >
+                          <X size={13} />
+                          <span>Fechar</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Branding Header */}
@@ -4008,16 +3998,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <span>{deferredPrompt ? '⚡ Instalar App no Celular' : '📱 Instalar / Baixar Aplicativo'}</span>
                     </button>
 
-                    {/* Exit / Return to Main System Button */}
-                    <button
-                      type="button"
-                      onClick={handleExitAppOrSystem}
-                      className="w-full py-2 bg-slate-800/80 hover:bg-slate-800 active:bg-slate-900 text-slate-300 hover:text-white font-bold text-[11px] rounded-xl border border-slate-700/60 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <ArrowLeft size={13} />
-                      <span>Sair para o Painel Geral / Admin</span>
-                    </button>
-
                   </form>
 
                   {/* Footer Terms */}
@@ -4275,7 +4255,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             </button>
                           </div>
 
-                          {/* Drawer Footer Logout & Exit Actions */}
+                          {/* Drawer Footer Logout */}
                           <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0 space-y-2">
                             <button
                               type="button"
@@ -4284,15 +4264,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             >
                               <LogOut size={15} />
                               <span>Desconectar Condutor</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={handleExitAppOrSystem}
-                              className="w-full py-2.5 bg-rose-600/20 hover:bg-rose-600 active:bg-rose-700 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer"
-                            >
-                              <ArrowLeft size={15} />
-                              <span>Sair para o Painel Geral</span>
                             </button>
                           </div>
                         </motion.div>

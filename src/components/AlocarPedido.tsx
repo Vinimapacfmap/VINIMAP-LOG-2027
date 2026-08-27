@@ -517,7 +517,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
         // When reallocated to the same driver or new driver, keep current status unless explicitly modified
         const assignedStatus = isSameDriver 
           ? order.status 
-          : (order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' || hasOrderCompletionEvidence(order) ? order.status : ('Não iniciado' as const));
+          : (order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' ? order.status : ('Não iniciado' as const));
 
         const tempOrder: Order = {
           ...order,
@@ -663,7 +663,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       if (selectedOrderIds.has(order.id)) {
         if (order.riderId) previousRiderIds.add(order.riderId);
 
-        const isCompleted = order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' || hasOrderCompletionEvidence(order);
+        const isCompleted = order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado';
         const assignedStatus = isCompleted ? order.status : ('Não iniciado' as const);
 
         const tempOrder: Order = {
@@ -1349,7 +1349,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     // However, if order is already completed or has completion evidence, preserve its status.
     const updatedOrders = orders.map(order => {
       if (selectedOrderIds.has(order.id)) {
-        const isCompleted = order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado' || hasOrderCompletionEvidence(order);
+        const isCompleted = order.status === 'Concluído' || order.status === 'Ocorrência' || order.status === 'Cancelado';
         const assignedStatus = isCompleted ? order.status : ('Não iniciado' as const);
 
         const tempAssignedOrder: Order = {
@@ -1943,7 +1943,9 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                 <div className="flex gap-2 shrink-0">
                   <button
                     onClick={() => {
-                      setDateFrom('2026-06-01'); // Wide window
+                      const pastDate = new Date();
+                      pastDate.setDate(pastDate.getDate() - 60);
+                      setDateFrom(pastDate.toISOString().slice(0, 10));
                       setDateTo(todayStr);
                       setHasSearchedPeriod(true);
                     }}

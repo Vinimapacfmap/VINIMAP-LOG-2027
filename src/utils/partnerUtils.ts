@@ -375,12 +375,9 @@ export function isOrderMatchingRider(
 
       if (targetRider && targetRider.id === assignedRider.id) return true;
     }
-
-    // Since the order is assigned to another specific rider, it must NOT match the filter
-    return false;
   }
 
-  // 2. IF AND ONLY IF the order has NO active assigned riderId (unassigned order), check rawData fallback
+  // 2. Also check rawData fallback for rider mentions
   const rawData = order.rawData || {};
   let rawRiderValues: string[] = [];
   for (const k of Object.keys(rawData)) {

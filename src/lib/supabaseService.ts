@@ -1534,3 +1534,112 @@ export async function fetchAllStateFromSupabase(): Promise<SupabaseLoadedState> 
     };
   }
 }
+
+export interface QueryHistoricOrdersParams {
+  dateFrom?: string;
+  dateTo?: string;
+  searchTerm?: string;
+  status?: string;
+  riderId?: string;
+  partnerName?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface QueryHistoricOrdersResult {
+  orders: Order[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  source: 'supabase';
+}
+
+/**
+ * Consulta de Pedidos Anteriores / Histórico exclusivamente no banco Supabase (PostgreSQL).
+ * Esta consulta é 100% de leitura direta e NÃO consome cotas de leitura do Firebase Firestore.
+ */
+export async function sbQueryHistoricOrders(params: QueryHistoricOrdersParams): Promise<QueryHistoricOrdersResult> {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase não está configurado. Por favor, verifique as credenciais no painel Supabase.');
+  }
+
+  const page = Math.max(1, params.page || 1);
+  const pageSize = Math.min(200, Math.max(1, params.pageSize || 50));
+  const offset = (page - 1) * pageSize;
+
+  try {
+    let queryBuilder = supabase
+      .from('orders')
+      .select('*', { count: 'exact' });
+
+    // Date range filter
+    if (params.dateFrom) {
+      const isoFrom = extractISODateFromTimestamp(params.dateFrom) || params.dateFrom;
+      queryBuilder = queryBuilder.gte('date', isoFrom);
+    }
+    if (params.dateTo) {
+      const isoTo = extractISODateFromTimestamp(params.dateTo) || params.dateTo;
+      queryBuilder = queryBuilder.lte('date', isoTo);
+    }
+
+    // Status filter
+    if (params.status && params.status !== 'Todos' && params.status !== '') {
+      queryBuilder = queryBuilder.eq('status', params.status);
+    }
+
+    // Rider filter
+    if (params.riderId && params.riderId !== '') {
+      if (params.riderId === 'unassigned') {
+        queryBuilder = queryBuilder.is('rider_id', null);
+      } else {
+        queryBuilder = queryBuilder.eq('rider_id', params.riderId);
+      }
+    }
+
+    // Partner filter
+    if (params.partnerName && params.partnerName !== '') {
+      queryBuilder = queryBuilder.ilike('partner_name', `%${params.partnerName}%`);
+    }
+
+    // Search term (searches in id, client_name, address, cep, protocol_number, partner_name)
+    if (params.searchTerm && params.searchTerm.trim() !== '') {
+      const term = params.searchTerm.trim();
+      const sanitized = term.replace(/[%_]/g, '');
+      queryBuilder = queryBuilder.or(
+        `id.ilike.%${sanitized}%,client_name.ilike.%${sanitized}%,address.ilike.%${sanitized}%,cep.ilike.%${sanitized}%,protocol_number.ilike.%${sanitized}%,partner_name.ilike.%${sanitized}%`
+      );
+    }
+
+    // Ordering and pagination
+    queryBuilder = queryBuilder
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    const { data, count, error } = await queryBuilder;
+
+    if (error) {
+      throw new Error(`Erro na consulta Supabase: ${error.message}`);
+    }
+
+    const rawRows = data || [];
+    const mapped = rawRows.map(mapOrderFromDb);
+    const { orders: sanitized } = sanitizeOrdersListConsistency(mapped);
+    const total = count ?? sanitized.length;
+    const totalPages = Math.ceil(total / pageSize) || 1;
+
+    return {
+      orders: sanitized,
+      totalCount: total,
+      page,
+      pageSize,
+      totalPages,
+      source: 'supabase'
+    };
+  } catch (err: any) {
+    console.error('[sbQueryHistoricOrders] Exception executing historical orders query:', err);
+    throw err;
+  }
+}
+

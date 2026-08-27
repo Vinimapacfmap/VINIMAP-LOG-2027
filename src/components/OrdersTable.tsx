@@ -13,6 +13,7 @@ import { matchesAddressQuery } from '../utils/addressUtils';
 import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from '../utils/searchUtils';
 import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult } from '../utils/locationUtils';
 import CepInput, { ViaCepData } from './CepInput';
+import HistoricOrdersConsultModal from './HistoricOrdersConsultModal';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -35,6 +36,7 @@ import {
   Edit3,
   Trash2,
   Plus,
+  Database,
   Settings2,
   DownloadCloud,
   Check,
@@ -261,6 +263,7 @@ function OrdersTable({
   
   // Selection states
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isHistoricConsultOpen, setIsHistoricConsultOpen] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionMenuState, setActionMenuState] = useState<{ id: string; order: Order; top?: number; bottom?: number; left: number; openUp: boolean } | null>(null);
   const [activeStatusDropdownId, setActiveStatusDropdownId] = useState<string | null>(null);
@@ -2444,6 +2447,17 @@ function OrdersTable({
             >
               <Plus size={15} className="font-extrabold" />
               <span>Criar em Massa</span>
+            </button>
+
+            {/* Consulta de Pedidos Anteriores (Supabase Read-Only) */}
+            <button
+              type="button"
+              onClick={() => setIsHistoricConsultOpen(true)}
+              className="h-9 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-2xs hover:scale-[1.01] active:scale-[0.99]"
+              title="Consultar histórico de pedidos anteriores diretamente no banco Supabase sem consumir cotas do Firestore"
+            >
+              <Database size={14} className="text-emerald-700" />
+              <span>Consultar Supabase (Histórico)</span>
             </button>
 
             {/* Buscar & Geocodificar CEP */}
@@ -5501,6 +5515,15 @@ function OrdersTable({
           </>
         )}
       </AnimatePresence>
+
+      {/* Historic Orders Direct Supabase Query Modal */}
+      <HistoricOrdersConsultModal
+        isOpen={isHistoricConsultOpen}
+        onClose={() => setIsHistoricConsultOpen(false)}
+        clientPartners={clientPartners}
+        riders={riders}
+        initialSearchQuery={searchQuery}
+      />
 
     </div>
   );

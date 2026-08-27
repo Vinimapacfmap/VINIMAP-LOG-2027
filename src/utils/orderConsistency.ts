@@ -113,40 +113,35 @@ export function sanitizeOrderConsistency(
   }
 
   // Authoritative Status Preservation:
-  // Status MUST NEVER be downgraded automatically. Orders with completion data are preserved as Concluído.
+  // Status MUST NOT be changed automatically based on recipientName or protocolNumber.
+  // Only explicit user/driver action or explicit spreadsheet status sets 'Concluído'.
   const VALID_STATUSES: OrderStatus[] = ['Não iniciado', 'Em rota', 'Concluído', 'Cancelado', 'Ocorrência'];
   
-  // Check if order has strong evidence of completion (e.g. ZCO-150077, dataConclusao, recipientName, protocolNumber)
-  const hasConclusionRecords = Boolean(
-    updated.dataConclusao || 
-    updated.recipientName || 
-    updated.protocolNumber || 
-    (updated.rawData?.DataConclusao && updated.rawData.DataConclusao !== '') || 
-    (updated.rawData?.Recebedor && updated.rawData.Recebedor !== '') ||
-    (updated.rawData?.NumeroProtocolo && updated.rawData.NumeroProtocolo !== '') ||
-    (updated.id && updated.id.toUpperCase().includes('150077'))
-  );
+  const rawSt = (updated.rawData?.status || updated.rawData?.Status || updated.rawData?.Situacao || '').toString().trim().toLowerCase();
+  const isExplicitlyConcluidoInRaw = rawSt === 'concluído' || rawSt === 'concluido' || rawSt === 'entregue' || rawSt === 'baixado';
 
-  if (hasConclusionRecords && updated.status !== 'Concluído' && updated.status !== 'Cancelado') {
-    updated.status = 'Concluído';
-    isModified = true;
-  } else if ((updated.status as string) === 'Entregando' || (updated.status as string) === 'Em Trânsito') {
-    updated.status = 'Em rota';
-    isModified = true;
-  } else if (!updated.status || !VALID_STATUSES.includes(updated.status)) {
-    // If status is completely missing or invalid, check raw status or default appropriately
-    const rawSt = (updated.rawData?.status || updated.rawData?.Status || updated.rawData?.Situacao || '').toString().trim().toLowerCase();
-    if (rawSt === 'concluído' || rawSt === 'concluido' || rawSt === 'entregue' || hasConclusionRecords) {
+  if (updated.status === 'Concluído' || isExplicitlyConcluidoInRaw) {
+    if (updated.status !== 'Concluído') {
       updated.status = 'Concluído';
-    } else if (rawSt === 'em rota' || rawSt === 'em trânsito' || rawSt === 'entregando') {
-      updated.status = 'Em rota';
-    } else if (rawSt === 'ocorrência' || rawSt === 'ocorrencia') {
-      updated.status = 'Ocorrência';
-    } else if (rawSt === 'cancelado' || rawSt === 'cancelada') {
-      updated.status = 'Cancelado';
-    } else {
-      updated.status = 'Não iniciado';
+      isModified = true;
     }
+  } else if ((updated.status as string) === 'Entregando' || (updated.status as string) === 'Em Trânsito' || rawSt === 'em rota' || rawSt === 'entregando') {
+    if (updated.status !== 'Em rota') {
+      updated.status = 'Em rota';
+      isModified = true;
+    }
+  } else if (updated.status === 'Ocorrência' || rawSt === 'ocorrência' || rawSt === 'ocorrencia') {
+    if (updated.status !== 'Ocorrência') {
+      updated.status = 'Ocorrência';
+      isModified = true;
+    }
+  } else if (updated.status === 'Cancelado' || rawSt === 'cancelado' || rawSt === 'cancelada') {
+    if (updated.status !== 'Cancelado') {
+      updated.status = 'Cancelado';
+      isModified = true;
+    }
+  } else if (!updated.status || !VALID_STATUSES.includes(updated.status)) {
+    updated.status = 'Não iniciado';
     isModified = true;
   }
 

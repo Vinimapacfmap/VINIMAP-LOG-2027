@@ -30,6 +30,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyHub, Order, DeliveryRider, ClientPartner } from '../types';
 import { PwaInstallButton } from './PwaInstallButton';
+import HistoricOrdersConsultModal from './HistoricOrdersConsultModal';
 import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from '../utils/searchUtils';
 
 interface HeaderProps {
@@ -72,6 +73,7 @@ export default function Header({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
+  const [isHistoricConsultOpen, setIsHistoricConsultOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [timeStr, setTimeStr] = useState('');
   const [dateStr, setDateStr] = useState('');
@@ -404,6 +406,18 @@ export default function Header({
         {/* PWA Install Action */}
         <PwaInstallButton variant="header" activeHub={activeHub} />
 
+        {/* Historic Orders Direct Supabase Query Button */}
+        <button
+          type="button"
+          onClick={() => setIsHistoricConsultOpen(true)}
+          title="Consultar histórico de pedidos anteriores diretamente no banco Supabase sem consumir cotas do Firestore"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 shadow-3xs transition-all cursor-pointer shrink-0"
+          id="header-supabase-consult-btn"
+        >
+          <Database size={13} className="text-emerald-700 shrink-0" />
+          <span className="hidden md:inline">Consultar Supabase</span>
+        </button>
+
         {/* Supabase Force Sync Action */}
         {onSyncSupabase && (
           <button
@@ -684,6 +698,15 @@ export default function Header({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Direct Supabase Historical Orders Consult Modal */}
+      <HistoricOrdersConsultModal
+        isOpen={isHistoricConsultOpen}
+        onClose={() => setIsHistoricConsultOpen(false)}
+        clientPartners={clientPartners}
+        riders={riders}
+        initialSearchQuery={searchQuery}
+      />
     </header>
   );
 }

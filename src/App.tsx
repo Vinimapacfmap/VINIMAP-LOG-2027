@@ -2997,7 +2997,9 @@ export default function App() {
         return;
       }
 
-      const riderName = riders.find(r => r.id === riderId)?.name || 'Entregador';
+      const targetRider = findRiderByIdentifier(riders, riderId) || riders.find(r => r.id === riderId);
+      const riderName = targetRider?.name || 'Entregador';
+      const actualRiderId = targetRider ? targetRider.id : riderId;
 
       const preservedAssignStatus: OrderStatus = (currentOrder.status === 'Concluído' || currentOrder.status === 'Ocorrência' || currentOrder.status === 'Cancelado' || currentOrder.status === 'Em rota' || (currentOrder.status as string) === 'Entregando')
         ? currentOrder.status
@@ -3011,12 +3013,23 @@ export default function App() {
       };
 
       const isoNow = new Date().toISOString();
+      const updatedRaw = { ...(currentOrder.rawData || {}) };
+      if (targetRider) {
+        updatedRaw['Condutor'] = targetRider.name;
+        updatedRaw['NomeCondutor'] = targetRider.name;
+        updatedRaw['Entregador'] = targetRider.name;
+        updatedRaw['NomeEntregador'] = targetRider.name;
+        updatedRaw['DispositivoCondutor'] = targetRider.deviceNumber || targetRider.name;
+        updatedRaw['riderId'] = targetRider.id;
+      }
+
       const initialUpdatedOrder: Order = { 
         ...currentOrder, 
-        riderId, 
+        riderId: actualRiderId, 
         status: preservedAssignStatus,
         updatedAt: isoNow,
         statusUpdatedAt: isoNow,
+        rawData: updatedRaw,
         history: [...(currentOrder.history || []), historyEntry]
       };
 
@@ -3392,13 +3405,15 @@ export default function App() {
   const handleBulkAssignRider = async (orderIds: string[], riderId: string) => {
     try {
       const isUnassign = !riderId || riderId === '' || riderId === 'unassign' || riderId === 'desalocar';
-      const riderName = isUnassign ? 'Nenhum' : (riders.find(r => r.id === riderId)?.name || 'Entregador');
+      const targetRider = !isUnassign ? (findRiderByIdentifier(riders, riderId) || riders.find(r => r.id === riderId)) : null;
+      const riderName = isUnassign ? 'Nenhum' : (targetRider?.name || 'Entregador');
+      const actualRiderId = targetRider ? targetRider.id : riderId;
       const updatedOrders: Order[] = [];
       const affectedPrevRiderIds = new Set<string>();
 
       orders.forEach(order => {
         if (orderIds.includes(order.id)) {
-          if (order.riderId && order.riderId !== riderId) {
+          if (order.riderId && order.riderId !== actualRiderId) {
             affectedPrevRiderIds.add(order.riderId);
           }
           const historyEntry = {
@@ -3425,10 +3440,17 @@ export default function App() {
             delete cleanedRawData.DispositivoCondutor;
             delete cleanedRawData.dispositivoCondutor;
             delete cleanedRawData.riderName;
+          } else if (targetRider) {
+            cleanedRawData['Condutor'] = targetRider.name;
+            cleanedRawData['NomeCondutor'] = targetRider.name;
+            cleanedRawData['Entregador'] = targetRider.name;
+            cleanedRawData['NomeEntregador'] = targetRider.name;
+            cleanedRawData['DispositivoCondutor'] = targetRider.deviceNumber || targetRider.name;
+            cleanedRawData['riderId'] = targetRider.id;
           }
           const initialUpdatedOrder: Order = {
             ...order,
-            riderId: isUnassign ? undefined : riderId,
+            riderId: isUnassign ? undefined : actualRiderId,
             driverValue: isUnassign ? 0 : order.driverValue,
             status: preservedBulkStatus,
             updatedAt: isoNow,
@@ -3451,7 +3473,6 @@ export default function App() {
 
       // Update riders status
       const updatedRidersToSave: DeliveryRider[] = [];
-      const targetRider = !isUnassign ? riders.find(r => r.id === riderId) : null;
 
       riders.forEach(r => {
         if (affectedPrevRiderIds.has(r.id)) {
@@ -6229,7 +6250,7 @@ export default function App() {
                                   }}
                                 >
                                   <span className="flex items-center justify-center gap-1">
-                                    Entregas
+                                    Alocados / Concluídos
                                     {riderSortField === 'deliveries' && (riderSortDirection === 'asc' ? '▲' : '▼')}
                                   </span>
                                 </th>
@@ -6337,7 +6358,35 @@ export default function App() {
                                       </span>
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3.5 text-center font-bold text-slate-800">{item.completedDeliveries}</td>
+                                  <td className="px-4 py-3.5 text-center">
+                                    {(() => {
+                                      const activeAllocatedCount = orders.filter(o => isOrderMatchingRider(o, item.id, riders) && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
+                                      const completedCount = orders.filter(o => isOrderMatchingRider(o, item.id, riders) && o.status === 'Concluído').length;
+                                      return (
+                                        <div className="flex flex-col items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setFilterRiderId(item.id);
+                                              setFilterStatus('');
+                                              setActiveSection('pedidos');
+                                            }}
+                                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all cursor-pointer ${
+                                              activeAllocatedCount > 0
+                                                ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 shadow-2xs'
+                                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
+                                            }`}
+                                            title="Clique para filtrar e ver pedidos deste condutor"
+                                          >
+                                            {activeAllocatedCount} pendente{activeAllocatedCount === 1 ? '' : 's'}
+                                          </button>
+                                          <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
+                                            {completedCount} concluído{completedCount === 1 ? '' : 's'}
+                                          </span>
+                                        </div>
+                                      );
+                                    })()}
+                                  </td>
                                   <td className="px-4 py-3.5 text-center">
                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
                                       item.status === 'Disponível'

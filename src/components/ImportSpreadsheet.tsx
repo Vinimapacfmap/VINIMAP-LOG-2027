@@ -28,6 +28,7 @@ import {
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode, OrderStatus } from '../types';
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
+import { findRiderByIdentifier } from '../utils/partnerUtils';
 import * as XLSX from 'xlsx';
 import { getSaoPauloDateTimeShort, getSaoPauloISODate, getSaoPauloTime, getSaoPauloDate, formatToBrazilianDate, extractISODateFromTimestamp } from '../utils/dateUtils';
 
@@ -438,14 +439,25 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
       else if (cepPrefix >= 2000 && cepPrefix <= 2999) region = 'Zona Norte';
       else if (cepPrefix >= 3000 && cepPrefix <= 3999) region = 'Zona Leste';
 
-      // Find matching rider ID if DispositivoCondutor contains a registered rider name or ID
+      // Find matching rider ID from DispositivoCondutor, Condutor, Entregador, Motorista, etc.
       let matchedRiderId = undefined;
-      const rawCondutorVal = getRowValue(data, 'DispositivoCondutor').trim();
+      const rawCondutorVal = (
+        getRowValue(data, 'DispositivoCondutor') ||
+        getRowValue(data, 'Condutor') ||
+        getRowValue(data, 'NomeCondutor') ||
+        getRowValue(data, 'Entregador') ||
+        getRowValue(data, 'NomeEntregador') ||
+        getRowValue(data, 'Motorista') ||
+        getRowValue(data, 'NomeMotorista') ||
+        getRowValue(data, 'Rider') ||
+        getRowValue(data, 'Driver')
+      ).trim();
+      
       const condutorVal = rawCondutorVal.toLowerCase();
-      const genericKeywords = ['condutor', 'entregador', 'dispositivo', 'moto', 'sem condutor', 'não alocado', 'nao alocado', 'não vinculado', 'nao vinculado', 'nenhum', 'unassign', 'desalocar'];
+      const genericKeywords = ['condutor', 'entregador', 'dispositivo', 'moto', 'sem condutor', 'não alocado', 'nao alocado', 'não vinculado', 'nao vinculado', 'nenhum', 'unassign', 'desalocar', 'null', 'undefined', '-'];
       
       if (condutorVal && !genericKeywords.includes(condutorVal)) {
-        const foundRider = riders.find(r => 
+        const foundRider = findRiderByIdentifier(riders, rawCondutorVal) || riders.find(r => 
           r.id.toLowerCase() === condutorVal || 
           r.name.toLowerCase() === condutorVal ||
           (r.deviceNumber && r.deviceNumber.trim().toLowerCase() === condutorVal) ||
@@ -495,9 +507,9 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
         deliveryValue: finalFreightValue,
         riderId: matchedRiderId,
         rawData: data,
-        status: 'Concluído' // compute full potential commission value for record
+        status: 'Não iniciado'
       };
-      const foundRider = riders.find(r => r.id === matchedRiderId);
+      const foundRider = findRiderByIdentifier(riders, matchedRiderId) || riders.find(r => r.id === matchedRiderId);
       const commissionResult = calculateRiderCommissionForOrder(foundRider, tempOrderForCommission as Order, clientPartners || []);
       const finalDriverValue = matchedRiderId ? commissionResult.total : (parsedValCondutor !== undefined && !isNaN(parsedValCondutor) ? parsedValCondutor : undefined);
 
@@ -524,11 +536,17 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
       }
 
       // Check if Excel explicitly provides dataConclusao and status
+      const rawStatusVal = (getRowValue(data, 'Status') || getRowValue(data, 'status') || getRowValue(data, 'Situacao') || getRowValue(data, 'situação') || '').trim().toLowerCase();
+      const isExplicitlyConcluidoInExcel = rawStatusVal === 'concluído' || rawStatusVal === 'concluido' || rawStatusVal === 'entregue' || rawStatusVal === 'baixado';
+      
+      const initialStatus: OrderStatus = isExplicitlyConcluidoInExcel ? 'Concluído' : 'Não iniciado';
       const rawDataConclusao = normalizeDate(getRowValue(data, 'DataConclusao'));
-      const rawStatusVal = getRowValue(data, 'Status') || getRowValue(data, 'status') || '';
-      const initialStatus: OrderStatus = rawStatusVal.toLowerCase() === 'concluído' || rawStatusVal.toLowerCase() === 'concluido' ? 'Concluído' : 'Não iniciado';
-      // Only assign dataConclusao when order status is actually 'Concluído'
-      const finalDataConclusao = initialStatus === 'Concluído' ? (rawDataConclusao || getSaoPauloISODate()) : undefined;
+      const finalDataConclusao = isExplicitlyConcluidoInExcel ? (rawDataConclusao || getSaoPauloISODate()) : undefined;
+
+      const rawProtocol = getRowValue(data, 'NumeroProtocolo') || getRowValue(data, 'Protocolo');
+      const protocolNumber = isExplicitlyConcluidoInExcel 
+        ? (rawProtocol || 'PROT-' + Math.random().toString(36).substring(2, 9).toUpperCase())
+        : (rawProtocol || undefined);
 
       return {
         id: uniqueOrderId,
@@ -556,13 +574,13 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
         driverValue: finalDriverValue,
         partnerName,
         rawData: data,
-        protocolNumber: 'PROT-' + Math.random().toString(36).substring(2, 9).toUpperCase(),
+        protocolNumber,
         history: [
           {
             timestamp: getSaoPauloDateTimeShort(),
             action: 'Pedido Importado',
             user: 'Sistema (Planilha)',
-            details: 'Importação de dados via planilha Excel realizada com sucesso.'
+            details: `Importação de dados via planilha Excel realizada com sucesso. Status inicial: ${initialStatus}.`
           }
         ]
       };
