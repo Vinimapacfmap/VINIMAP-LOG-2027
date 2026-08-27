@@ -195,9 +195,11 @@ export function setCachedDeliveryRiders(riders: DeliveryRider[]) {
   }
 }
 
+const EXCLUDED_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5', 'ent-70791804'];
+
 export function getCachedDeliveryRiders(): DeliveryRider[] {
   if (globalDeliveryRidersCache.length > 0) {
-    return globalDeliveryRidersCache;
+    return globalDeliveryRidersCache.filter(r => !EXCLUDED_RIDER_IDS.includes(r.id));
   }
   try {
     if (typeof window !== 'undefined') {
@@ -205,8 +207,9 @@ export function getCachedDeliveryRiders(): DeliveryRider[] {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          globalDeliveryRidersCache = parsed;
-          return parsed;
+          const filtered = parsed.filter(r => !EXCLUDED_RIDER_IDS.includes(r.id));
+          globalDeliveryRidersCache = filtered;
+          return filtered;
         }
       }
     }

@@ -912,7 +912,7 @@ export default function App() {
         const existing = map.get(r.id);
         map.set(r.id, existing ? { ...existing, ...r } : r);
       });
-      return Array.from(map.values());
+      return Array.from(map.values()).filter(r => !MOCK_RIDER_IDS.includes(r.id));
     };
 
     const mergeClients = (prev: ClientPartner[], incoming: ClientPartner[]): ClientPartner[] => {
@@ -1089,7 +1089,10 @@ export default function App() {
         markFirestoreConnected();
         const docs: DeliveryRider[] = [];
         snapshot.forEach(doc => {
-          docs.push(doc.data() as DeliveryRider);
+          const data = doc.data() as DeliveryRider;
+          if (!MOCK_RIDER_IDS.includes(data.id)) {
+            docs.push(data);
+          }
         });
         setRiders(docs);
       }, (error) => handleListenerError(error, 'deliveryRiders'))

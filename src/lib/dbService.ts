@@ -54,7 +54,7 @@ export const INITIAL_CLIENT_PARTNERS: ClientPartner[] = [];
 export const MOCK_CLIENT_IDS = ['CL1-001', 'CL1-002', 'CL1-003', 'CL1-004', 'CL1-005', 'CL1-006', 'CL1-007'];
 
 // Known list of mock rider and mock order IDs to allow permanent deletion in real mode
-export const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
+export const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5', 'ent-70791804'];
 export const MOCK_ORDER_IDS = ['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'];
 
 // Helper function to recursively remove undefined fields before saving to Firestore
@@ -764,6 +764,31 @@ export async function dbPurgeMockRidersAndOrders(): Promise<void> {
     } catch (err) {
       console.warn(`Could not delete mock order ${mockId}:`, err);
     }
+  }
+
+  // Also clean up local caches
+  try {
+    if (typeof window !== 'undefined') {
+      const cachedRidersRaw = localStorage.getItem('vinimap_cached_delivery_riders');
+      if (cachedRidersRaw) {
+        const parsed = JSON.parse(cachedRidersRaw);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(r => !MOCK_RIDER_IDS.includes(r.id));
+          localStorage.setItem('vinimap_cached_delivery_riders', JSON.stringify(filtered));
+        }
+      }
+
+      const backupRaw = localStorage.getItem('vinimap_contingency_backup_latest');
+      if (backupRaw) {
+        const parsed = JSON.parse(backupRaw);
+        if (parsed.deliveryRiders && Array.isArray(parsed.deliveryRiders)) {
+          parsed.deliveryRiders = parsed.deliveryRiders.filter((r: any) => !MOCK_RIDER_IDS.includes(r.id));
+          localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not clean local storage caches during rider purge:', e);
   }
 }
 
