@@ -53,7 +53,8 @@ import {
   Flag,
   AlertCircle,
   FileText,
-  Settings2
+  Settings2,
+  ArrowUpDown
 } from 'lucide-react';
 
 interface AdvancedReportsProps {
@@ -138,6 +139,16 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
   // For customized report export settings
   const [showExportModal, setShowExportModal] = useState(false);
   const emptySelectedIds = useMemo(() => new Set<string>(), []);
+
+  // Table Sorting States
+  const [partnerSortField, setPartnerSortField] = useState<'name' | 'volA' | 'volB' | 'volGrowth' | 'revA' | 'revB' | 'revGrowth' | 'status'>('name');
+  const [partnerSortDirection, setPartnerSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const [riderOrderSortField, setRiderOrderSortField] = useState<'id' | 'partner' | 'client' | 'date' | 'value' | 'status'>('date');
+  const [riderOrderSortDirection, setRiderOrderSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  const [prodSortField, setProdSortField] = useState<'name' | 'total' | 'completed' | 'avgTravelTime' | 'slaRate' | 'status'>('completed');
+  const [prodSortDirection, setProdSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Filtered orders list based on toggle
   const targetOrders = useMemo(() => {
@@ -580,6 +591,53 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
       };
     }).sort((a, b) => b.completed - a.completed);
   }, [riders, targetOrders]);
+
+  // Sorted Partners Data for Table
+  const sortedPartnersData = useMemo(() => {
+    return [...partnersData].sort((a, b) => {
+      const volGrowthA = a.volA > 0 ? ((a.volB - a.volA) / a.volA) * 100 : a.volB > 0 ? 100 : 0;
+      const volGrowthB = b.volA > 0 ? ((b.volB - b.volA) / b.volA) * 100 : b.volB > 0 ? 100 : 0;
+      const revGrowthA = a.revA > 0 ? ((a.revB - a.revA) / a.revA) * 100 : a.revB > 0 ? 100 : 0;
+      const revGrowthB = b.revA > 0 ? ((b.revB - b.revA) / b.revA) * 100 : b.revB > 0 ? 100 : 0;
+
+      if (partnerSortField === 'name') {
+        const res = a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
+        return partnerSortDirection === 'asc' ? res : -res;
+      } else if (partnerSortField === 'volA') {
+        return partnerSortDirection === 'asc' ? a.volA - b.volA : b.volA - a.volA;
+      } else if (partnerSortField === 'volB') {
+        return partnerSortDirection === 'asc' ? a.volB - b.volB : b.volB - a.volB;
+      } else if (partnerSortField === 'volGrowth') {
+        return partnerSortDirection === 'asc' ? volGrowthA - volGrowthB : volGrowthB - volGrowthA;
+      } else if (partnerSortField === 'revA') {
+        return partnerSortDirection === 'asc' ? a.revA - b.revA : b.revA - a.revA;
+      } else if (partnerSortField === 'revB') {
+        return partnerSortDirection === 'asc' ? a.revB - b.revB : b.revB - a.revB;
+      } else if (partnerSortField === 'revGrowth' || partnerSortField === 'status') {
+        return partnerSortDirection === 'asc' ? revGrowthA - revGrowthB : revGrowthB - revGrowthA;
+      }
+      return 0;
+    });
+  }, [partnersData, partnerSortField, partnerSortDirection]);
+
+  // Sorted Rider Productivity Data for Table
+  const sortedRiderProductivityData = useMemo(() => {
+    return [...riderProductivityData].sort((a, b) => {
+      if (prodSortField === 'name') {
+        const res = a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
+        return prodSortDirection === 'asc' ? res : -res;
+      } else if (prodSortField === 'total') {
+        return prodSortDirection === 'asc' ? a.totalOrders - b.totalOrders : b.totalOrders - a.totalOrders;
+      } else if (prodSortField === 'completed') {
+        return prodSortDirection === 'asc' ? a.completed - b.completed : b.completed - a.completed;
+      } else if (prodSortField === 'avgTravelTime') {
+        return prodSortDirection === 'asc' ? a.avgTravelTime - b.avgTravelTime : b.avgTravelTime - a.avgTravelTime;
+      } else if (prodSortField === 'slaRate' || prodSortField === 'status') {
+        return prodSortDirection === 'asc' ? a.slaRate - b.slaRate : b.slaRate - a.slaRate;
+      }
+      return 0;
+    });
+  }, [riderProductivityData, prodSortField, prodSortDirection]);
 
   return (
     <div className="space-y-6" id="view-relatorios-avancados">
@@ -1057,27 +1115,146 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
                 <h3 className="text-sm font-bold text-slate-800">Tabela de Desempenho Detalhado por Parceiro</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">Variação percentual de crescimento em volume e receita entre os períodos</p>
               </div>
-              <div className="text-[10px] text-slate-400 font-semibold font-mono bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-lg">
-                Totalizando {partnersData.length} parceiros corporativos
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Sort Selector Filter */}
+                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl">
+                  <ArrowUpDown size={12} className="text-slate-400 shrink-0" />
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ordem:</span>
+                  <select
+                    value={partnerSortField}
+                    onChange={(e) => setPartnerSortField(e.target.value as any)}
+                    className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer pr-1"
+                  >
+                    <option value="name">Parceiro Comercial</option>
+                    <option value="volA">Vol. {monthA}</option>
+                    <option value="volB">Vol. {monthB}</option>
+                    <option value="volGrowth">Cresc. Vol (%)</option>
+                    <option value="revA">Rec. {monthA}</option>
+                    <option value="revB">Rec. {monthB}</option>
+                    <option value="revGrowth">Cresc. Receita (%)</option>
+                    <option value="status">Status</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    className="p-0.5 text-blue-600 hover:bg-blue-100 rounded font-extrabold text-[10px] cursor-pointer"
+                    title={partnerSortDirection === 'asc' ? "Ordem Crescente (A-Z / Menor-Maior)" : "Ordem Decrescente (Z-A / Maior-Menor)"}
+                  >
+                    {partnerSortDirection === 'asc' ? '▲ ASC' : '▼ DESC'}
+                  </button>
+                </div>
+
+                <div className="text-[10px] text-slate-400 font-semibold font-mono bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-lg">
+                  Totalizando {partnersData.length} parceiros corporativos
+                </div>
               </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs text-slate-600 border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-[10px] uppercase text-left tracking-wider">
-                    <th className="px-6 py-3">Parceiro Comercial</th>
-                    <th className="px-4 py-3 text-center">Vol. {monthA}</th>
-                    <th className="px-4 py-3 text-center">Vol. {monthB}</th>
-                    <th className="px-4 py-3 text-center">Cresc. Vol (%)</th>
-                    <th className="px-4 py-3 text-right">Rec. {monthA}</th>
-                    <th className="px-4 py-3 text-right">Rec. {monthB}</th>
-                    <th className="px-4 py-3 text-right">Cresc. Receita (%)</th>
-                    <th className="px-6 py-3 text-center">Status</th>
+                  <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-[10px] uppercase text-left tracking-wider select-none">
+                    <th 
+                      className="px-6 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (partnerSortField === 'name') setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setPartnerSortField('name'); setPartnerSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center gap-1">
+                        Parceiro Comercial
+                        {partnerSortField === 'name' && (partnerSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (partnerSortField === 'volA') setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setPartnerSortField('volA'); setPartnerSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Vol. {monthA}
+                        {partnerSortField === 'volA' && (partnerSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (partnerSortField === 'volB') setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setPartnerSortField('volB'); setPartnerSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Vol. {monthB}
+                        {partnerSortField === 'volB' && (partnerSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (partnerSortField === 'volGrowth') setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setPartnerSortField('volGrowth'); setPartnerSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Cresc. Vol (%)
+                        {partnerSortField === 'volGrowth' && (partnerSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (partnerSortField === 'revA') setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setPartnerSortField('revA'); setPartnerSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-end gap-1">
+                        Rec. {monthA}
+                        {partnerSortField === 'revA' && (partnerSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (partnerSortField === 'revB') setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setPartnerSortField('revB'); setPartnerSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-end gap-1">
+                        Rec. {monthB}
+                        {partnerSortField === 'revB' && (partnerSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (partnerSortField === 'revGrowth') setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setPartnerSortField('revGrowth'); setPartnerSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-end gap-1">
+                        Cresc. Receita (%)
+                        {partnerSortField === 'revGrowth' && (partnerSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-6 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (partnerSortField === 'status') setPartnerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setPartnerSortField('status'); setPartnerSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Status
+                        {partnerSortField === 'status' && (partnerSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-                  {partnersData.map((partner, idx) => {
+                  {sortedPartnersData.map((partner, idx) => {
                     // Growth calculation
                     const volGrowth = partner.volA > 0 
                       ? ((partner.volB - partner.volA) / partner.volA) * 100 
@@ -1505,31 +1682,152 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
 
                   {/* Driver Orders List */}
                   <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Histórico de Pedidos Despachados</h4>
                         <p className="text-[10px] text-slate-400 mt-0.5">Listagem das encomendas vinculadas a este entregador</p>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono font-bold bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-lg shrink-0">
-                        {orders.filter(o => o.riderId === activeReportRider.id).length} pedidos
-                      </span>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Sort Selector Filter */}
+                        <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl">
+                          <ArrowUpDown size={12} className="text-slate-400 shrink-0" />
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ordem:</span>
+                          <select
+                            value={riderOrderSortField}
+                            onChange={(e) => setRiderOrderSortField(e.target.value as any)}
+                            className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer pr-1"
+                          >
+                            <option value="date">Data do Pedido</option>
+                            <option value="id">Cód/ID</option>
+                            <option value="partner">Parceiro</option>
+                            <option value="client">Cliente</option>
+                            <option value="value">Valor</option>
+                            <option value="status">Status</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setRiderOrderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                            className="p-0.5 text-blue-600 hover:bg-blue-100 rounded font-extrabold text-[10px] cursor-pointer"
+                            title={riderOrderSortDirection === 'asc' ? "Ordem Crescente" : "Ordem Decrescente"}
+                          >
+                            {riderOrderSortDirection === 'asc' ? '▲ ASC' : '▼ DESC'}
+                          </button>
+                        </div>
+
+                        <span className="text-[10px] text-slate-400 font-mono font-bold bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-lg shrink-0">
+                          {orders.filter(o => o.riderId === activeReportRider.id).length} pedidos
+                        </span>
+                      </div>
                     </div>
 
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-xs text-slate-600 border-collapse">
                         <thead>
-                          <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-[10px] uppercase text-left tracking-wider">
-                            <th className="px-3 py-2.5">Cód/ID</th>
-                            <th className="px-3 py-2.5">Parceiro</th>
-                            <th className="px-3 py-2.5">Cliente</th>
-                            <th className="px-3 py-2.5 text-center">Data</th>
-                            <th className="px-3 py-2.5 text-right">Valor</th>
-                            <th className="px-3 py-2.5 text-center">Status</th>
+                          <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-[10px] uppercase text-left tracking-wider select-none">
+                            <th 
+                              className="px-3 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                              onClick={() => {
+                                if (riderOrderSortField === 'id') setRiderOrderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                else { setRiderOrderSortField('id'); setRiderOrderSortDirection('asc'); }
+                              }}
+                            >
+                              <span className="flex items-center gap-1">
+                                Cód/ID
+                                {riderOrderSortField === 'id' && (riderOrderSortDirection === 'asc' ? '▲' : '▼')}
+                              </span>
+                            </th>
+                            <th 
+                              className="px-3 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                              onClick={() => {
+                                if (riderOrderSortField === 'partner') setRiderOrderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                else { setRiderOrderSortField('partner'); setRiderOrderSortDirection('asc'); }
+                              }}
+                            >
+                              <span className="flex items-center gap-1">
+                                Parceiro
+                                {riderOrderSortField === 'partner' && (riderOrderSortDirection === 'asc' ? '▲' : '▼')}
+                              </span>
+                            </th>
+                            <th 
+                              className="px-3 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                              onClick={() => {
+                                if (riderOrderSortField === 'client') setRiderOrderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                else { setRiderOrderSortField('client'); setRiderOrderSortDirection('asc'); }
+                              }}
+                            >
+                              <span className="flex items-center gap-1">
+                                Cliente
+                                {riderOrderSortField === 'client' && (riderOrderSortDirection === 'asc' ? '▲' : '▼')}
+                              </span>
+                            </th>
+                            <th 
+                              className="px-3 py-2.5 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                              onClick={() => {
+                                if (riderOrderSortField === 'date') setRiderOrderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                else { setRiderOrderSortField('date'); setRiderOrderSortDirection('asc'); }
+                              }}
+                            >
+                              <span className="flex items-center justify-center gap-1">
+                                Data
+                                {riderOrderSortField === 'date' && (riderOrderSortDirection === 'asc' ? '▲' : '▼')}
+                              </span>
+                            </th>
+                            <th 
+                              className="px-3 py-2.5 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                              onClick={() => {
+                                if (riderOrderSortField === 'value') setRiderOrderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                else { setRiderOrderSortField('value'); setRiderOrderSortDirection('asc'); }
+                              }}
+                            >
+                              <span className="flex items-center justify-end gap-1">
+                                Valor
+                                {riderOrderSortField === 'value' && (riderOrderSortDirection === 'asc' ? '▲' : '▼')}
+                              </span>
+                            </th>
+                            <th 
+                              className="px-3 py-2.5 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                              onClick={() => {
+                                if (riderOrderSortField === 'status') setRiderOrderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                else { setRiderOrderSortField('status'); setRiderOrderSortDirection('asc'); }
+                              }}
+                            >
+                              <span className="flex items-center justify-center gap-1">
+                                Status
+                                {riderOrderSortField === 'status' && (riderOrderSortDirection === 'asc' ? '▲' : '▼')}
+                              </span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
                           {(() => {
-                            const riderOrders = orders.filter(o => o.riderId === activeReportRider.id);
+                            const riderOrders = orders.filter(o => o.riderId === activeReportRider.id).sort((a, b) => {
+                              if (riderOrderSortField === 'value') {
+                                return riderOrderSortDirection === 'asc' ? (a.value || 0) - (b.value || 0) : (b.value || 0) - (a.value || 0);
+                              } else if (riderOrderSortField === 'date') {
+                                const dtA = a.date || '';
+                                const dtB = b.date || '';
+                                const res = dtA.localeCompare(dtB);
+                                return riderOrderSortDirection === 'asc' ? res : -res;
+                              }
+                              let valA = '';
+                              let valB = '';
+                              if (riderOrderSortField === 'id') {
+                                valA = String(a.id || '');
+                                valB = String(b.id || '');
+                              } else if (riderOrderSortField === 'partner') {
+                                valA = getPartnerDisplayName(a.partnerName, clientPartners);
+                                valB = getPartnerDisplayName(b.partnerName, clientPartners);
+                              } else if (riderOrderSortField === 'client') {
+                                valA = String(a.clientName || '');
+                                valB = String(b.clientName || '');
+                              } else if (riderOrderSortField === 'status') {
+                                valA = String(a.status || '');
+                                valB = String(b.status || '');
+                              }
+                              const res = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base' });
+                              return riderOrderSortDirection === 'asc' ? res : -res;
+                            });
 
                             if (riderOrders.length === 0) {
                               return (
@@ -1762,22 +2060,114 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
                 <h4 className="font-bold text-slate-800 text-sm">Ranking de Produtividade dos Condutores</h4>
                 <p className="text-xs text-slate-400 mt-0.5">Indicadores detalhados de SLA, agilidade e volume no período selecionado</p>
               </div>
+
+              {/* Sort Selector Filter */}
+              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl">
+                <ArrowUpDown size={12} className="text-slate-400 shrink-0" />
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ordem:</span>
+                <select
+                  value={prodSortField}
+                  onChange={(e) => setProdSortField(e.target.value as any)}
+                  className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer pr-1"
+                >
+                  <option value="completed">Concluídos</option>
+                  <option value="name">Condutor</option>
+                  <option value="total">Atribuições</option>
+                  <option value="avgTravelTime">Tempo Médio de Rota</option>
+                  <option value="slaRate">Pontualidade (SLA)</option>
+                  <option value="status">Desempenho Geral</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setProdSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="p-0.5 text-blue-600 hover:bg-blue-100 rounded font-extrabold text-[10px] cursor-pointer"
+                  title={prodSortDirection === 'asc' ? "Ordem Crescente" : "Ordem Decrescente"}
+                >
+                  {prodSortDirection === 'asc' ? '▲ ASC' : '▼ DESC'}
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                    <th className="px-5 py-3.5">Condutor / Equipamento</th>
-                    <th className="px-5 py-3.5 text-center">Atribuições</th>
-                    <th className="px-5 py-3.5 text-center">Concluídos</th>
-                    <th className="px-5 py-3.5 text-center">Tempo Médio de Rota</th>
-                    <th className="px-5 py-3.5 text-center">Pontualidade (SLA)</th>
-                    <th className="px-5 py-3.5 text-center">Desempenho Geral</th>
+                  <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 select-none">
+                    <th 
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (prodSortField === 'name') setProdSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setProdSortField('name'); setProdSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center gap-1">
+                        Condutor / Equipamento
+                        {prodSortField === 'name' && (prodSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3.5 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (prodSortField === 'total') setProdSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setProdSortField('total'); setProdSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Atribuições
+                        {prodSortField === 'total' && (prodSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3.5 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (prodSortField === 'completed') setProdSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setProdSortField('completed'); setProdSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Concluídos
+                        {prodSortField === 'completed' && (prodSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3.5 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (prodSortField === 'avgTravelTime') setProdSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setProdSortField('avgTravelTime'); setProdSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Tempo Médio de Rota
+                        {prodSortField === 'avgTravelTime' && (prodSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3.5 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (prodSortField === 'slaRate') setProdSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setProdSortField('slaRate'); setProdSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Pontualidade (SLA)
+                        {prodSortField === 'slaRate' && (prodSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3.5 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (prodSortField === 'status') setProdSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        else { setProdSortField('status'); setProdSortDirection('asc'); }
+                      }}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Desempenho Geral
+                        {prodSortField === 'status' && (prodSortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {riderProductivityData.map((row) => {
+                  {sortedRiderProductivityData.map((row) => {
                     // Calculate general efficiency tier
                     let efficiencyTier = 'Sob Atenção';
                     let efficiencyColor = 'bg-rose-50 text-rose-700 border-rose-100';

@@ -157,6 +157,7 @@ export default function GlobalFilters({
     let unassignedCount = 0;
 
     relevantOrders.forEach(o => {
+      if (o.status === 'Cancelado') return;
       const rawRiderId = o.riderId ? String(o.riderId).trim() : '';
       if (!rawRiderId || rawRiderId === 'unassigned' || rawRiderId === 'sem condutor') {
         unassignedCount += 1;

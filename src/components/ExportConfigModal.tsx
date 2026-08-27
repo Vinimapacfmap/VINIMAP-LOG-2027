@@ -67,7 +67,7 @@ const EXPORT_COLUMNS: ExportColumnDefinition[] = [
   { key: 'ValorReceber', label: 'Valor a Receber', category: 'financial', getValue: (o) => o.rawData?.ValorReceber || o.rawData?.valorreceber || '' },
 
   // LOGISTICS & TIMING
-  { key: 'riderId', label: 'Entregador', category: 'logistics', getValue: (o, idx, riders) => riders.find(r => r.id === o.riderId)?.name || 'Não vinculado' },
+  { key: 'riderId', label: 'Entregador', category: 'logistics', getValue: (o, idx, riders) => o.status === 'Cancelado' ? 'Cancelado' : (riders.find(r => r.id === o.riderId)?.name || 'Não vinculado') },
   { key: 'TipoEntrega', label: 'Tipo de Entrega', category: 'logistics', getValue: (o) => o.rawData?.TipoEntrega || o.rawData?.tipoentrega || '' },
   { key: 'HorarioInicio', label: 'Horário de Início', category: 'logistics', getValue: (o) => o.horarioInicial || o.createdAt || o.rawData?.HorarioInicio || o.rawData?.horarioinicio || '' },
   { key: 'HorarioFinal', label: 'Horário Final', category: 'logistics', getValue: (o) => o.rawData?.HorarioFinal || o.rawData?.horariofinal || '' },
@@ -93,7 +93,7 @@ const EXPORT_COLUMNS: ExportColumnDefinition[] = [
   { key: 'Complemento', label: 'Complemento Endereço', category: 'fiscal_extra', getValue: (o) => o.rawData?.Complemento || o.rawData?.complemento || '' },
   { key: 'Sequencia', label: 'Sequência', category: 'fiscal_extra', getValue: (o, idx) => idx },
   { key: 'ProcurarPor', label: 'Procurar Por', category: 'fiscal_extra', getValue: (o) => o.clientName },
-  { key: 'DispositivoCondutor', label: 'Dispositivo Condutor', category: 'fiscal_extra', getValue: (o, idx, riders) => riders.find(r => r.id === o.riderId)?.name || 'Não vinculado' },
+  { key: 'DispositivoCondutor', label: 'Dispositivo Condutor', category: 'fiscal_extra', getValue: (o, idx, riders) => o.status === 'Cancelado' ? 'Cancelado' : (riders.find(r => r.id === o.riderId)?.name || 'Não vinculado') },
   { key: 'Latitude', label: 'Latitude', category: 'fiscal_extra', getValue: (o) => o.rawData?.Latitude || o.rawData?.latitude || '' },
   { key: 'Longitude', label: 'Longitude', category: 'fiscal_extra', getValue: (o) => o.rawData?.Longitude || o.rawData?.longitude || '' },
 ];

@@ -29,7 +29,8 @@ import {
   FileSpreadsheet,
   Download,
   MapPin,
-  User
+  User,
+  ArrowUpDown
 } from 'lucide-react';
 
 interface ClientBillingModalProps {
@@ -58,6 +59,10 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
   const [startDate, setStartDate] = useState<string>('2026-06-01');
   const [endDate, setEndDate] = useState<string>('2026-07-31');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Table Sorting state
+  const [sortField, setSortField] = useState<'id' | 'date' | 'client' | 'address' | 'cep' | 'value' | 'freight'>('cep');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Setup presets helper
   const handlePreset = (preset: 'today' | 'week' | 'july26' | 'june26' | 'all') => {
@@ -122,6 +127,42 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
       return true;
     }).sort(compareOrdersByCep);
   }, [orders, client, startDate, endDate, searchQuery, riders]);
+
+  // Sorted orders for table display
+  const sortedOrders = useMemo(() => {
+    return [...filteredOrders].sort((a, b) => {
+      if (sortField === 'value') {
+        return sortDirection === 'asc' ? (a.value || 0) - (b.value || 0) : (b.value || 0) - (a.value || 0);
+      } else if (sortField === 'freight') {
+        const freightA = getOrderFreightValue(a, clientPartners);
+        const freightB = getOrderFreightValue(b, clientPartners);
+        return sortDirection === 'asc' ? freightA - freightB : freightB - freightA;
+      } else if (sortField === 'date') {
+        const dtA = a.date || '';
+        const dtB = b.date || '';
+        const res = dtA.localeCompare(dtB);
+        return sortDirection === 'asc' ? res : -res;
+      } else if (sortField === 'cep') {
+        const res = compareOrdersByCep(a, b);
+        return sortDirection === 'asc' ? res : -res;
+      }
+      
+      let valA = '';
+      let valB = '';
+      if (sortField === 'id') {
+        valA = String(a.id || '').replace('ped-', '');
+        valB = String(b.id || '').replace('ped-', '');
+      } else if (sortField === 'client') {
+        valA = String(a.clientName || '');
+        valB = String(b.clientName || '');
+      } else if (sortField === 'address') {
+        valA = String(a.address || '');
+        valB = String(b.address || '');
+      }
+      const res = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base' });
+      return sortDirection === 'asc' ? res : -res;
+    });
+  }, [filteredOrders, sortField, sortDirection, clientPartners]);
 
   // Calculations for billing metrics
   const stats = useMemo(() => {
@@ -599,38 +640,145 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
 
             {/* Deliveries Table */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <FileText size={14} className="text-slate-400" />
                   Listagem Detalhada de Entregas Realizadas
                 </span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  {filteredOrders.length} resultados encontrados
-                </span>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Sort Selector Filter */}
+                  <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl">
+                    <ArrowUpDown size={12} className="text-slate-400 shrink-0" />
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ordem:</span>
+                    <select
+                      value={sortField}
+                      onChange={(e) => setSortField(e.target.value as any)}
+                      className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer pr-1"
+                    >
+                      <option value="cep">CEP / Rota</option>
+                      <option value="id">Nº Pedido</option>
+                      <option value="date">Data</option>
+                      <option value="client">Cliente</option>
+                      <option value="address">Endereço</option>
+                      <option value="value">Valor Mercadoria</option>
+                      <option value="freight">Frete Cobrado</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                      className="p-0.5 text-violet-600 hover:bg-violet-100 rounded font-extrabold text-[10px] cursor-pointer"
+                      title={sortDirection === 'asc' ? "Ordem Crescente" : "Ordem Decrescente"}
+                    >
+                      {sortDirection === 'asc' ? '▲ ASC' : '▼ DESC'}
+                    </button>
+                  </div>
+
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {filteredOrders.length} resultados encontrados
+                  </span>
+                </div>
               </div>
 
               <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white shadow-sm">
                 <table className="min-w-full text-xs text-slate-600 border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase">
-                      <th className="px-4 py-3">Nº Pedido</th>
-                      <th className="px-4 py-3 text-center">Data</th>
-                      <th className="px-4 py-3">Cliente</th>
-                      <th className="px-4 py-3">Endereço</th>
-                      <th className="px-4 py-3">CEP</th>
-                      <th className="px-4 py-3 text-right">Valor Mercadoria</th>
-                      <th className="px-4 py-3 text-right">Frete Cobrado</th>
+                    <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase select-none">
+                      <th 
+                        className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => {
+                          if (sortField === 'id') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortField('id'); setSortDirection('asc'); }
+                        }}
+                      >
+                        <span className="flex items-center gap-1">
+                          Nº Pedido
+                          {sortField === 'id' && (sortDirection === 'asc' ? '▲' : '▼')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => {
+                          if (sortField === 'date') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortField('date'); setSortDirection('asc'); }
+                        }}
+                      >
+                        <span className="flex items-center justify-center gap-1">
+                          Data
+                          {sortField === 'date' && (sortDirection === 'asc' ? '▲' : '▼')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => {
+                          if (sortField === 'client') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortField('client'); setSortDirection('asc'); }
+                        }}
+                      >
+                        <span className="flex items-center gap-1">
+                          Cliente
+                          {sortField === 'client' && (sortDirection === 'asc' ? '▲' : '▼')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => {
+                          if (sortField === 'address') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortField('address'); setSortDirection('asc'); }
+                        }}
+                      >
+                        <span className="flex items-center gap-1">
+                          Endereço
+                          {sortField === 'address' && (sortDirection === 'asc' ? '▲' : '▼')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => {
+                          if (sortField === 'cep') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortField('cep'); setSortDirection('asc'); }
+                        }}
+                      >
+                        <span className="flex items-center gap-1">
+                          CEP
+                          {sortField === 'cep' && (sortDirection === 'asc' ? '▲' : '▼')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => {
+                          if (sortField === 'value') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortField('value'); setSortDirection('asc'); }
+                        }}
+                      >
+                        <span className="flex items-center justify-end gap-1">
+                          Valor Mercadoria
+                          {sortField === 'value' && (sortDirection === 'asc' ? '▲' : '▼')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => {
+                          if (sortField === 'freight') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortField('freight'); setSortDirection('asc'); }
+                        }}
+                      >
+                        <span className="flex items-center justify-end gap-1">
+                          Frete Cobrado
+                          {sortField === 'freight' && (sortDirection === 'asc' ? '▲' : '▼')}
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-                    {filteredOrders.length === 0 ? (
+                    {sortedOrders.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                           Nenhuma entrega registrada para este parceiro neste período.
                         </td>
                       </tr>
                     ) : (
-                      filteredOrders.map((order) => {
+                      sortedOrders.map((order) => {
                         const isConcluded = order.status === 'Concluído';
                         const orderFreight = getOrderFreightValue(order, clientPartners);
                         

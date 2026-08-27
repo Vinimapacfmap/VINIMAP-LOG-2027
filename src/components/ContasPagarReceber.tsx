@@ -44,7 +44,8 @@ import {
   Printer,
   ChevronDown,
   Building,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ArrowUpDown
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -188,7 +189,7 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
   const [costTypeFilter, setCostTypeFilter] = useState<'Todos' | 'fixed' | 'variable'>('Todos');
   const [recurrenceFilter, setRecurrenceFilter] = useState<'Todos' | 'recurring' | 'single'>('Todos');
   const [partnerFilter, setPartnerFilter] = useState('Todos');
-  const [sortField, setSortField] = useState<'dueDate' | 'amount'>('dueDate');
+  const [sortField, setSortField] = useState<'dueDate' | 'amount' | 'description' | 'recipientOrPayer' | 'category' | 'paymentMethod' | 'status'>('dueDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Export menu & Partner PDF Modal states
@@ -351,7 +352,7 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
   };
 
   // Handle Sort Toggle
-  const handleSort = (field: 'dueDate' | 'amount') => {
+  const handleSort = (field: 'dueDate' | 'amount' | 'description' | 'recipientOrPayer' | 'category' | 'paymentMethod' | 'status') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -1852,6 +1853,33 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
                 </select>
               </div>
 
+              {/* Sort Order Selector Filter */}
+              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl">
+                <ArrowUpDown size={12} className="text-slate-400" />
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ordem:</span>
+                <select
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value as any)}
+                  className="bg-transparent border-none text-[11px] font-bold text-slate-600 outline-none cursor-pointer pr-1"
+                >
+                  <option value="dueDate">Data Vencimento</option>
+                  <option value="amount">Valor Financeiro</option>
+                  <option value="description">Descrição</option>
+                  <option value="recipientOrPayer">Favorecido / Recebedor</option>
+                  <option value="category">Categoria</option>
+                  <option value="paymentMethod">Método Pagamento</option>
+                  <option value="status">Status</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="p-0.5 text-blue-600 hover:bg-blue-100 rounded font-extrabold text-[10px] cursor-pointer"
+                  title={sortDirection === 'asc' ? "Ordem Crescente (A-Z / Menor-Maior)" : "Ordem Decrescente (Z-A / Maior-Menor)"}
+                >
+                  {sortDirection === 'asc' ? '▲ ASC' : '▼ DESC'}
+                </button>
+              </div>
+
             </div>
           </div>
 
@@ -1907,29 +1935,76 @@ export const ContasPagarReceber: React.FC<ContasPagarReceberProps> = ({
                         title="Selecionar Todos os Filtrados"
                       />
                     </th>
-                    <th className="px-5 py-3">Descrição / Lançamento</th>
-                    <th className="px-5 py-3">Favorecido / Recebedor</th>
-                    <th className="px-5 py-3">Categoria / Classificação</th>
                     <th 
-                      className="px-5 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      className="px-5 py-3 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                      onClick={() => handleSort('description')}
+                      title="Ordenar por Descrição"
+                    >
+                      <span className="flex items-center gap-1">
+                        Descrição / Lançamento
+                        {sortField === 'description' && (sortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                      onClick={() => handleSort('recipientOrPayer')}
+                      title="Ordenar por Favorecido / Recebedor"
+                    >
+                      <span className="flex items-center gap-1">
+                        Favorecido / Recebedor
+                        {sortField === 'recipientOrPayer' && (sortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                      onClick={() => handleSort('category')}
+                      title="Ordenar por Categoria"
+                    >
+                      <span className="flex items-center gap-1">
+                        Categoria / Classificação
+                        {sortField === 'category' && (sortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors select-none"
                       onClick={() => handleSort('dueDate')}
+                      title="Ordenar por Data de Vencimento"
                     >
                       <span className="flex items-center justify-center gap-1">
                         Vencimento
                         {sortField === 'dueDate' && (sortDirection === 'asc' ? '▲' : '▼')}
                       </span>
                     </th>
-                    <th className="px-5 py-3 text-center">Método</th>
                     <th 
-                      className="px-5 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                      className="px-5 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                      onClick={() => handleSort('paymentMethod')}
+                      title="Ordenar por Método de Pagamento"
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Método
+                        {sortField === 'paymentMethod' && (sortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
+                    <th 
+                      className="px-5 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors select-none"
                       onClick={() => handleSort('amount')}
+                      title="Ordenar por Valor"
                     >
                       <span className="flex items-center justify-end gap-1">
                         Valor
                         {sortField === 'amount' && (sortDirection === 'asc' ? '▲' : '▼')}
                       </span>
                     </th>
-                    <th className="px-5 py-3 text-center">Status</th>
+                    <th 
+                      className="px-5 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                      onClick={() => handleSort('status')}
+                      title="Ordenar por Status"
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        Status
+                        {sortField === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
+                      </span>
+                    </th>
                     <th className="px-5 py-3 text-center">Ações</th>
                   </tr>
                 </thead>

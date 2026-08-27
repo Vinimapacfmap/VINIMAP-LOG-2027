@@ -42,7 +42,8 @@ import {
   Maximize2,
   Minimize2,
   UserX,
-  X
+  X,
+  ArrowUpDown
 } from 'lucide-react';
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
@@ -404,7 +405,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     return orders.filter(order => {
       // Check Driver A filter
       if (reallocateDriverAId === 'unassigned') {
-        if (order.riderId) return false;
+        if (order.riderId || order.status === 'Cancelado') return false;
       } else if (reallocateDriverAId && reallocateDriverAId !== 'todos') {
         if (order.riderId !== reallocateDriverAId) return false;
       }
@@ -435,7 +436,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     return orders.filter(order => {
       // Check Driver A filter
       if (filterDriverAId === 'unassigned') {
-        if (order.riderId) return false;
+        if (order.riderId || order.status === 'Cancelado') return false;
       } else if (filterDriverAId && filterDriverAId !== 'todos') {
         if (order.riderId !== filterDriverAId) return false;
       }
@@ -958,6 +959,9 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     }
     const isRiderCol = lowerCol === 'dispositivocondutor' || lowerCol === 'condutor' || lowerCol === 'nomecondutor' || lowerCol === 'entregador' || lowerCol === 'motorista' || lowerCol === 'nomemotorista';
     if (isRiderCol) {
+      if (order.status === 'Cancelado') {
+        return 'Cancelado';
+      }
       if (!isAssignedRider(order, riders)) {
         return 'Não vinculado';
       }
@@ -1107,14 +1111,14 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     // Filter by Condutor (A)
     if (filterDriverAId && filterDriverAId !== 'todos') {
       if (filterDriverAId === 'unassigned') {
-        if (order.riderId) return false;
+        if (order.riderId || order.status === 'Cancelado') return false;
       } else {
         if (order.riderId !== filterDriverAId) return false;
       }
     }
 
     // Tab filter
-    if (statusTab === 'Sem Condutor' && order.riderId) return false;
+    if (statusTab === 'Sem Condutor' && (order.riderId || order.status === 'Cancelado')) return false;
     if (statusTab === 'Com Condutor' && !order.riderId) return false;
     if (statusTab === 'Não Iniciadas' && order.status !== 'Não iniciado') return false;
     if (statusTab === 'Ocorrências' && order.status !== 'Ocorrência') return false;
@@ -2489,7 +2493,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                             const val = e.target.value;
                             setFilterDriverAId(val);
                             const matched = orders.filter(order => {
-                              if (val === 'unassigned') return !order.riderId;
+                              if (val === 'unassigned') return !order.riderId && order.status !== 'Cancelado';
                               if (val !== 'todos') return order.riderId === val;
                               return true;
                             });
@@ -2843,7 +2847,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         </select>
                       </div>
 
-                      <div className="relative flex-1 sm:flex-initial sm:w-60">
+                      <div className="relative flex-1 sm:flex-initial sm:w-56">
                         <Search className="absolute left-2.5 top-2 text-slate-400" size={12} />
                         <input
                           type="text"
@@ -2852,6 +2856,54 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                           placeholder="Buscar ID, cliente, endereço..."
                           className="w-full pl-7.5 pr-2.5 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700 font-medium"
                         />
+                      </div>
+
+                      {/* Sort Order Selector Filter */}
+                      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+                        <ArrowUpDown size={11} className="text-slate-400 shrink-0" />
+                        <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider hidden lg:inline">Ordem:</span>
+                        <select
+                          value={sortConfig?.key || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (!val) {
+                              setSortConfig(null);
+                            } else {
+                              setSortConfig({ key: val, direction: sortConfig?.direction || 'desc' });
+                            }
+                          }}
+                          className="bg-transparent border-0 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-0 cursor-pointer pr-1"
+                          title="Filtrar ordenação da tabela de alocação"
+                        >
+                          <option value="">Padrão (Mais Recentes)</option>
+                          {columnsOrder.map(col => (
+                            <option key={`sort-opt-${col}`} value={col}>
+                              {COLUMN_LABELS[col] || col}
+                            </option>
+                          ))}
+                        </select>
+
+                        {sortConfig && (
+                          <div className="flex items-center gap-0.5 border-l border-slate-200 pl-1">
+                            <button
+                              type="button"
+                              onClick={() => setSortConfig(prev => prev ? { ...prev, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : null)}
+                              className="p-0.5 text-blue-600 hover:bg-blue-50 rounded font-extrabold text-[9px] flex items-center gap-0.5 cursor-pointer"
+                              title={sortConfig.direction === 'asc' ? "Ordem Crescente (A-Z)" : "Ordem Decrescente (Z-A)"}
+                            >
+                              {sortConfig.direction === 'asc' ? <MoveUp size={11} className="text-blue-600" /> : <MoveDown size={11} className="text-blue-600" />}
+                              <span className="font-extrabold uppercase text-[8px]">{sortConfig.direction === 'asc' ? 'ASC' : 'DESC'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSortConfig(null)}
+                              className="p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded cursor-pointer text-[9px]"
+                              title="Limpar ordenação"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -70,7 +70,10 @@ import {
   Server,
   Zap,
   CheckSquare,
-  Activity
+  Activity,
+  ArrowUpDown,
+  MoveUp,
+  MoveDown
 } from 'lucide-react';
 import { 
   getNotificationSettings, 
@@ -781,6 +784,9 @@ function OrdersTable({
       return String(commission.total);
     }
     if (lowerCol === 'dispositivocondutor') {
+      if (order.status === 'Cancelado') {
+        return 'Cancelado';
+      }
       const rider = riders.find(r => r.id === order.riderId);
       return rider ? rider.name : 'Não vinculado';
     }
@@ -835,7 +841,7 @@ function OrdersTable({
           value = order.phone || '(11) 98888-7777';
           break;
         case 'dispositivocondutor':
-          value = riders.find(r => r.id === order.riderId)?.name || 'Não vinculado';
+          value = order.status === 'Cancelado' ? 'Cancelado' : (riders.find(r => r.id === order.riderId)?.name || 'Não vinculado');
           break;
         case 'complemento': 
           value = '';
@@ -987,8 +993,8 @@ function OrdersTable({
           valA = String(a.status ?? '');
           valB = String(b.status ?? '');
         } else if (key === 'Entregador' || key === 'Condutor' || key === 'DispositivoCondutor') {
-          const riderA = riders.find(r => r.id === a.riderId)?.name || '';
-          const riderB = riders.find(r => r.id === b.riderId)?.name || '';
+          const riderA = a.status === 'Cancelado' ? 'Cancelado' : (riders.find(r => r.id === a.riderId)?.name || 'Não vinculado');
+          const riderB = b.status === 'Cancelado' ? 'Cancelado' : (riders.find(r => r.id === b.riderId)?.name || 'Não vinculado');
           valA = riderA;
           valB = riderB;
         } else if (key === 'Valor' || key === 'ValorNotaFiscal') {
@@ -1459,7 +1465,7 @@ function OrdersTable({
     }
 
     const exportData = targetList.map((o, idx) => {
-      const riderName = riders.find((r) => r.id === o.riderId)?.name || 'Não vinculado';
+      const riderName = o.status === 'Cancelado' ? 'Cancelado' : (riders.find((r) => r.id === o.riderId)?.name || 'Não vinculado');
       
       // If we have rawData, we can export ALL columns
       if (viewMode === 'spreadsheet') {
@@ -1522,7 +1528,7 @@ function OrdersTable({
 
     const pdfHeaders = [['Código', 'Cliente', 'Endereço / Região', 'Entregador', 'Status', 'Valor']];
     const pdfBody = targetList.map((o) => {
-      const riderName = riders.find((r) => r.id === o.riderId)?.name || 'Não vinculado';
+      const riderName = o.status === 'Cancelado' ? 'Cancelado' : (riders.find((r) => r.id === o.riderId)?.name || 'Não vinculado');
       return [
         o.id,
         `${o.clientName}\n${o.phone || ''}`,
@@ -2688,6 +2694,61 @@ function OrdersTable({
               )}
             </div>
 
+            {/* Sort Order Selector Filter */}
+            <div className="bg-white px-2.5 py-1 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center gap-1.5 h-10">
+              <ArrowUpDown size={13} className="text-slate-400 shrink-0" />
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider hidden md:inline">Ordem:</span>
+              <select
+                value={sortConfig?.key || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    setSortConfig(null);
+                  } else {
+                    setSortConfig({ key: val, direction: sortConfig?.direction || 'desc' });
+                  }
+                }}
+                className="bg-transparent border-0 text-xs font-bold text-slate-700 focus:outline-none focus:ring-0 cursor-pointer pr-1"
+                title="Filtrar ordenação por coluna"
+              >
+                <option value="">Padrão (Mais Recentes)</option>
+                <option value="Data">Data</option>
+                <option value="Código">Código / ID</option>
+                <option value="Cliente">Cliente</option>
+                <option value="Endereço">Endereço</option>
+                <option value="Entregador">Entregador</option>
+                <option value="Valor">Valor</option>
+                <option value="Status">Status</option>
+                <option value="Prioridade">Prioridade</option>
+                <option value="CEP">CEP</option>
+                <option value="HorarioInicio">Horário Início</option>
+                <option value="HorarioFinal">Horário Final</option>
+                <option value="TempoTotal">Tempo Total</option>
+              </select>
+
+              {sortConfig && (
+                <div className="flex items-center gap-0.5 border-l border-slate-200 pl-1">
+                  <button
+                    type="button"
+                    onClick={() => setSortConfig(prev => prev ? { ...prev, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : null)}
+                    className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-extrabold text-[10px] flex items-center gap-0.5 cursor-pointer"
+                    title={sortConfig.direction === 'asc' ? "Ordem Crescente (A-Z, Menor-Maior)" : "Ordem Decrescente (Z-A, Maior-Menor)"}
+                  >
+                    {sortConfig.direction === 'asc' ? <MoveUp size={12} className="text-blue-600 font-extrabold" /> : <MoveDown size={12} className="text-blue-600 font-extrabold" />}
+                    <span className="font-extrabold uppercase text-[9px]">{sortConfig.direction === 'asc' ? 'ASC' : 'DESC'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortConfig(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md cursor-pointer text-[10px]"
+                    title="Remover ordenação personalizada"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* View Mode Switcher Pill */}
             <div className="bg-white p-1 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center gap-1">
               <button
@@ -3357,7 +3418,11 @@ function OrdersTable({
                           {/* Assigned Delivery Rider */}
                           {visibleColumns.has('DispositivoCondutor') && (
                             <td className="px-2.5 py-1.5 relative">
-                              {rider ? (
+                              {order.status === 'Cancelado' ? (
+                                <span className="inline-flex items-center px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold border border-slate-200" title="Pedido Cancelado">
+                                  Cancelado
+                                </span>
+                              ) : rider ? (
                                 <div className="flex items-center gap-1.5 relative group/rider">
                                   <img
                                     src={rider.avatar}

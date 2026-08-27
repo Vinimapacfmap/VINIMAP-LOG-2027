@@ -39,7 +39,8 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
-  Download
+  Download,
+  ArrowUpDown
 } from 'lucide-react';
 
 interface DriverBillingModalProps {
@@ -70,6 +71,10 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
   const [startDate, setStartDate] = useState<string>('2026-06-01');
   const [endDate, setEndDate] = useState<string>('2026-07-31');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Table Sorting state
+  const [sortField, setSortField] = useState<'id' | 'date' | 'partner' | 'client' | 'address' | 'cep' | 'value' | 'status' | 'commission'>('cep');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Customizable billing model interactive local states (simulated/real-time)
   const [editingModel, setEditingModel] = useState<BillingModelType>('misto');
@@ -157,6 +162,48 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
       billingFractionalValue: parseFloat(editingFractionalValue) || 0,
     };
   }, [rider, editingModel, editingFixedFee, editingVariablePercent, editingFreightPercent, editingFractionalValue]);
+
+  // Sorted orders for table display
+  const sortedOrders = useMemo(() => {
+    return [...filteredOrders].sort((a, b) => {
+      if (sortField === 'value') {
+        return sortDirection === 'asc' ? (a.value || 0) - (b.value || 0) : (b.value || 0) - (a.value || 0);
+      } else if (sortField === 'commission') {
+        const commA = calculateRiderCommissionForOrder(simulatedRider || undefined, a, clientPartners).total;
+        const commB = calculateRiderCommissionForOrder(simulatedRider || undefined, b, clientPartners).total;
+        return sortDirection === 'asc' ? commA - commB : commB - commA;
+      } else if (sortField === 'date') {
+        const dtA = a.date || '';
+        const dtB = b.date || '';
+        const res = dtA.localeCompare(dtB);
+        return sortDirection === 'asc' ? res : -res;
+      } else if (sortField === 'cep') {
+        const res = compareOrdersByCep(a, b);
+        return sortDirection === 'asc' ? res : -res;
+      }
+      
+      let valA = '';
+      let valB = '';
+      if (sortField === 'id') {
+        valA = String(a.id || '').replace('ped-', '');
+        valB = String(b.id || '').replace('ped-', '');
+      } else if (sortField === 'partner') {
+        valA = getPartnerDisplayName(a.partnerName, clientPartners);
+        valB = getPartnerDisplayName(b.partnerName, clientPartners);
+      } else if (sortField === 'client') {
+        valA = String(a.clientName || '');
+        valB = String(b.clientName || '');
+      } else if (sortField === 'address') {
+        valA = String(a.address || '');
+        valB = String(b.address || '');
+      } else if (sortField === 'status') {
+        valA = String(a.status || '');
+        valB = String(b.status || '');
+      }
+      const res = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base' });
+      return sortDirection === 'asc' ? res : -res;
+    });
+  }, [filteredOrders, sortField, sortDirection, simulatedRider, clientPartners]);
 
   // Calculations for billing metrics based on simulated/active rider parameters
   const stats = useMemo(() => {

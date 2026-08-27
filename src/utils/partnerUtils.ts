@@ -288,7 +288,7 @@ export function findRiderByIdentifier(
  * When an order has an active `order.riderId`, that assignment is authoritative and exclusive.
  */
 export function isOrderMatchingRider(
-  order: { riderId?: any; rawData?: Record<string, any> },
+  order: { riderId?: any; rawData?: Record<string, any>; status?: any },
   filterRiderId: any,
   riders?: DeliveryRider[]
 ): boolean {
@@ -296,8 +296,36 @@ export function isOrderMatchingRider(
     return true;
   }
 
-  const availableRiders = (riders && riders.length > 0) ? riders : getCachedDeliveryRiders();
   const cleanFilter = String(filterRiderId).trim().toLowerCase();
+
+  // If filtering specifically for unassigned / sem condutor:
+  // Cancelled orders should NOT appear as unassigned / sem condutor (they are Cancelados)
+  if (
+    cleanFilter === 'unassigned' ||
+    cleanFilter === 'sem condutor' ||
+    cleanFilter === 'semcondutor' ||
+    cleanFilter === 'nao alocado' ||
+    cleanFilter === 'não alocado' ||
+    cleanFilter === 'nao vinculado' ||
+    cleanFilter === 'não vinculado'
+  ) {
+    if (order.status === 'Cancelado') return false;
+    const rawOrderRiderId = order.riderId !== undefined && order.riderId !== null ? String(order.riderId).trim() : '';
+    const orderRiderId = rawOrderRiderId.toLowerCase();
+    const isAssigned = rawOrderRiderId !== '' && 
+      orderRiderId !== 'unassigned' && 
+      orderRiderId !== 'desalocar' && 
+      orderRiderId !== 'undefined' && 
+      orderRiderId !== 'null' &&
+      orderRiderId !== 'sem condutor' &&
+      orderRiderId !== 'não alocado' &&
+      orderRiderId !== 'nao alocado' &&
+      orderRiderId !== 'não vinculado' &&
+      orderRiderId !== 'nao vinculado';
+    return !isAssigned;
+  }
+
+  const availableRiders = (riders && riders.length > 0) ? riders : getCachedDeliveryRiders();
   const filterDigits = cleanFilter.replace(/\D/g, '');
   const targetRider = findRiderByIdentifier(availableRiders, filterRiderId);
 
@@ -312,7 +340,9 @@ export function isOrderMatchingRider(
     orderRiderId !== 'null' &&
     orderRiderId !== 'sem condutor' &&
     orderRiderId !== 'não alocado' &&
-    orderRiderId !== 'nao alocado';
+    orderRiderId !== 'nao alocado' &&
+    orderRiderId !== 'não vinculado' &&
+    orderRiderId !== 'nao vinculado';
 
   // 1. If order has an active riderId assigned, evaluate against that assigned rider
   if (isAssigned) {

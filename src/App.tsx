@@ -164,7 +164,8 @@ import {
   GitBranch,
   Volume2,
   WifiOff,
-  CloudOff
+  CloudOff,
+  ArrowUpDown
 } from 'lucide-react';
 import NotificationSettingsManager from './components/NotificationSettingsManager';
 import { 
@@ -412,6 +413,16 @@ export default function App() {
   const [billingModalRiderId, setBillingModalRiderId] = useState<string | null>(null);
   const [billingModalClientId, setBillingModalClientId] = useState<string | null>(null);
   const [selectedClientType, setSelectedClientType] = useState<'Todos' | 'Cliente' | 'Parceiro'>('Todos');
+  
+  // Table Sorting States
+  const [clientSortField, setClientSortField] = useState<'codigo' | 'name' | 'cnpj' | 'type' | 'region' | 'tel' | 'addr' | 'status'>('name');
+  const [clientSortDirection, setClientSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const [riderSortField, setRiderSortField] = useState<'name' | 'vehicle' | 'phone' | 'addr' | 'battery' | 'deliveries' | 'status'>('name');
+  const [riderSortDirection, setRiderSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const [financialSortField, setFinancialSortField] = useState<'id' | 'client' | 'region' | 'value' | 'fee' | 'repasse' | 'rider' | 'status'>('id');
+  const [financialSortDirection, setFinancialSortDirection] = useState<'asc' | 'desc'>('desc');
   
   const [isCepRangesModalOpen, setIsCepRangesModalOpen] = useState(false);
   const [selectedCepRangesClient, setSelectedCepRangesClient] = useState<ClientPartner | null>(null);
@@ -1518,18 +1529,19 @@ export default function App() {
         }
       }
     } else {
+      const fallbackDispositivo = order.status === 'Cancelado' ? 'Cancelado' : 'Não vinculado';
       normalizedRawData['Condutor'] = '';
       normalizedRawData['NomeCondutor'] = '';
       normalizedRawData['Entregador'] = '';
       normalizedRawData['NomeEntregador'] = '';
-      normalizedRawData['DispositivoCondutor'] = 'Não vinculado';
+      normalizedRawData['DispositivoCondutor'] = fallbackDispositivo;
       normalizedRawData['riderId'] = '';
       for (const k of keys) {
         const norm = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
         if (norm === 'condutor' || norm === 'nomecondutor' || norm === 'entregador' || norm === 'nomeentregador' || norm === 'motorista' || norm === 'nomemotorista' || norm === 'rider' || norm === 'ridername') {
           normalizedRawData[k] = '';
         } else if (norm === 'dispositivocondutor' || norm === 'dispositivo' || norm === 'dispositivoentregador') {
-          normalizedRawData[k] = 'Não vinculado';
+          normalizedRawData[k] = fallbackDispositivo;
         } else if (norm === 'idcondutor' || norm === 'identregador' || norm === 'codigocondutor' || norm === 'codigoentregador' || norm === 'riderid') {
           normalizedRawData[k] = '';
         }
@@ -4621,7 +4633,7 @@ export default function App() {
               const juneOrdersBaseline = 1020.00;
               const momGrowthPercent = ((totalRev - juneOrdersBaseline) / juneOrdersBaseline) * 100;
 
-              // Filtered clients & partners
+              // Filtered & Sorted clients & partners
               const filteredClients = clientPartners.filter(cp => {
                 const matchesSearch = cp.name.toLowerCase().includes(searchClientQuery.toLowerCase()) ||
                   cp.tel.includes(searchClientQuery) ||
@@ -4631,9 +4643,39 @@ export default function App() {
                 
                 const matchesType = selectedClientType === 'Todos' || cp.type === selectedClientType;
                 return matchesSearch && matchesType;
+              }).sort((a, b) => {
+                let valA = '';
+                let valB = '';
+                if (clientSortField === 'codigo') {
+                  valA = String(a.codigoCliente || a.id || '');
+                  valB = String(b.codigoCliente || b.id || '');
+                } else if (clientSortField === 'name') {
+                  valA = String(a.name || '');
+                  valB = String(b.name || '');
+                } else if (clientSortField === 'cnpj') {
+                  valA = String(a.cnpj || '');
+                  valB = String(b.cnpj || '');
+                } else if (clientSortField === 'type') {
+                  valA = String(a.type || '');
+                  valB = String(b.type || '');
+                } else if (clientSortField === 'region') {
+                  valA = String(a.region || '');
+                  valB = String(b.region || '');
+                } else if (clientSortField === 'tel') {
+                  valA = String(a.tel || '');
+                  valB = String(b.tel || '');
+                } else if (clientSortField === 'addr') {
+                  valA = String(a.addr || '');
+                  valB = String(b.addr || '');
+                } else if (clientSortField === 'status') {
+                  valA = String(a.status || '');
+                  valB = String(b.status || '');
+                }
+                const res = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base', numeric: true });
+                return clientSortDirection === 'asc' ? res : -res;
               });
 
-              // Filtered riders
+              // Filtered & Sorted riders
               const filteredRiders = (riders || []).filter(r => {
                 if (!r) return false;
                 const name = (r.name || '').toLowerCase();
@@ -4641,6 +4683,71 @@ export default function App() {
                 const vehicle = (r.vehicle || '').toLowerCase();
                 const search = (searchRiderQuery || '').toLowerCase();
                 return name.includes(search) || phone.includes(search) || vehicle.includes(search);
+              }).sort((a, b) => {
+                if (riderSortField === 'deliveries') {
+                  const delA = a.completedDeliveries ?? (a as any).deliveriesCount ?? 0;
+                  const delB = b.completedDeliveries ?? (b as any).deliveriesCount ?? 0;
+                  return riderSortDirection === 'asc' ? delA - delB : delB - delA;
+                } else if (riderSortField === 'battery') {
+                  const batA = a.batteryPercent ?? (a as any).batteryLevel ?? 0;
+                  const batB = b.batteryPercent ?? (b as any).batteryLevel ?? 0;
+                  return riderSortDirection === 'asc' ? batA - batB : batB - batA;
+                }
+                let valA = '';
+                let valB = '';
+                if (riderSortField === 'name') {
+                  valA = String(a.name || '');
+                  valB = String(b.name || '');
+                } else if (riderSortField === 'vehicle') {
+                  valA = String(a.vehicle || '');
+                  valB = String(b.vehicle || '');
+                } else if (riderSortField === 'phone') {
+                  valA = String(a.phone || '');
+                  valB = String(b.phone || '');
+                } else if (riderSortField === 'addr') {
+                  valA = String(a.address || '');
+                  valB = String(b.address || '');
+                } else if (riderSortField === 'status') {
+                  valA = String(a.status || '');
+                  valB = String(b.status || '');
+                }
+                const res = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base', numeric: true });
+                return riderSortDirection === 'asc' ? res : -res;
+              });
+
+              // Sorted administrative orders for the financial ledger table
+              const sortedAdminOrders = [...filteredOrders].sort((a, b) => {
+                if (financialSortField === 'value') {
+                  return financialSortDirection === 'asc' ? (a.value || 0) - (b.value || 0) : (b.value || 0) - (a.value || 0);
+                } else if (financialSortField === 'fee') {
+                  const feeA = (a.value || 0) * 0.15;
+                  const feeB = (b.value || 0) * 0.15;
+                  return financialSortDirection === 'asc' ? feeA - feeB : feeB - feeA;
+                } else if (financialSortField === 'repasse') {
+                  const repA = (a.value || 0) * 0.85;
+                  const repB = (b.value || 0) * 0.85;
+                  return financialSortDirection === 'asc' ? repA - repB : repB - repA;
+                }
+                let valA = '';
+                let valB = '';
+                if (financialSortField === 'id') {
+                  valA = String(a.id || '');
+                  valB = String(b.id || '');
+                } else if (financialSortField === 'client') {
+                  valA = String(a.clientName || '');
+                  valB = String(b.clientName || '');
+                } else if (financialSortField === 'region') {
+                  valA = String(a.region || '');
+                  valB = String(b.region || '');
+                } else if (financialSortField === 'rider') {
+                  valA = a.status === 'Cancelado' ? 'Cancelado' : (riders.find(r => r.id === a.riderId)?.name || 'Não vinculado');
+                  valB = b.status === 'Cancelado' ? 'Cancelado' : (riders.find(r => r.id === b.riderId)?.name || 'Não vinculado');
+                } else if (financialSortField === 'status') {
+                  valA = String(a.status || '');
+                  valB = String(b.status || '');
+                }
+                const res = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base', numeric: true });
+                return financialSortDirection === 'asc' ? res : -res;
               });
 
               return (
@@ -5027,35 +5134,153 @@ export default function App() {
 
                       {/* Detailed Operational Ledger */}
                       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-4">
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">Extrato Operacional Detalhado</h4>
-                          <p className="text-xs text-slate-400 mt-0.5">Demonstrativo financeiro individualizado de todos os lançamentos.</p>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-sm">Extrato Operacional Detalhado</h4>
+                            <p className="text-xs text-slate-400 mt-0.5">Demonstrativo financeiro individualizado de todos os lançamentos.</p>
+                          </div>
+
+                          {/* Sort Selector Filter */}
+                          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+                            <ArrowUpDown size={12} className="text-slate-400 shrink-0" />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ordem:</span>
+                            <select
+                              value={financialSortField}
+                              onChange={(e) => setFinancialSortField(e.target.value as any)}
+                              className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer pr-1"
+                            >
+                              <option value="id">ID Pedido</option>
+                              <option value="client">Cliente</option>
+                              <option value="region">Região</option>
+                              <option value="value">Valor Total</option>
+                              <option value="fee">Taxa Admin (15%)</option>
+                              <option value="repasse">Repasse (85%)</option>
+                              <option value="rider">Entregador</option>
+                              <option value="status">Status</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                              className="p-1 text-blue-600 hover:bg-blue-100 rounded font-extrabold text-[10px] cursor-pointer"
+                              title={financialSortDirection === 'asc' ? "Ordem Crescente (A-Z / Menor-Maior)" : "Ordem Decrescente (Z-A / Maior-Menor)"}
+                            >
+                              {financialSortDirection === 'asc' ? '▲ ASC' : '▼ DESC'}
+                            </button>
+                          </div>
                         </div>
 
                         <div className="overflow-x-auto">
                           <table className="min-w-full text-xs text-slate-600 border-collapse">
                             <thead>
-                              <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase">
-                                <th className="px-6 py-3">ID Pedido</th>
-                                <th className="px-6 py-3">Cliente</th>
-                                <th className="px-6 py-3">Região</th>
-                                <th className="px-6 py-3 text-right">Valor Total</th>
-                                <th className="px-6 py-3 text-right">Taxa Admin (15%)</th>
-                                <th className="px-6 py-3 text-right">Repasse (85%)</th>
-                                <th className="px-6 py-3">Entregador</th>
-                                <th className="px-6 py-3 text-center">Status Lançamento</th>
+                              <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase select-none">
+                                <th 
+                                  className="px-6 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (financialSortField === 'id') setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setFinancialSortField('id'); setFinancialSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    ID Pedido
+                                    {financialSortField === 'id' && (financialSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-6 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (financialSortField === 'client') setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setFinancialSortField('client'); setFinancialSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Cliente
+                                    {financialSortField === 'client' && (financialSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-6 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (financialSortField === 'region') setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setFinancialSortField('region'); setFinancialSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Região
+                                    {financialSortField === 'region' && (financialSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (financialSortField === 'value') setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setFinancialSortField('value'); setFinancialSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center justify-end gap-1">
+                                    Valor Total
+                                    {financialSortField === 'value' && (financialSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (financialSortField === 'fee') setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setFinancialSortField('fee'); setFinancialSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center justify-end gap-1">
+                                    Taxa Admin (15%)
+                                    {financialSortField === 'fee' && (financialSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (financialSortField === 'repasse') setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setFinancialSortField('repasse'); setFinancialSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center justify-end gap-1">
+                                    Repasse (85%)
+                                    {financialSortField === 'repasse' && (financialSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-6 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (financialSortField === 'rider') setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setFinancialSortField('rider'); setFinancialSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Entregador
+                                    {financialSortField === 'rider' && (financialSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-6 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (financialSortField === 'status') setFinancialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setFinancialSortField('status'); setFinancialSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center justify-center gap-1">
+                                    Status Lançamento
+                                    {financialSortField === 'status' && (financialSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
                                 <th className="px-6 py-3 text-center">Ações</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-                              {filteredOrders.length === 0 ? (
+                              {sortedAdminOrders.length === 0 ? (
                                 <tr>
                                   <td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-semibold">
                                     Nenhum pedido encontrado nos filtros selecionados.
                                   </td>
                                 </tr>
                               ) : (
-                                filteredOrders.map((o) => {
+                                sortedAdminOrders.map((o) => {
                                   const rider = riders.find((r) => r.id === o.riderId);
                                   const adminFee = o.value * 0.15;
                                   const riderShare = o.value * 0.85;
@@ -5324,7 +5549,7 @@ export default function App() {
                             <p className="text-xs text-slate-400 mt-0.5">Lista de contas com faturamento ativo e regiões preferenciais.</p>
                           </div>
 
-                          <div className="flex gap-2.5 shrink-0 items-center">
+                          <div className="flex gap-2.5 shrink-0 items-center flex-wrap">
                             <div className="relative">
                               <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
                               <input
@@ -5334,6 +5559,34 @@ export default function App() {
                                 onChange={(e) => setSearchClientQuery(e.target.value)}
                                 className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"
                               />
+                            </div>
+
+                            {/* Sort Selector Filter */}
+                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl">
+                              <ArrowUpDown size={12} className="text-slate-400 shrink-0" />
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ordem:</span>
+                              <select
+                                value={clientSortField}
+                                onChange={(e) => setClientSortField(e.target.value as any)}
+                                className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer pr-1"
+                              >
+                                <option value="name">Nome / Empresa</option>
+                                <option value="codigo">Código ID</option>
+                                <option value="cnpj">CNPJ</option>
+                                <option value="type">Tipo</option>
+                                <option value="region">Região</option>
+                                <option value="tel">Telefone</option>
+                                <option value="addr">Endereço</option>
+                                <option value="status">Status</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                className="p-0.5 text-blue-600 hover:bg-blue-100 rounded font-extrabold text-[10px] cursor-pointer"
+                                title={clientSortDirection === 'asc' ? "Ordem Crescente (A-Z)" : "Ordem Decrescente (Z-A)"}
+                              >
+                                {clientSortDirection === 'asc' ? '▲ ASC' : '▼ DESC'}
+                              </button>
                             </div>
 
                             <button
@@ -5380,15 +5633,103 @@ export default function App() {
                         <div className="overflow-x-auto">
                           <table className="min-w-full text-xs text-slate-600 border-collapse">
                             <thead>
-                              <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase">
-                                <th className="px-4 py-3">Código ID</th>
-                                <th className="px-4 py-3">Nome / Empresa</th>
-                                <th className="px-4 py-3">CNPJ</th>
-                                <th className="px-4 py-3">Tipo</th>
-                                <th className="px-4 py-3">Região</th>
-                                <th className="px-4 py-3">Telefone</th>
-                                <th className="px-4 py-3">Endereço</th>
-                                <th className="px-4 py-3 text-center">Status</th>
+                              <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase select-none">
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (clientSortField === 'codigo') setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setClientSortField('codigo'); setClientSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Código ID
+                                    {clientSortField === 'codigo' && (clientSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (clientSortField === 'name') setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setClientSortField('name'); setClientSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Nome / Empresa
+                                    {clientSortField === 'name' && (clientSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (clientSortField === 'cnpj') setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setClientSortField('cnpj'); setClientSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    CNPJ
+                                    {clientSortField === 'cnpj' && (clientSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (clientSortField === 'type') setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setClientSortField('type'); setClientSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Tipo
+                                    {clientSortField === 'type' && (clientSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (clientSortField === 'region') setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setClientSortField('region'); setClientSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Região
+                                    {clientSortField === 'region' && (clientSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (clientSortField === 'tel') setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setClientSortField('tel'); setClientSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Telefone
+                                    {clientSortField === 'tel' && (clientSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (clientSortField === 'addr') setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setClientSortField('addr'); setClientSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Endereço
+                                    {clientSortField === 'addr' && (clientSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (clientSortField === 'status') setClientSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setClientSortField('status'); setClientSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center justify-center gap-1">
+                                    Status
+                                    {clientSortField === 'status' && (clientSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
                                 <th className="px-4 py-3 text-center">Notif. Conclusão</th>
                                 <th className="px-4 py-3 text-center">Ações</th>
                               </tr>
@@ -5762,7 +6103,7 @@ export default function App() {
                             <p className="text-xs text-slate-400 mt-0.5">Gestão de entregadores, veículos associados, baterias e desempenho individual.</p>
                           </div>
 
-                          <div className="flex gap-2.5 shrink-0 items-center">
+                          <div className="flex gap-2.5 shrink-0 items-center flex-wrap">
                             <div className="relative">
                               <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
                               <input
@@ -5772,6 +6113,33 @@ export default function App() {
                                 onChange={(e) => setSearchRiderQuery(e.target.value)}
                                 className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"
                               />
+                            </div>
+
+                            {/* Sort Selector Filter */}
+                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl">
+                              <ArrowUpDown size={12} className="text-slate-400 shrink-0" />
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ordem:</span>
+                              <select
+                                value={riderSortField}
+                                onChange={(e) => setRiderSortField(e.target.value as any)}
+                                className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer pr-1"
+                              >
+                                <option value="name">Nome do Condutor</option>
+                                <option value="vehicle">Veículo</option>
+                                <option value="phone">Telefone</option>
+                                <option value="addr">Endereço</option>
+                                <option value="battery">Bateria</option>
+                                <option value="deliveries">Entregas</option>
+                                <option value="status">Status</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => setRiderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                className="p-0.5 text-blue-600 hover:bg-blue-100 rounded font-extrabold text-[10px] cursor-pointer"
+                                title={riderSortDirection === 'asc' ? "Ordem Crescente (A-Z / Menor-Maior)" : "Ordem Decrescente (Z-A / Maior-Menor)"}
+                              >
+                                {riderSortDirection === 'asc' ? '▲ ASC' : '▼ DESC'}
+                              </button>
                             </div>
 
                             <button
@@ -5791,15 +6159,92 @@ export default function App() {
                         <div className="overflow-x-auto">
                           <table className="min-w-full text-xs text-slate-600 border-collapse">
                             <thead>
-                              <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase">
-                                <th className="px-4 py-3">Entregador</th>
-                                <th className="px-4 py-3">Veículo</th>
-                                <th className="px-4 py-3">Telefone</th>
-                                <th className="px-4 py-3">Endereço</th>
+                              <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-left text-[10px] uppercase select-none">
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (riderSortField === 'name') setRiderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setRiderSortField('name'); setRiderSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Entregador
+                                    {riderSortField === 'name' && (riderSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (riderSortField === 'vehicle') setRiderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setRiderSortField('vehicle'); setRiderSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Veículo
+                                    {riderSortField === 'vehicle' && (riderSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (riderSortField === 'phone') setRiderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setRiderSortField('phone'); setRiderSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Telefone
+                                    {riderSortField === 'phone' && (riderSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (riderSortField === 'addr') setRiderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setRiderSortField('addr'); setRiderSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Endereço
+                                    {riderSortField === 'addr' && (riderSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
                                 <th className="px-4 py-3 text-center">Acesso (Disp/Senha)</th>
-                                <th className="px-4 py-3 text-center">Bateria</th>
-                                <th className="px-4 py-3 text-center">Entregas</th>
-                                <th className="px-4 py-3 text-center">Status</th>
+                                <th 
+                                  className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (riderSortField === 'battery') setRiderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setRiderSortField('battery'); setRiderSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center justify-center gap-1">
+                                    Bateria
+                                    {riderSortField === 'battery' && (riderSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (riderSortField === 'deliveries') setRiderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setRiderSortField('deliveries'); setRiderSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center justify-center gap-1">
+                                    Entregas
+                                    {riderSortField === 'deliveries' && (riderSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
+                                <th 
+                                  className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                                  onClick={() => {
+                                    if (riderSortField === 'status') setRiderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                                    else { setRiderSortField('status'); setRiderSortDirection('asc'); }
+                                  }}
+                                >
+                                  <span className="flex items-center justify-center gap-1">
+                                    Status
+                                    {riderSortField === 'status' && (riderSortDirection === 'asc' ? '▲' : '▼')}
+                                  </span>
+                                </th>
                                 <th className="px-4 py-3 text-center">Ações</th>
                               </tr>
                             </thead>
