@@ -577,14 +577,15 @@ export default function RiderAppSimulator({
     }
   }, [orders]);
 
-  // Proactive sync on mount or when orders array is empty or when rider is changed
-  useEffect(() => {
-    const fetchFresh = async () => {
-      realtimeSyncBus.broadcast('REQUEST_ORDERS_SYNC', {
-        riderId: selectedRiderId || selectedRider?.id,
-        timestamp: Date.now()
-      });
+  // Guard for initial one-shot sync on mount (prevents reactive sync storms and browser freeze)
+  const hasInitialFetchedRef = useRef(false);
 
+  useEffect(() => {
+    if (hasInitialFetchedRef.current) return;
+    hasInitialFetchedRef.current = true;
+
+    const fetchFreshOnMount = async () => {
+      // Only do a direct fetch if orders list is truly empty on mount
       if (orders.length === 0) {
         let fetched: Order[] = [];
         try {
@@ -628,8 +629,8 @@ export default function RiderAppSimulator({
       }
     };
 
-    fetchFresh();
-  }, [orders.length, selectedRiderId, selectedRider, onUpdateOrders]);
+    fetchFreshOnMount();
+  }, []); // Run only once on mount
 
   // Individual Login State
   const [phoneInput, setPhoneInput] = useState<string>('');
@@ -1001,9 +1002,6 @@ export default function RiderAppSimulator({
 
       if (type === 'ORDERS_BATCH_UPDATED' && Array.isArray(payload) && payload.length > 0) {
         const batch: Order[] = payload;
-        if (onUpdateOrders) {
-          onUpdateOrders(batch);
-        }
         const hasMyOrder = currentDriverId && batch.some(o => isOrderMatchingRider(o, currentDriverId, riders));
         if (hasMyOrder) {
           playBeep(987.77, 0.12);
@@ -1011,9 +1009,6 @@ export default function RiderAppSimulator({
         }
       } else if ((type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED') && payload?.id) {
         const updatedOrder: Order = payload;
-        if (onUpdateOrders) {
-          onUpdateOrders([updatedOrder]);
-        }
         if (currentDriverId && isOrderMatchingRider(updatedOrder, currentDriverId, riders)) {
           playBeep(987.77, 0.1);
         }
@@ -1023,7 +1018,7 @@ export default function RiderAppSimulator({
     return () => {
       unsub();
     };
-  }, [selectedRiderId, selectedRider, riders, onUpdateOrders]);
+  }, [selectedRiderId, selectedRider, riders]);
 
   // Manual explicit synchronization of today's orders with system
   const handleManualSyncTodayOrders = async () => {
@@ -1761,11 +1756,15 @@ export default function RiderAppSimulator({
   const todayFormatted = getSaoPauloDate();
 
   const isOrderActiveForDriver = (order: Order) => {
+    const storedDriverId = typeof window !== 'undefined' ? localStorage.getItem('vinimap_driver_id') : null;
     const isAssignedToRider = 
       isOrderMatchingRider(order, selectedRiderId, riders) ||
       (selectedRider && isOrderMatchingRider(order, selectedRider.id, riders)) ||
       (selectedRider && isOrderMatchingRider(order, selectedRider.phone, riders)) ||
-      (selectedRider && isOrderMatchingRider(order, selectedRider.name, riders));
+      (selectedRider && isOrderMatchingRider(order, selectedRider.deviceNumber, riders)) ||
+      (selectedRider && isOrderMatchingRider(order, selectedRider.name, riders)) ||
+      (lockedRiderId && isOrderMatchingRider(order, lockedRiderId, riders)) ||
+      (storedDriverId && isOrderMatchingRider(order, storedDriverId, riders));
 
     if (!isAssignedToRider) return false;
     
