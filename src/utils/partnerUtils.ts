@@ -263,7 +263,7 @@ export function findRiderByIdentifier(
   return list.find(r => {
     if (String(r.id || '').trim().toLowerCase() === clean) return true;
     if (String(r.name || '').trim().toLowerCase() === clean) return true;
-    if (r.name && clean.length >= 4 && r.name.toLowerCase().includes(clean)) return true;
+    if (r.name && clean.length >= 4 && (clean.includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(clean))) return true;
     if (r.deviceNumber && String(r.deviceNumber).trim().toLowerCase() === clean) return true;
 
     if (digits.length >= 6) {
@@ -350,6 +350,7 @@ export function isOrderMatchingRider(
   // 1. If order has an active riderId assigned, evaluate against that assigned rider
   if (isAssigned) {
     if (orderRiderId === cleanFilter) return true;
+    if (orderRiderId.includes(cleanFilter) || cleanFilter.includes(orderRiderId)) return true;
     if (filterDigits.length >= 8 && orderRiderDigits.length >= 8 && areDigitsMatching(orderRiderDigits, filterDigits)) {
       return true;
     }
@@ -362,6 +363,7 @@ export function isOrderMatchingRider(
       const tCpfDigits = String(targetRider.cpfCnpj || '').replace(/\D/g, '');
 
       if (orderRiderId === tId || orderRiderId === tName) return true;
+      if (tName && (orderRiderId.includes(tName) || tName.includes(orderRiderId))) return true;
       if (tPhoneDigits && areDigitsMatching(orderRiderDigits, tPhoneDigits)) return true;
       if (tDeviceDigits && areDigitsMatching(orderRiderDigits, tDeviceDigits)) return true;
       if (tCpfDigits && areDigitsMatching(orderRiderDigits, tCpfDigits)) return true;
@@ -369,8 +371,11 @@ export function isOrderMatchingRider(
 
     const assignedRider = findRiderByIdentifier(availableRiders, order.riderId);
     if (assignedRider) {
-      if (String(assignedRider.id || '').trim().toLowerCase() === cleanFilter) return true;
-      if (String(assignedRider.name || '').trim().toLowerCase() === cleanFilter) return true;
+      const aId = String(assignedRider.id || '').trim().toLowerCase();
+      const aName = String(assignedRider.name || '').trim().toLowerCase();
+      if (aId === cleanFilter || aName === cleanFilter) return true;
+      if (aName && (cleanFilter.includes(aName) || aName.includes(cleanFilter))) return true;
+
       const aPhoneDigits = String(assignedRider.phone || '').replace(/\D/g, '');
       if (filterDigits.length >= 8 && areDigitsMatching(aPhoneDigits, filterDigits)) return true;
       const aDeviceDigits = String(assignedRider.deviceNumber || '').replace(/\D/g, '');

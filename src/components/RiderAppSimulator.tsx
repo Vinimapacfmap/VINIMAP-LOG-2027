@@ -13,7 +13,7 @@ import { INITIAL_RIDERS } from '../data/mock';
 import { realtimeSyncBus } from '../utils/realtimeSync';
 import { compressImage } from '../utils/imageCompressor';
 import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { isSupabaseConfigured } from '../supabase';
 import { fetchAllStateFromSupabase } from '../lib/supabaseService';
@@ -581,9 +581,7 @@ export default function RiderAppSimulator({
   const hasInitialFetchedRef = useRef(false);
 
   useEffect(() => {
-    if (hasInitialFetchedRef.current) return;
-    hasInitialFetchedRef.current = true;
-
+    // 1. Initial snapshot / fallback fetch
     const fetchFreshOnMount = async () => {
       // Only do a direct fetch if orders list is truly empty on mount
       if (orders.length === 0) {
@@ -629,8 +627,40 @@ export default function RiderAppSimulator({
       }
     };
 
-    fetchFreshOnMount();
-  }, []); // Run only once on mount
+    if (!hasInitialFetchedRef.current) {
+      hasInitialFetchedRef.current = true;
+      fetchFreshOnMount();
+    }
+
+    // 2. In standalone or real mobile device mode, listen directly to Firestore live updates
+    let unsubSnapshot: (() => void) | null = null;
+    if (isStandalone || isEffectiveRealDevice) {
+      try {
+        unsubSnapshot = onSnapshot(collection(db, 'orders'), (snapshot) => {
+          const liveDocs: Order[] = [];
+          snapshot.forEach(docSnap => {
+            const d = docSnap.data() as Order;
+            if (d && d.id) {
+              liveDocs.push(d);
+            }
+          });
+          if (liveDocs.length > 0 && onUpdateOrders) {
+            onUpdateOrders(liveDocs);
+          }
+        }, (err) => {
+          console.warn('Driver app standalone onSnapshot listener error:', err);
+        });
+      } catch (err) {
+        console.warn('Error setting up onSnapshot in Driver App:', err);
+      }
+    }
+
+    return () => {
+      if (unsubSnapshot) {
+        unsubSnapshot();
+      }
+    };
+  }, [isStandalone, isEffectiveRealDevice, onUpdateOrders]);
 
   // Individual Login State
   const [phoneInput, setPhoneInput] = useState<string>('');
