@@ -5,6 +5,7 @@
 
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
@@ -582,8 +583,6 @@ app.post('/api/geocode', async (req, res) => {
 // ==========================================
 // GITHUB INTEGRATION & OAUTH / SYNC ENDPOINTS
 // ==========================================
-
-import fs from 'fs';
 
 function collectProjectFiles(dir: string, baseDir = ''): { relativePath: string; fullPath: string }[] {
   const result: { relativePath: string; fullPath: string }[] = [];
