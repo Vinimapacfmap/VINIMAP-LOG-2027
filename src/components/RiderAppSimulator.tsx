@@ -577,21 +577,58 @@ export default function RiderAppSimulator({
     }
   }, [orders]);
 
-  // Proactive sync on mount or when orders array is empty
+  // Proactive sync on mount or when orders array is empty or when rider is changed
   useEffect(() => {
-    if (orders.length === 0) {
+    const fetchFresh = async () => {
       realtimeSyncBus.broadcast('REQUEST_ORDERS_SYNC', {
         riderId: selectedRiderId || selectedRider?.id,
         timestamp: Date.now()
       });
-      if (isSupabaseConfigured && onUpdateOrders) {
-        fetchAllStateFromSupabase().then(sbState => {
-          if (sbState.orders && sbState.orders.length > 0) {
-            onUpdateOrders(sbState.orders);
+
+      if (orders.length === 0) {
+        let fetched: Order[] = [];
+        try {
+          const snap = await getDocs(collection(db, 'orders'));
+          snap.forEach(d => {
+            const ord = d.data() as Order;
+            if (ord && !['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'].includes(ord.id)) {
+              fetched.push(ord);
+            }
+          });
+        } catch (e) {
+          console.warn("Direct Firestore read fallback in Driver App:", e);
+        }
+
+        if (fetched.length === 0 && isSupabaseConfigured) {
+          try {
+            const sbState = await fetchAllStateFromSupabase();
+            if (sbState.orders && sbState.orders.length > 0) {
+              fetched = sbState.orders;
+            }
+          } catch (sbErr) {
+            console.warn("Supabase fetch fallback in Driver App:", sbErr);
           }
-        }).catch(() => {});
+        }
+
+        if (fetched.length === 0 && typeof window !== 'undefined') {
+          try {
+            const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+            if (rawBackup) {
+              const parsed = JSON.parse(rawBackup);
+              if (parsed.orders && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+                fetched = parsed.orders;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (fetched.length > 0 && onUpdateOrders) {
+          onUpdateOrders(fetched);
+        }
       }
-    }
+    };
+
+    fetchFresh();
   }, [orders.length, selectedRiderId, selectedRider, onUpdateOrders]);
 
   // Individual Login State
@@ -3855,6 +3892,22 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       setPhoneInput('');
                       setPasswordInput('');
                       setLoginError(null);
+
+                      // Proactive fetch of fresh orders upon login
+                      if (onUpdateOrders) {
+                        getDocs(collection(db, 'orders')).then(snap => {
+                          const fresh: Order[] = [];
+                          snap.forEach(d => {
+                            const o = d.data() as Order;
+                            if (o && !['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'].includes(o.id)) {
+                              fresh.push(o);
+                            }
+                          });
+                          if (fresh.length > 0) {
+                            onUpdateOrders(fresh);
+                          }
+                        }).catch(() => {});
+                      }
 
                       // Automatically activate device GPS tracking by default upon login
                       if (typeof navigator !== 'undefined' && navigator.geolocation) {

@@ -54,7 +54,7 @@ export const INITIAL_CLIENT_PARTNERS: ClientPartner[] = [];
 export const MOCK_CLIENT_IDS = ['CL1-001', 'CL1-002', 'CL1-003', 'CL1-004', 'CL1-005', 'CL1-006', 'CL1-007'];
 
 // Known list of mock rider and mock order IDs to allow permanent deletion in real mode
-export const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5', 'ent-70791804'];
+export const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
 export const MOCK_ORDER_IDS = ['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'];
 
 // Helper function to recursively remove undefined fields before saving to Firestore

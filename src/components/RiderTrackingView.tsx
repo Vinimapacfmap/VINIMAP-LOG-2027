@@ -78,7 +78,7 @@ export interface RiderLocationPoint {
   source: string;
 }
 
-const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5', 'ent-70791804'];
+const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
 const MOCK_ORDER_IDS = ['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'];
 
 export default function RiderTrackingView({ 

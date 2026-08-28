@@ -195,7 +195,7 @@ export function setCachedDeliveryRiders(riders: DeliveryRider[]) {
   }
 }
 
-const EXCLUDED_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5', 'ent-70791804'];
+const EXCLUDED_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
 
 export function getCachedDeliveryRiders(): DeliveryRider[] {
   if (globalDeliveryRidersCache.length > 0) {
