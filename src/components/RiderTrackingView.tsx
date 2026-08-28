@@ -79,7 +79,7 @@ export interface RiderLocationPoint {
 }
 
 const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
-const MOCK_ORDER_IDS = ['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'];
+const MOCK_ORDER_IDS: string[] = [];
 
 export default function RiderTrackingView({ 
   riders: propsRiders, 

@@ -2222,7 +2222,15 @@ export default function App() {
 
   // Triggered when a new order is dispatched
   const handleCreateOrder = async (newOrderData: Omit<Order, 'id' | 'status' | 'createdAt'>) => {
-    const nextId = `ped-${100 + orders.length + 1}`;
+    let maxNum = 1000;
+    orders.forEach(o => {
+      const num = parseInt(String(o.id || '').replace(/\D/g, ''), 10);
+      if (!isNaN(num) && num >= maxNum && num < 999999) {
+        maxNum = num;
+      }
+    });
+    const candidateId = `ped-${maxNum + 1}`;
+    const nextId = orders.some(o => o.id === candidateId) ? `ped-${Date.now().toString().slice(-6)}` : candidateId;
     
     // Auto geocode if coordinates are missing
     let finalLat = newOrderData.lat;

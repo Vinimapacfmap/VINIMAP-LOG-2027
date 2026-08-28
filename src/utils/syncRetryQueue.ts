@@ -9,6 +9,7 @@
 
 import { Order } from '../types';
 import { sbSaveOrder, sbDeleteOrder } from '../lib/supabaseService';
+import { isSupabaseConfigured } from '../supabase';
 import { db } from '../firebase';
 import { getIsFirestoreQuotaExceeded, isQuotaError, setIsFirestoreQuotaExceeded } from '../lib/dbService';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -344,7 +345,7 @@ class SyncRetryQueueManager {
       }
 
       const isFirestoreExceeded = getIsFirestoreQuotaExceeded();
-      const isAllSuccessful = (supabaseSuccess && firestoreSuccess) || (supabaseSuccess && isFirestoreExceeded);
+      const isAllSuccessful = (firestoreSuccess && supabaseSuccess) || (supabaseSuccess && isFirestoreExceeded) || (firestoreSuccess && !isSupabaseConfigured) || (firestoreSuccess);
 
       if (isAllSuccessful) {
         // Success: Remove task from queue

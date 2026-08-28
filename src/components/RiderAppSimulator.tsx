@@ -591,7 +591,7 @@ export default function RiderAppSimulator({
           const snap = await getDocs(collection(db, 'orders'));
           snap.forEach(d => {
             const ord = d.data() as Order;
-            if (ord && !['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'].includes(ord.id)) {
+            if (ord && ord.id) {
               fetched.push(ord);
             }
           });
@@ -3899,7 +3899,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           const fresh: Order[] = [];
                           snap.forEach(d => {
                             const o = d.data() as Order;
-                            if (o && !['ped-101', 'ped-102', 'ped-103', 'ped-104', 'ped-105', 'ped-106', 'ped-107', 'ped-108'].includes(o.id)) {
+                            if (o && o.id) {
                               fresh.push(o);
                             }
                           });
