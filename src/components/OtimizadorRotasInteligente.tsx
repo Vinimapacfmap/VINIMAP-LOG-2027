@@ -32,6 +32,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 import { getCoordinatesFromCep } from '../utils/locationUtils';
 import { initLeafletPosGuard } from '../utils/leafletPatch';
+import { isOrderMatchingRider } from '../utils/partnerUtils';
 import OrderQuickViewTooltip from './OrderQuickViewTooltip';
 
 interface OtimizadorRotasInteligenteProps {
@@ -120,7 +121,7 @@ export default function OtimizadorRotasInteligente({
 
   // Get current pending orders for this rider
   const riderPendingOrders = selectedRiderId
-    ? orders.filter(o => o.riderId === selectedRiderId && o.status !== 'Concluído' && o.status !== 'Cancelado')
+    ? orders.filter(o => isOrderMatchingRider(o, selectedRiderId, riders) && o.status !== 'Concluído' && o.status !== 'Cancelado')
     : [];
 
   // Helper coordinate resolution from svg to Geo coordinates

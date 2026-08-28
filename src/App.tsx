@@ -12,7 +12,7 @@ import {
   REGION_DISTRIBUTIONS 
 } from './data/mock';
 import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHistoryEntry, isMatchingClientCode, CepRange, CepTableHistoryItem, CompanyHub, BillingModelType } from './types';
-import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime } from './utils/dateUtils';
+import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime, extractISODateFromTimestamp } from './utils/dateUtils';
 import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider, findRiderByIdentifier, setCachedClientPartners, setCachedDeliveryRiders } from './utils/partnerUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from './utils/addressUtils';
 import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from './utils/searchUtils';
@@ -6368,8 +6368,13 @@ export default function App() {
                                   </td>
                                   <td className="px-4 py-3.5 text-center">
                                     {(() => {
+                                      const todayIso = getSaoPauloISODate();
                                       const activeAllocatedCount = orders.filter(o => isOrderMatchingRider(o, item.id, riders) && o.status !== 'Concluído' && o.status !== 'Cancelado').length;
-                                      const completedCount = orders.filter(o => isOrderMatchingRider(o, item.id, riders) && o.status === 'Concluído').length;
+                                      const completedCount = orders.filter(o => {
+                                        if (!isOrderMatchingRider(o, item.id, riders) || o.status !== 'Concluído') return false;
+                                        const rawCompDate = o.dataConclusao || o.deliveryDate || o.rawData?.dataConclusao || o.rawData?.DataConclusao || o.rawData?.DataEntrega || o.date;
+                                        return extractISODateFromTimestamp(rawCompDate) === todayIso;
+                                      }).length;
                                       return (
                                         <div className="flex flex-col items-center gap-1">
                                           <button

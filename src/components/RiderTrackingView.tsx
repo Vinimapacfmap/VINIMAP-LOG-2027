@@ -11,6 +11,7 @@ import { DeliveryRider, Order, RiderStatus, OrderStatus, CompanyHub } from '../t
 import { getDriverAppInstallUrl } from '../utils/pwaUtils';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 import { getSaoPauloDateTimeShort, getSaoPauloISODate, isOrderInDatePeriod } from '../utils/dateUtils';
+import { isOrderMatchingRider } from '../utils/partnerUtils';
 import { getCoordinatesFromCep } from '../utils/locationUtils';
 import SafeMapWrapper from './SafeMapWrapper';
 import { fetchOsrmMultiStopRoute, getCachedOsrmRoute } from '../utils/osrmService';
@@ -868,7 +869,7 @@ export default function RiderTrackingView({
 
   const riderPendingOrders = useMemo(() => {
     if (!selectedRiderId) return [];
-    return orders.filter(o => o.riderId === selectedRiderId && o.status !== 'Concluído' && o.status !== 'Cancelado');
+    return orders.filter(o => isOrderMatchingRider(o, selectedRiderId, riders) && o.status !== 'Concluído' && o.status !== 'Cancelado');
   }, [orders, selectedRiderId]);
 
   const getWhatsAppLink = (rider: DeliveryRider) => {

@@ -1779,9 +1779,14 @@ export default function RiderAppSimulator({
   };
 
   // Filter orders for the active driver:
-  // PREVIOUS-DAY ORDERS: ONLY displayed if their status is still OPEN/PENDING in the Admin dashboard ('Não iniciado', 'Em rota').
-  // COMPLETED/CANCELED orders from previous days are permanently excluded from the driver's active route screen.
-  // TODAY'S ORDERS: Open orders are shown to follow the route, and today's completed/occurrence orders are displayed for daily totals.
+  // 1. OPEN/PENDING ORDERS: If an order is allocated to this driver and is still OPEN ('Não iniciado', 'Em rota', etc.),
+  //    it MUST ALWAYS be shown in the driver's active route/pending list, regardless of its original launch date
+  //    (allowing the admin to allocate/re-allocate orders from previous days to be executed today).
+  // 2. COMPLETED ORDERS: ONLY orders completed TODAY (in São Paulo date todayIso) are displayed in the "Concluídos" tab
+  //    and counted in today's performance metrics (completedCount, shiftEarnings, etc.). Completed orders from previous days
+  //    are strictly excluded so they do NOT contaminate today's shift totals.
+  // 3. OCCURRENCES: Only occurrences recorded TODAY are shown.
+  // 4. CANCELED: Canceled orders are permanently excluded from driver active route.
   const todayIso = getSaoPauloISODate();
   const todayFormatted = getSaoPauloDate();
 
@@ -1810,51 +1815,40 @@ export default function RiderAppSimulator({
     // Any assigned order that has not been finalized (completed/canceled/occurrence) is strictly OPEN
     const isExplicitlyOpen = !isCompleted && !isOccurrence && !isCanceled;
 
-    // Extract true operational / creation date of the order
-    const rawOrderDate = order.date 
-      || order.rawData?.DataSolicitacao 
-      || order.rawData?.dataSolicitacao 
-      || order.rawData?.DataLancamento 
-      || order.rawData?.dataLancamento 
-      || order.rawData?.Data 
-      || order.rawData?.data
-      || order.rawData?.DataCriacao
-      || order.deliveryDate
-      || order.dataConclusao
-      || order.occurrenceDate;
-
-    const orderIsoDate = extractISODateFromTimestamp(rawOrderDate) || (order.date ? String(order.date).split('T')[0] : '');
-    const isFromToday = !orderIsoDate || orderIsoDate === todayIso;
-
     // 1. If the order is open and assigned to this driver, ALWAYS display it for delivery (regardless of creation date)
+    // The admin can allocate orders from any previous date for the driver to deliver today.
     if (isExplicitlyOpen) {
       return true;
     }
 
-    // 2. Completed orders: include if completed today, or if completion date matches today, or recently updated today
+    // 2. Completed orders: strictly ONLY include if completed TODAY
     if (isCompleted) {
-      const completionDate = extractISODateFromTimestamp(order.deliveryDate || order.dataConclusao || (order as any).statusUpdatedAt || (order as any).updatedAt || order.date);
-      return !completionDate || completionDate === todayIso || isFromToday;
+      const rawCompDate = order.dataConclusao 
+        || order.deliveryDate 
+        || order.rawData?.dataConclusao 
+        || order.rawData?.DataConclusao 
+        || order.rawData?.DataEntrega 
+        || order.date;
+      
+      const completionIso = extractISODateFromTimestamp(rawCompDate);
+      return completionIso === todayIso;
     }
 
-    // 3. Today's occurrences
+    // 3. Today's occurrences: strictly ONLY include if registered TODAY
     if (isOccurrence) {
-      const occurrenceDate = extractISODateFromTimestamp(order.occurrenceDate || order.deliveryDate || (order as any).statusUpdatedAt || order.date);
-      return !occurrenceDate || occurrenceDate === todayIso || isFromToday;
+      const rawOccDate = order.occurrenceDate 
+        || order.deliveryDate 
+        || order.dataConclusao 
+        || order.rawData?.occurrenceDate 
+        || order.rawData?.DataOcorrencia 
+        || order.date;
+      
+      const occurrenceIso = extractISODateFromTimestamp(rawOccDate);
+      return occurrenceIso === todayIso;
     }
 
-    // 4. Today's canceled orders
-    if (isCanceled) {
-      const canceledDate = extractISODateFromTimestamp(order.date);
-      return !canceledDate || canceledDate === todayIso || isFromToday;
-    }
-
-    // 5. If not from today and not open, do not include
-    if (!isFromToday) {
-      return false;
-    }
-
-    return true;
+    // 4. Canceled or other closed orders are not displayed on driver active route
+    return false;
   };
 
   // Pre-render consistency verification to ensure orders data is clean and valid
@@ -1942,15 +1936,21 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
   useEffect(() => {
     if (!orders || orders.length === 0) return;
     
-    // Find completed orders for this driver or all drivers if no specific rider selected (default today)
+    // Find completed orders for this driver or all drivers if no specific rider selected (strictly today)
     const completed = orders.filter(o => {
       const isConclued = o.status === 'Concluído' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o);
       if (!isConclued) return false;
       if (selectedRiderId) {
-        const matchesRider = o.riderId === selectedRiderId || (selectedRider && (o.riderId === selectedRider.id || o.riderId === selectedRider.name));
+        const matchesRider = 
+          isOrderMatchingRider(o, selectedRiderId, riders) ||
+          (selectedRider && isOrderMatchingRider(o, selectedRider.id, riders)) ||
+          (selectedRider && isOrderMatchingRider(o, selectedRider.phone, riders)) ||
+          (selectedRider && isOrderMatchingRider(o, selectedRider.deviceNumber, riders)) ||
+          (selectedRider && isOrderMatchingRider(o, selectedRider.name, riders));
         if (!matchesRider) return false;
       }
-      const orderDate = extractISODateFromTimestamp(o.deliveryDate || o.dataConclusao || o.date) || o.deliveryDate || o.dataConclusao || o.date;
+      const rawCompDate = o.dataConclusao || o.deliveryDate || o.rawData?.dataConclusao || o.rawData?.DataConclusao || o.rawData?.DataEntrega || o.date;
+      const orderDate = extractISODateFromTimestamp(rawCompDate);
       return orderDate === todayIso;
     });
     
