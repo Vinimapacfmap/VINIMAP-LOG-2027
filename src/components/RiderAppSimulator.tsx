@@ -271,6 +271,8 @@ export default function RiderAppSimulator({
   const [lockedRiderId, setLockedRiderId] = useState<string | null>(null);
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
   const [deliveryTabFilter, setDeliveryTabFilter] = useState<'pending' | 'completed'>('pending');
+  const hasCheckedUrlParamsRef = useRef(false);
+
   const selectedRider = useMemo(() => {
     return findRiderByIdentifier(riders, selectedRiderId) ||
            findRiderByIdentifier(INITIAL_RIDERS, selectedRiderId) ||
@@ -287,9 +289,17 @@ export default function RiderAppSimulator({
   // Check URL parameters for standalone driver device link (?riderId=xxx)
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // If the user explicitly clicked logout during this session, do not auto-login again
+      if (sessionStorage.getItem('vinimap_driver_explicit_logout') === 'true') {
+        return;
+      }
+
+      if (hasCheckedUrlParamsRef.current) return;
+
       const params = new URLSearchParams(window.location.search);
       const urlRiderParam = params.get('riderId');
       if (urlRiderParam) {
+        hasCheckedUrlParamsRef.current = true;
         const resolved = findRiderByIdentifier(riders, urlRiderParam) ||
                          findRiderByIdentifier(getCachedDeliveryRiders(), urlRiderParam) ||
                          findRiderByIdentifier(INITIAL_RIDERS, urlRiderParam);
@@ -313,6 +323,7 @@ export default function RiderAppSimulator({
         }
       } else {
         if (!selectedRiderId && riders.length > 0) {
+          hasCheckedUrlParamsRef.current = true;
           const storedRiderId = localStorage.getItem('vinimap_driver_id') || activeRiderId;
           const resolvedStored = findRiderByIdentifier(riders, storedRiderId);
           const initial = resolvedStored ? resolvedStored.id : riders[0].id;
@@ -325,7 +336,7 @@ export default function RiderAppSimulator({
         }
       }
     }
-  }, [riders, activeRiderId]);
+  }, [riders, activeRiderId, selectedRiderId]);
 
   // Sync state with parent activeRiderId
   useEffect(() => {
@@ -424,19 +435,35 @@ export default function RiderAppSimulator({
   const handleDriverLogout = () => {
     setIsDrawerMenuOpen(false);
     setSelectedOrder(null);
+    setLockedRiderId(null);
     setCurrentScreen('login');
+    setActiveTab('tasks');
     setPhoneInput('');
     setPasswordInput('');
     setLoginError(null);
 
+    // Stop webcam if active
+    if (isCameraActive) {
+      stopWebcam();
+    }
+
     if (typeof window !== 'undefined') {
+      sessionStorage.setItem('vinimap_driver_explicit_logout', 'true');
       localStorage.removeItem('vinimap_driver_logged_in');
       localStorage.removeItem('vinimap_driver_active_screen');
       localStorage.removeItem('vinimap_driver_active_tab');
       localStorage.removeItem('vinimap_driver_selected_order_id');
       localStorage.removeItem('vinimap_locked_rider_id');
+      localStorage.removeItem('vinimap_driver_id');
       // Guarantee driver stays strictly in driver app mode (never falls back to admin)
       localStorage.setItem('vinimap_is_driver_app', 'true');
+
+      // Clean query params in URL without full page reload
+      try {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('riderId');
+        window.history.replaceState({}, '', cleanUrl.toString());
+      } catch (_) {}
     }
 
     if (selectedRider) {
@@ -1001,32 +1028,66 @@ export default function RiderAppSimulator({
   // State for manual synchronization with system
   const [isSyncingWithSystem, setIsSyncingWithSystem] = useState<boolean>(false);
 
-  // Audio/visual notification when real-time updates affect this rider
+  // Real-time synchronization of orders directly from Firestore
+  useEffect(() => {
+    try {
+      const unsubFirestore = onSnapshot(collection(db, 'orders'), (snapshot) => {
+        const freshList: Order[] = [];
+        snapshot.forEach((doc) => {
+          const ord = doc.data() as Order;
+          if (ord && ord.id) {
+            freshList.push(ord);
+          }
+        });
+        if (freshList.length > 0 && onUpdateOrders) {
+          onUpdateOrders(freshList);
+        }
+      }, (err) => {
+        console.warn('[RiderAppSimulator] Firestore orders snapshot listener error:', err);
+      });
+
+      return () => {
+        unsubFirestore();
+      };
+    } catch (err) {
+      console.warn('[RiderAppSimulator] Error subscribing to Firestore orders:', err);
+    }
+  }, [onUpdateOrders]);
+
+  // Audio/visual notification and reactive state merge when real-time updates affect this rider
   useEffect(() => {
     const unsub = realtimeSyncBus.subscribe('*', (msg) => {
       const { type, payload } = msg;
-
       const currentDriverId = selectedRiderId || selectedRider?.id;
 
       if (type === 'ORDERS_BATCH_UPDATED' && Array.isArray(payload) && payload.length > 0) {
         const batch: Order[] = payload;
+        if (onUpdateOrders) {
+          onUpdateOrders(batch);
+        }
         const hasMyOrder = currentDriverId && batch.some(o => isOrderMatchingRider(o, currentDriverId, riders));
         if (hasMyOrder) {
           playBeep(987.77, 0.12);
           setTimeout(() => playBeep(1318.51, 0.22), 120);
         }
-      } else if ((type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED') && payload?.id) {
-        const updatedOrder: Order = payload;
-        if (currentDriverId && isOrderMatchingRider(updatedOrder, currentDriverId, riders)) {
-          playBeep(987.77, 0.1);
+      } else if ((type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED' || type === 'NEW_ORDER_ASSIGNED') && (payload?.id || payload?.order?.id)) {
+        const updatedOrder: Order = payload.id ? payload : payload.order;
+        if (updatedOrder && onUpdateOrders) {
+          onUpdateOrders([updatedOrder]);
         }
+        if (currentDriverId && updatedOrder && isOrderMatchingRider(updatedOrder, currentDriverId, riders)) {
+          playBeep(987.77, 0.1);
+          setTimeout(() => playBeep(1318.51, 0.2), 120);
+        }
+      } else if (type === 'REQUEST_ORDERS_SYNC') {
+        // Parent or peer requested orders sync
       }
     });
 
     return () => {
       unsub();
     };
-  }, [selectedRiderId, selectedRider, riders]);
+  }, [selectedRiderId, selectedRider, riders, onUpdateOrders]);
 
   // Manual explicit synchronization of today's orders with system
   const handleManualSyncTodayOrders = async () => {
@@ -3955,6 +4016,7 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       // Login successful - persist session and unlock device for this rider
                       setLockedRiderId(matched.id);
                       if (typeof window !== 'undefined') {
+                        sessionStorage.removeItem('vinimap_driver_explicit_logout');
                         localStorage.setItem('vinimap_driver_id', matched.id);
                         localStorage.setItem('vinimap_driver_logged_in', 'true');
                         localStorage.setItem('vinimap_is_driver_app', 'true');
@@ -3968,6 +4030,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       setPhoneInput('');
                       setPasswordInput('');
                       setLoginError(null);
+
+                      // Trigger immediate orders sync upon login
+                      setTimeout(() => {
+                        handleManualSyncTodayOrders();
+                      }, 100);
 
                       // Automatically activate device GPS tracking by default upon login
                       if (typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -4975,22 +5042,35 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                           </button>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider truncate">
                             {deliveryTabFilter === 'pending'
                               ? `Fila de Entregas (${riderPendingOrders.length})`
                               : `Entregas Concluídas Hoje (${riderCompletedOrders.length})`}
                           </h4>
                           
-                          {deliveryTabFilter === 'pending' && riderPendingOrders.some(o => o.status === 'Não iniciado') && (
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <button
-                              onClick={handleCollectAtCD}
-                              className="px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[9px] font-bold rounded-md cursor-pointer transition-all flex items-center gap-1"
+                              type="button"
+                              disabled={isSyncingWithSystem}
+                              onClick={handleManualSyncTodayOrders}
+                              className="px-2 py-1 bg-sky-50 text-sky-700 hover:bg-sky-100 text-[9px] font-black rounded-md border border-sky-200 cursor-pointer transition-all flex items-center gap-1"
+                              title="Atualizar lista de entregas em tempo real"
                             >
-                              <RefreshCw size={10} />
-                              <span>Retirar no CD</span>
+                              <RefreshCw size={10} className={`text-sky-600 ${isSyncingWithSystem ? "animate-spin" : ""}`} />
+                              <span>{isSyncingWithSystem ? "Sinc..." : "Atualizar"}</span>
                             </button>
-                          )}
+
+                            {deliveryTabFilter === 'pending' && riderPendingOrders.some(o => o.status === 'Não iniciado') && (
+                              <button
+                                onClick={handleCollectAtCD}
+                                className="px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[9px] font-bold rounded-md cursor-pointer transition-all flex items-center gap-1"
+                              >
+                                <RefreshCw size={10} />
+                                <span>Retirar no CD</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         {renderDeliveryCards()}

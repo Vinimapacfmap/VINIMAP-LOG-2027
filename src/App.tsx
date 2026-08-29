@@ -4234,8 +4234,9 @@ export default function App() {
               onUpdateOrders={(updatedOrders) => {
                 if (!updatedOrders || updatedOrders.length === 0) return;
                 setOrders(prev => {
-                  const updatedMap = new Map(updatedOrders.map(o => [o.id, o]));
-                  return prev.map(o => updatedMap.get(o.id) || o);
+                  const map = new Map(prev.map(o => [o.id, o]));
+                  updatedOrders.forEach(o => map.set(o.id, o));
+                  return Array.from(map.values());
                 });
               }}
               showRiderEarnings={showRiderEarnings}
@@ -7433,8 +7434,9 @@ export default function App() {
                   onUpdateOrders={(updatedOrders) => {
                     if (!updatedOrders || updatedOrders.length === 0) return;
                     setOrders(prev => {
-                      const updatedMap = new Map(updatedOrders.map(o => [o.id, o]));
-                      return prev.map(o => updatedMap.get(o.id) || o);
+                      const map = new Map(prev.map(o => [o.id, o]));
+                      updatedOrders.forEach(o => map.set(o.id, o));
+                      return Array.from(map.values());
                     });
                   }}
                   showRiderEarnings={showRiderEarnings}
