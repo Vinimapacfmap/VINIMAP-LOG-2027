@@ -3044,12 +3044,27 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
         completionPayload.recipientDoc,
         newProtocol.observations
       );
-      
-      triggerPhoneNotification(
-        "Entrega Concluída! ✓",
-        `Pedido #${selectedOrder.id} finalizado com sucesso para o cliente ${selectedOrder.clientName}.`,
-        'success'
-      );
+
+      // Optimistically update orders in parent state immediately
+      if (onUpdateOrders && orders) {
+        const todayIso = getSaoPauloISODate();
+        const timeNow = getSaoPauloTime();
+        const updatedList = orders.map(o => o.id === selectedOrder.id ? {
+          ...o,
+          status: 'Concluído' as const,
+          protocolNumber: protocolHash,
+          signatureUrl: finalSignature,
+          deliveryPhotoUrl: newProtocol.photoImage,
+          recipientName: finalName,
+          recipientDoc: finalDoc,
+          notes: newProtocol.observations,
+          deliveryDate: o.deliveryDate || todayIso,
+          dataConclusao: o.dataConclusao || todayIso,
+          deliveryTime: o.deliveryTime || timeNow,
+          horarioFinal: o.horarioFinal || timeNow
+        } : o);
+        onUpdateOrders(updatedList);
+      }
       
       onSaveLogs([{
         id: `log-sim-done-${Date.now()}`,
@@ -3059,9 +3074,68 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
         orderId: selectedOrder.id
       }]);
 
+      // Stop camera if still running
+      if (isCameraActive) {
+        stopWebcam();
+      }
+
+      // Clear session draft and form inputs
+      try {
+        sessionStorage.removeItem('vinimap_active_receipt_draft');
+      } catch (_) {}
+
+      setShowReceiptModal(false);
+      setShowSuccessProtocol(false);
       setGeneratedProtocol(newProtocol);
-      setShowSuccessProtocol(true);
+      setReceiptPhoto(null);
+      setReceiptSignature('');
+      setReceiverName('');
+      setReceiptObservations('');
+      setSignatureImage(null);
+      hasDrawnOnCanvasRef.current = false;
+      isDrawingRef.current = false;
       setIsSubmittingDelivery(false);
+
+      // Identify remaining pending orders for this driver
+      const currentDriverId = selectedRiderId || selectedRider?.id;
+      const remainingPendingOrders = (orders || []).filter(o => 
+        o.id !== selectedOrder.id &&
+        isOrderMatchingRider(o, currentDriverId, riders) &&
+        o.status !== 'Concluído' &&
+        o.status !== 'Cancelado'
+      );
+
+      if (remainingPendingOrders.length > 0) {
+        const nextOrder = remainingPendingOrders[0];
+        setSelectedOrder(nextOrder);
+        setCurrentScreen('details');
+        setActiveTab('tasks');
+        setDeliveryTabFilter('pending');
+
+        triggerPhoneNotification(
+          "Entrega Concluída! ✓",
+          `Pedido #${selectedOrder.id} finalizado. Próximo pedido carregado: #${nextOrder.id} (${nextOrder.clientName}).`,
+          'success'
+        );
+
+        playBeep(987.77, 0.12);
+        setTimeout(() => playBeep(1318.51, 0.22), 120);
+      } else {
+        setSelectedOrder(null);
+        setCurrentScreen('dashboard');
+        setActiveTab('tasks');
+        setDeliveryTabFilter('pending');
+
+        triggerPhoneNotification(
+          "Rota Concluída! 🎉",
+          `Parabéns! Todas as entregas atribuídas foram finalizadas com sucesso.`,
+          'success'
+        );
+
+        playBeep(523.25, 0.15);
+        setTimeout(() => playBeep(659.25, 0.15), 120);
+        setTimeout(() => playBeep(783.99, 0.25), 240);
+      }
     }, 400);
   };
 
