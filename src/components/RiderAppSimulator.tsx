@@ -86,10 +86,12 @@ import {
   Menu,
   Users,
   LogOut,
-  Package
+  Package,
+  Bug
 } from 'lucide-react';
 import { SignatureCanvasModal } from './SignatureCanvasModal';
 import { DriverAppInstallerModal } from './DriverAppInstallerModal';
+import { RiderDiagnosticModal } from './RiderDiagnosticModal';
 import { applyDynamicPwaManifestAndIcons, getDriverAppInstallUrl } from '../utils/pwaUtils';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 
@@ -267,6 +269,7 @@ export default function RiderAppSimulator({
 
   const [selectedRiderId, setSelectedRiderId] = useState<string>('');
   const [lockedRiderId, setLockedRiderId] = useState<string | null>(null);
+  const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
   const [deliveryTabFilter, setDeliveryTabFilter] = useState<'pending' | 'completed'>('pending');
   const selectedRider = useMemo(() => {
     return findRiderByIdentifier(riders, selectedRiderId) ||
@@ -287,10 +290,23 @@ export default function RiderAppSimulator({
       const params = new URLSearchParams(window.location.search);
       const urlRiderParam = params.get('riderId');
       if (urlRiderParam) {
-        const resolved = findRiderByIdentifier(riders, urlRiderParam);
+        const resolved = findRiderByIdentifier(riders, urlRiderParam) ||
+                         findRiderByIdentifier(getCachedDeliveryRiders(), urlRiderParam) ||
+                         findRiderByIdentifier(INITIAL_RIDERS, urlRiderParam);
         const riderIdToSet = resolved ? resolved.id : urlRiderParam;
         setLockedRiderId(riderIdToSet);
         setSelectedRiderId(riderIdToSet);
+        
+        // Auto-authenticate standalone link access
+        localStorage.setItem('vinimap_driver_id', riderIdToSet);
+        localStorage.setItem('vinimap_driver_logged_in', 'true');
+        localStorage.setItem('vinimap_is_driver_app', 'true');
+        localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
+        localStorage.setItem('vinimap_driver_active_tab', 'tasks');
+        
+        setCurrentScreen('dashboard');
+        setActiveTab('tasks');
+        
         if (resolved) {
           setPhoneInput(prev => prev || resolved.deviceNumber || resolved.phone || '');
           setPasswordInput(prev => prev || resolved.password || '1234');
@@ -4080,6 +4096,16 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <span>{deferredPrompt ? '⚡ Instalar App no Celular' : '📱 Instalar / Baixar Aplicativo'}</span>
                     </button>
 
+                    {/* Diagnostic Inspector Button for Verification */}
+                    <button
+                      type="button"
+                      onClick={() => setIsDiagnosticOpen(true)}
+                      className="w-full py-2 bg-slate-800/80 hover:bg-slate-700 text-amber-300 font-bold text-[10.5px] rounded-xl border border-amber-500/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Bug size={13} className="text-amber-400" />
+                      <span>Painel de Diagnóstico & Alocações</span>
+                    </button>
+
                   </form>
 
                   {/* Footer Terms */}
@@ -4126,6 +4152,17 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       >
                         <RefreshCw size={11} className={`text-sky-600 ${isSyncingWithSystem ? "animate-spin" : ""}`} />
                         <span>{isSyncingWithSystem ? 'Sinc...' : 'Sinc'}</span>
+                      </button>
+
+                      {/* Diagnostic Inspector Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsDiagnosticOpen(true)}
+                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-extrabold text-[9.5px] rounded-lg border border-amber-200 transition-all flex items-center gap-1 cursor-pointer"
+                        title="Painel de Diagnóstico & Rastreamento de Alocações"
+                      >
+                        <Bug size={11} className="text-amber-600" />
+                        <span>Diag</span>
                       </button>
 
                       {/* GPS Localização Button */}
@@ -4334,6 +4371,18 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             >
                               <Download size={15} />
                               <span>Instalar Aplicativo PWA</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDiagnosticOpen(true);
+                                setIsDrawerMenuOpen(false);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-amber-400 hover:bg-amber-950/30 transition-all cursor-pointer"
+                            >
+                              <Bug size={15} />
+                              <span>Painel de Diagnóstico</span>
                             </button>
                           </div>
 
@@ -6612,6 +6661,35 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* RIDER DEEP DIAGNOSTIC INSPECTOR MODAL */}
+      <RiderDiagnosticModal
+        isOpen={isDiagnosticOpen}
+        onClose={() => setIsDiagnosticOpen(false)}
+        selectedRiderId={selectedRiderId}
+        lockedRiderId={lockedRiderId}
+        selectedRider={selectedRider}
+        riders={riders}
+        orders={orders}
+        driverActiveOrders={driverActiveOrders}
+        riderPendingOrders={riderPendingOrders}
+        riderCompletedOrders={riderCompletedOrders}
+        onForceSync={handleManualSyncTodayOrders}
+        onForceAutoLogin={(riderId) => {
+          changeSelectedRiderId(riderId);
+          setLockedRiderId(riderId);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('vinimap_driver_id', riderId);
+            localStorage.setItem('vinimap_driver_logged_in', 'true');
+            localStorage.setItem('vinimap_is_driver_app', 'true');
+            localStorage.setItem('vinimap_driver_active_screen', 'dashboard');
+            localStorage.setItem('vinimap_driver_active_tab', 'tasks');
+          }
+          setCurrentScreen('dashboard');
+          setActiveTab('tasks');
+          setIsDiagnosticOpen(false);
+        }}
+      />
 
       </div>
     </div>

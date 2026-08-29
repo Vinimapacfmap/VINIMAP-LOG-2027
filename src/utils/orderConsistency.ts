@@ -84,7 +84,32 @@ export function sanitizeOrderConsistency(
     }
   }
 
-  // Normalize riderId - empty or placeholder values mean unassigned
+  // Normalize riderId - handle object, driverId, assignedDriver, and empty/placeholder values
+  if (updated.riderId && typeof updated.riderId === 'object') {
+    const obj: any = updated.riderId;
+    updated.riderId = obj.id || obj.name || obj.deviceNumber || undefined;
+    isModified = true;
+  }
+
+  // If riderId is missing, check alternative fields (driverId, assignedDriver, driver, rider, rawData)
+  if (!updated.riderId) {
+    const altCandidate = (updated as any).driverId ||
+      (typeof (updated as any).assignedDriver === 'object' ? (updated as any).assignedDriver?.id : (updated as any).assignedDriver) ||
+      (typeof (updated as any).driver === 'object' ? (updated as any).driver?.id : (updated as any).driver) ||
+      (typeof (updated as any).rider === 'object' ? (updated as any).rider?.id : (updated as any).rider) ||
+      (updated as any).entregadorId ||
+      (updated as any).motoristaId ||
+      updated.rawData?.riderId ||
+      updated.rawData?.driverId ||
+      updated.rawData?.RiderId ||
+      updated.rawData?.DriverId;
+
+    if (altCandidate && typeof altCandidate === 'string' && altCandidate.trim() !== '') {
+      updated.riderId = altCandidate.trim();
+      isModified = true;
+    }
+  }
+
   if (updated.riderId) {
     const cleanRiderId = (updated.riderId || '').toString().trim();
     const isPlaceholder = cleanRiderId === '' || 
@@ -100,6 +125,9 @@ export function sanitizeOrderConsistency(
 
     if (isPlaceholder) {
       updated.riderId = undefined;
+      isModified = true;
+    } else if (updated.riderId !== cleanRiderId) {
+      updated.riderId = cleanRiderId;
       isModified = true;
     }
   }
