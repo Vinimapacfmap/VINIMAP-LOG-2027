@@ -373,11 +373,10 @@ export default function App() {
 
     const storedRiderId = localStorage.getItem('vinimap_driver_id');
     const isDriverAppStored = localStorage.getItem('vinimap_is_driver_app') === 'true';
-    const isDriverLoggedIn = localStorage.getItem('vinimap_driver_logged_in') === 'true';
-    const isPwaWithRider = isPwaDisplay && isDriverAppStored && Boolean(storedRiderId);
-    const hasActiveDriverSession = isDriverLoggedIn && Boolean(storedRiderId) && (isMobileDevice || isPwaDisplay);
+    const isPwaWithRider = isPwaDisplay && (isDriverAppStored || Boolean(storedRiderId));
+    const hasDriverAppStored = isDriverAppStored || isPwaWithRider;
 
-    if (isExplicitRiderParam || isPwaWithRider || (hasActiveDriverSession && isDriverAppStored)) {
+    if (isExplicitRiderParam || hasDriverAppStored || isPwaDisplay) {
       setIsStandaloneRider(true);
       setIsRealDeviceMode(true);
       setActiveSection('dispositivo_condutor');
@@ -4238,35 +4237,6 @@ export default function App() {
               onActiveRiderChange={setSelectedRiderId}
               isStandalone={true}
               isRealDevice={isRealDeviceMode}
-              onExitToAdmin={() => {
-                if (typeof window !== 'undefined') {
-                  localStorage.removeItem('vinimap_is_driver_app');
-                  localStorage.removeItem('vinimap_driver_id');
-                  localStorage.removeItem('vinimap_driver_logged_in');
-                  localStorage.removeItem('vinimap_driver_active_screen');
-                  localStorage.removeItem('vinimap_driver_active_tab');
-                  localStorage.removeItem('vinimap_driver_selected_order_id');
-                  localStorage.removeItem('vinimap_locked_rider_id');
-                  try {
-                    const url = new URL(window.location.href);
-                    url.searchParams.delete('view');
-                    url.searchParams.delete('rider');
-                    url.searchParams.delete('mode');
-                    window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
-                  } catch (e) {
-                    console.warn(e);
-                  }
-                }
-                setIsStandaloneRider(false);
-                setIsRealDeviceMode(false);
-                setIsAdminAuthenticated(false);
-                setActiveSection('dashboard');
-              }}
-              onCloseFloating={() => {
-                setIsStandaloneRider(false);
-                setIsRealDeviceMode(false);
-                setActiveSection('dashboard');
-              }}
             />
           </main>
         </div>

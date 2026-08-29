@@ -419,7 +419,7 @@ export default function RiderAppSimulator({
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-  // Immediate non-blocking driver logout (returns to driver login screen)
+  // Immediate non-blocking driver logout (returns to driver login screen without admin access)
   const handleDriverLogout = () => {
     setIsDrawerMenuOpen(false);
     setSelectedOrder(null);
@@ -434,6 +434,8 @@ export default function RiderAppSimulator({
       localStorage.removeItem('vinimap_driver_active_tab');
       localStorage.removeItem('vinimap_driver_selected_order_id');
       localStorage.removeItem('vinimap_locked_rider_id');
+      // Guarantee driver stays strictly in driver app mode (never falls back to admin)
+      localStorage.setItem('vinimap_is_driver_app', 'true');
     }
 
     if (selectedRider) {
@@ -449,26 +451,15 @@ export default function RiderAppSimulator({
     }
   };
 
-  // Immediate exit to main admin panel / close simulator
+  // Immediate exit / disconnect (keeps within driver app login screen, never exposes admin)
   const handleExitAppOrSystem = () => {
     handleDriverLogout();
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('vinimap_is_driver_app');
-      localStorage.removeItem('vinimap_driver_id');
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('view');
-        url.searchParams.delete('rider');
-        url.searchParams.delete('mode');
-        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
-      } catch (e) {
-        console.warn('Could not clean URL parameters:', e);
+    if (!isStandalone && !isEffectiveRealDevice) {
+      if (onCloseFloating) {
+        onCloseFloating();
+      } else if (onExitToAdmin) {
+        onExitToAdmin();
       }
-    }
-    if (onExitToAdmin) {
-      onExitToAdmin();
-    } else if (onCloseFloating) {
-      onCloseFloating();
     }
   };
 
@@ -4209,11 +4200,12 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
                       <button
                         type="button"
-                        onClick={handleExitAppOrSystem}
-                        className="p-1.5 hover:bg-slate-100 active:bg-rose-100 rounded-lg text-slate-400 hover:text-rose-600 transition-all cursor-pointer"
-                        title="Sair / Fechar Aplicativo"
+                        onClick={handleDriverLogout}
+                        className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-[9.5px] rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                        title="Desconectar / Sair da Conta do Condutor"
                       >
-                        <X size={15} />
+                        <LogOut size={11} className="text-rose-600" />
+                        <span>Sair</span>
                       </button>
                     </div>
                   </div>
