@@ -1182,6 +1182,9 @@ export default function RiderAppSimulator({
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
+  const [isStartingCamera, setIsStartingCamera] = useState<boolean>(false);
+  const [cameraErrorMessage, setCameraErrorMessage] = useState<string | null>(null);
 
   // GPS simulation state
   const [isSimulating, setIsSimulating] = useState(false);
@@ -1335,6 +1338,46 @@ export default function RiderAppSimulator({
   // Failure modal state
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureReason, setFailureReason] = useState<string>('');
+
+  // Draft persistence for delivery receipt modal (prevents losing data on accidental refresh)
+  useEffect(() => {
+    if (showReceiptModal && selectedOrder) {
+      try {
+        const draft = {
+          orderId: selectedOrder.id,
+          receiverName,
+          receiptPhoto,
+          receiptSignature,
+          signatureMode,
+          receiptObservations,
+          savedAt: Date.now()
+        };
+        sessionStorage.setItem('vinimap_active_receipt_draft', JSON.stringify(draft));
+      } catch (_) {}
+    }
+  }, [showReceiptModal, selectedOrder, receiverName, receiptPhoto, receiptSignature, signatureMode, receiptObservations]);
+
+  // Restore draft if user reloads during delivery completion
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('vinimap_active_receipt_draft');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.orderId && Date.now() - (parsed.savedAt || 0) < 2 * 3600 * 1000) {
+          const matchingOrder = orders.find(o => String(o.id) === String(parsed.orderId));
+          if (matchingOrder && matchingOrder.status !== 'Concluído') {
+            setSelectedOrder(matchingOrder);
+            if (parsed.receiverName) setReceiverName(parsed.receiverName);
+            if (parsed.receiptPhoto) setReceiptPhoto(parsed.receiptPhoto);
+            if (parsed.receiptSignature) setReceiptSignature(parsed.receiptSignature);
+            if (parsed.signatureMode) setSignatureMode(parsed.signatureMode);
+            if (parsed.receiptObservations) setReceiptObservations(parsed.receiptObservations);
+            setShowReceiptModal(true);
+          }
+        }
+      }
+    } catch (_) {}
+  }, [orders]);
   
   // Local leafet maps for the phone
   const phoneMapContainerRef = useRef<HTMLDivElement>(null);
@@ -2963,6 +3006,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
   // Resets receipt states and closes the modal
   const handleCompleteAndCloseModal = () => {
+    try {
+      sessionStorage.removeItem('vinimap_active_receipt_draft');
+    } catch (_) {}
     setShowReceiptModal(false);
     setShowSuccessProtocol(false);
     setGeneratedProtocol(null);
@@ -3005,49 +3051,72 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     alert("Ocorrência registrada! O pedido foi removido da sua lista de entregas ativas e encaminhado para tratativa operacional.");
   };
 
-  // Rear camera stream handlers
-  const startWebcam = async () => {
+  // Live In-App Camera stream handlers
+  const startWebcam = async (facing: 'environment' | 'user' = cameraFacingMode) => {
+    setIsStartingCamera(true);
+    setCameraErrorMessage(null);
+    stopWebcam();
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera API not supported in this environment");
+        throw new Error("Câmera nativa não suportada ou sem permissão neste navegador. Use a Galeria/Arquivo.");
       }
-      let stream: MediaStream;
+      let stream: MediaStream | null = null;
       try {
-        // Try strict rear camera constraint (facingMode: { exact: 'environment' })
+        // Try requested facingMode
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          video: { 
+            facingMode: facing === 'environment' ? { ideal: 'environment' } : 'user', 
+            width: { ideal: 1280, max: 1920 }, 
+            height: { ideal: 720, max: 1080 } 
+          },
+          audio: false
         });
       } catch (exactErr) {
-        console.warn("Exact environment facingMode failed, falling back to soft environment constraint:", exactErr);
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-          });
-        } catch (softErr) {
-          console.warn("Soft environment constraint failed, requesting default video stream:", softErr);
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true
-          });
-        }
+        console.warn("[RiderCamera] FacingMode constraint fallback, requesting generic video stream:", exactErr);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
       }
-      setCameraStream(stream);
-      setIsCameraActive(true);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(e => console.warn("Video play exception:", e));
-        }
-      }, 150);
-    } catch (err) {
-      console.warn("Could not start camera, generating proof photo fallback:", err);
+
+      if (stream) {
+        setCameraStream(stream);
+        setIsCameraActive(true);
+        setCameraFacingMode(facing);
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.setAttribute('playsinline', 'true');
+            videoRef.current.play().catch(e => console.warn("Video stream play exception:", e));
+          }
+        }, 120);
+      }
+    } catch (err: any) {
+      console.warn("[RiderCamera] Could not start camera stream:", err);
+      const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+      const friendlyMsg = isDenied
+        ? "Permissão da câmera bloqueada. Habilite a câmera nas permissões do site ou utilize o envio pela Galeria."
+        : (err?.message || "Não foi possível inicializar a câmera do celular.");
+      setCameraErrorMessage(friendlyMsg);
       setIsCameraActive(false);
-      handleCapturePhoto();
+    } finally {
+      setIsStartingCamera(false);
     }
+  };
+
+  const toggleCameraFacingMode = () => {
+    const nextMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    setCameraFacingMode(nextMode);
+    startWebcam(nextMode);
   };
 
   const stopWebcam = () => {
     if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
+      try {
+        cameraStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      } catch (_) {}
       setCameraStream(null);
     }
     if (videoRef.current) {
@@ -3056,31 +3125,31 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
     setIsCameraActive(false);
   };
 
-  const captureWebcamPhoto = () => {
+  const captureWebcamPhoto = async () => {
     try {
       const video = videoRef.current;
-      if (video && video.readyState >= 2 && (video.videoWidth > 0 || video.clientWidth > 0)) {
-        const w = Math.min(video.videoWidth || video.clientWidth || 640, 800);
-        const h = Math.min(video.videoHeight || video.clientHeight || 480, 800);
+      if (video && (video.videoWidth > 0 || video.clientWidth > 0)) {
+        const w = Math.min(video.videoWidth || 800, 800);
+        const h = Math.min(video.videoHeight || 600, 800);
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
         if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
           ctx.drawImage(video, 0, 0, w, h);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
           canvas.width = 0;
           canvas.height = 0;
-          if (dataUrl && dataUrl.length > 500) {
-            console.log("[RiderAppSimulator CAMERA CAPTURE SUCCESS]", {
-              type: 'camera',
+          if (dataUrl && dataUrl.length > 200) {
+            console.log("[RiderAppSimulator CAMERA FRAME CAPTURED]", {
               length: dataUrl.length,
-              preview: dataUrl.substring(0, 60) + '...'
+              preview: dataUrl.substring(0, 50) + '...'
             });
             stopWebcam();
-            enqueuePhotoProcessing(dataUrl, 'Foto da Câmera').then(compressed => {
-              if (compressed) setReceiptPhoto(compressed);
-            }).catch(e => console.warn("Camera photo queue error:", e));
+            const compressed = await enqueuePhotoProcessing(dataUrl, 'Foto da Câmera');
+            if (compressed) setReceiptPhoto(compressed);
             return dataUrl;
           }
         }
@@ -5516,40 +5585,92 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                     <span>FOTO CAPTURADA COM SUCESSO</span>
                                   </div>
                                 </div>
+                              ) : isCameraActive ? (
+                                <div className="space-y-2 p-2 bg-slate-900 rounded-xl border border-slate-700 text-white animate-fadeIn shadow-lg">
+                                  <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+                                    <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-emerald-400">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                                      <span>Câmera ({cameraFacingMode === 'environment' ? 'Traseira' : 'Frontal'})</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={toggleCameraFacingMode}
+                                        className="px-2 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-lg text-[9.5px] font-bold flex items-center gap-1 border border-slate-600 cursor-pointer transition-all"
+                                        title="Girar Câmera"
+                                      >
+                                        <RefreshCw size={11} className="text-blue-400" />
+                                        <span>Girar</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={stopWebcam}
+                                        className="p-1 bg-rose-600/80 hover:bg-rose-700 active:scale-95 text-white rounded-lg cursor-pointer transition-all"
+                                        title="Fechar Câmera"
+                                      >
+                                        <X size={13} />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Viewfinder stream */}
+                                  <div className="relative rounded-lg overflow-hidden bg-black aspect-4/3 flex items-center justify-center border border-slate-700 shadow-inner">
+                                    <video
+                                      ref={videoRef}
+                                      autoPlay
+                                      playsInline
+                                      muted
+                                      className="w-full h-full object-cover"
+                                    />
+                                    {/* Target framing boundary */}
+                                    <div className="absolute inset-3 border border-dashed border-emerald-400/70 rounded-lg pointer-events-none flex flex-col justify-between p-1.5">
+                                      <span className="text-[8px] font-mono text-emerald-300 bg-black/60 px-1 py-0.5 rounded self-start backdrop-blur-xs">
+                                        Enquadre o pacote ou documento
+                                      </span>
+                                      <span className="text-[7.5px] font-mono text-slate-400 bg-black/60 px-1 py-0.5 rounded self-end">
+                                        ViniMap Cam
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Big Capture Button */}
+                                  <button
+                                    type="button"
+                                    onClick={captureWebcamPhoto}
+                                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
+                                  >
+                                    <Camera size={15} />
+                                    <span>CAPTURAR FOTO AGORA</span>
+                                  </button>
+                                </div>
                               ) : (
                                 /* Camera and File Upload options */
                                 <div className="space-y-2">
+                                  {cameraErrorMessage && (
+                                    <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-[9.5px] leading-tight flex items-start gap-1.5">
+                                      <span className="shrink-0 text-amber-600 font-bold">⚠️</span>
+                                      <span>{cameraErrorMessage}</span>
+                                    </div>
+                                  )}
+
                                   <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl">
-                                    <label
-                                      htmlFor="delivery-camera-capture"
-                                      className="py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white text-[9.5px] font-extrabold rounded-lg shadow-xs border border-blue-500 text-center cursor-pointer flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                                    <button
+                                      type="button"
+                                      onClick={() => startWebcam('environment')}
+                                      disabled={isStartingCamera}
+                                      className="py-2.5 px-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-[9.5px] font-extrabold rounded-lg shadow-xs border border-blue-500 text-center cursor-pointer flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                                     >
-                                      <Camera size={13} />
-                                      <span>Tirar Foto (Câmera)</span>
-                                    </label>
-                                    <input
-                                      type="file"
-                                      id="delivery-camera-capture"
-                                      accept="image/*"
-                                      capture="environment"
-                                      className="hidden"
-                                      onChange={async (e) => {
-                                        if (e.target.files && e.target.files[0]) {
-                                          const file = e.target.files[0];
-                                          try {
-                                            const compressed = await enqueuePhotoProcessing(file, 'Câmera');
-                                            if (compressed) setReceiptPhoto(compressed);
-                                          } catch (err) {
-                                            console.warn("Camera photo compression queue error:", err);
-                                          }
-                                          e.target.value = '';
-                                        }
-                                      }}
-                                    />
+                                      {isStartingCamera ? (
+                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                      ) : (
+                                        <Camera size={13} />
+                                      )}
+                                      <span>{isStartingCamera ? 'Abrindo...' : 'Tirar Foto (Câmera)'}</span>
+                                    </button>
 
                                     <label
                                       htmlFor="delivery-file-upload"
-                                      className="py-2 px-2 bg-white hover:bg-slate-50 text-[9px] font-extrabold text-slate-700 rounded-lg shadow-2xs border border-slate-200 text-center cursor-pointer flex items-center justify-center gap-1 transition-all"
+                                      className="py-2 px-2 bg-white hover:bg-slate-50 active:scale-95 text-[9px] font-extrabold text-slate-700 rounded-lg shadow-2xs border border-slate-200 text-center cursor-pointer flex items-center justify-center gap-1 transition-all"
                                     >
                                       📁 Galeria / Arquivo
                                     </label>
