@@ -12,7 +12,7 @@ import { isOrderMatchingRider, findRiderByIdentifier, getCachedDeliveryRiders, s
 import { INITIAL_RIDERS } from '../data/mock';
 import { realtimeSyncBus } from '../utils/realtimeSync';
 import { compressImage } from '../utils/imageCompressor';
-import { dbSaveDeliveryRider, validateRiderDeviceSession } from '../lib/dbService';
+import { dbSaveDeliveryRider, dbBulkSaveOrders, validateRiderDeviceSession } from '../lib/dbService';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { isSupabaseConfigured } from '../supabase';
@@ -390,6 +390,7 @@ export default function RiderAppSimulator({
     if (onUpdateOrders) {
       onUpdateOrders(updatedOrders);
     }
+    dbBulkSaveOrders(updatedOrders).catch(() => {});
   };
   const [currentScreen, setCurrentScreen] = useState<'login' | 'dashboard' | 'map' | 'deliveries' | 'details'>(() => {
     if (typeof window !== 'undefined') {
@@ -588,9 +589,8 @@ export default function RiderAppSimulator({
   const hasInitialFetchedRef = useRef(false);
 
   useEffect(() => {
-    // 1. Initial snapshot / fallback fetch
+    // 1. Initial snapshot / fallback fetch only when orders are completely empty on mount
     const fetchFreshOnMount = async () => {
-      // Only do a direct fetch if orders list is truly empty on mount
       if (orders.length === 0) {
         let fetched: Order[] = [];
         try {
@@ -638,36 +638,7 @@ export default function RiderAppSimulator({
       hasInitialFetchedRef.current = true;
       fetchFreshOnMount();
     }
-
-    // 2. In standalone or real mobile device mode, listen directly to Firestore live updates
-    let unsubSnapshot: (() => void) | null = null;
-    if (isStandalone || isEffectiveRealDevice) {
-      try {
-        unsubSnapshot = onSnapshot(collection(db, 'orders'), (snapshot) => {
-          const liveDocs: Order[] = [];
-          snapshot.forEach(docSnap => {
-            const d = docSnap.data() as Order;
-            if (d && d.id) {
-              liveDocs.push(d);
-            }
-          });
-          if (liveDocs.length > 0 && onUpdateOrders) {
-            onUpdateOrders(liveDocs);
-          }
-        }, (err) => {
-          console.warn('Driver app standalone onSnapshot listener error:', err);
-        });
-      } catch (err) {
-        console.warn('Error setting up onSnapshot in Driver App:', err);
-      }
-    }
-
-    return () => {
-      if (unsubSnapshot) {
-        unsubSnapshot();
-      }
-    };
-  }, [isStandalone, isEffectiveRealDevice, onUpdateOrders]);
+  }, [orders.length, onUpdateOrders]);
 
   // Individual Login State
   const [phoneInput, setPhoneInput] = useState<string>('');
@@ -3928,22 +3899,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       setPhoneInput('');
                       setPasswordInput('');
                       setLoginError(null);
-
-                      // Proactive fetch of fresh orders upon login
-                      if (onUpdateOrders) {
-                        getDocs(collection(db, 'orders')).then(snap => {
-                          const fresh: Order[] = [];
-                          snap.forEach(d => {
-                            const o = d.data() as Order;
-                            if (o && o.id) {
-                              fresh.push(o);
-                            }
-                          });
-                          if (fresh.length > 0) {
-                            onUpdateOrders(fresh);
-                          }
-                        }).catch(() => {});
-                      }
 
                       // Automatically activate device GPS tracking by default upon login
                       if (typeof navigator !== 'undefined' && navigator.geolocation) {

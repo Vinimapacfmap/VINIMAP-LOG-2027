@@ -1555,6 +1555,8 @@ export default function App() {
     };
   };
 
+  const lastRiderGpsDbSaveRef = useRef<{ [riderId: string]: number }>({});
+
   const handleUpdateRiderCoords = (
     riderId: string, 
     lat: number, 
@@ -1602,6 +1604,10 @@ export default function App() {
       // Ignore broadcast errors
     }
 
+    const now = Date.now();
+    const lastSaveTime = lastRiderGpsDbSaveRef.current[riderId] || 0;
+    const shouldSaveToDb = now - lastSaveTime >= 6000;
+
     setRiders(prev => prev.map(r => {
       if (r.id === riderId) {
         const updated = {
@@ -1614,7 +1620,10 @@ export default function App() {
           ...(lastGpsUpdate !== undefined ? { lastGpsUpdate } : {}),
           ...(isGpsRealActive !== undefined ? { isGpsRealActive } : {})
         };
-        dbSaveDeliveryRider(updated);
+        if (shouldSaveToDb) {
+          lastRiderGpsDbSaveRef.current[riderId] = now;
+          dbSaveDeliveryRider(updated).catch(() => {});
+        }
         return updated;
       }
       return r;
@@ -4223,14 +4232,11 @@ export default function App() {
                 }
               }}
               onUpdateOrders={(updatedOrders) => {
+                if (!updatedOrders || updatedOrders.length === 0) return;
                 setOrders(prev => {
-                  const updatedIds = new Set(updatedOrders.map(o => o.id));
-                  return [
-                    ...updatedOrders,
-                    ...prev.filter(o => !updatedIds.has(o.id))
-                  ];
+                  const updatedMap = new Map(updatedOrders.map(o => [o.id, o]));
+                  return prev.map(o => updatedMap.get(o.id) || o);
                 });
-                dbBulkSaveOrders(updatedOrders);
               }}
               showRiderEarnings={showRiderEarnings}
               activeRiderId={selectedRiderId}
@@ -7425,14 +7431,11 @@ export default function App() {
                     }
                   }}
                   onUpdateOrders={(updatedOrders) => {
+                    if (!updatedOrders || updatedOrders.length === 0) return;
                     setOrders(prev => {
-                      const updatedIds = new Set(updatedOrders.map(o => o.id));
-                      return [
-                        ...updatedOrders,
-                        ...prev.filter(o => !updatedIds.has(o.id))
-                      ];
+                      const updatedMap = new Map(updatedOrders.map(o => [o.id, o]));
+                      return prev.map(o => updatedMap.get(o.id) || o);
                     });
-                    dbBulkSaveOrders(updatedOrders);
                   }}
                   showRiderEarnings={showRiderEarnings}
                   activeRiderId={selectedRiderId}
