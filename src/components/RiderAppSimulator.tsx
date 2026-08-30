@@ -68,6 +68,7 @@ import {
   HelpCircle, 
   QrCode, 
   Shield, 
+  ShieldCheck,
   RefreshCw,
   TrendingUp,
   Volume2,
@@ -1065,10 +1066,15 @@ export default function RiderAppSimulator({
         if (onUpdateOrders) {
           onUpdateOrders(batch);
         }
-        const hasMyOrder = currentDriverId && batch.some(o => isOrderMatchingRider(o, currentDriverId, riders));
-        if (hasMyOrder) {
+        const matchingOrders = currentDriverId ? batch.filter(o => isOrderMatchingRider(o, currentDriverId, riders)) : [];
+        if (matchingOrders.length > 0) {
           playBeep(987.77, 0.12);
           setTimeout(() => playBeep(1318.51, 0.22), 120);
+          triggerPhoneNotification(
+            "Pedidos Atualizados 📦",
+            `${matchingOrders.length} pedido(s) atualizados na sua rota de entregas.`,
+            'info'
+          );
         }
       } else if ((type === 'ORDER_STATUS_CHANGED' || type === 'ORDER_UPDATED' || type === 'NEW_ORDER_ASSIGNED') && (payload?.id || payload?.order?.id)) {
         const updatedOrder: Order = payload.id ? payload : payload.order;
@@ -1076,8 +1082,22 @@ export default function RiderAppSimulator({
           onUpdateOrders([updatedOrder]);
         }
         if (currentDriverId && updatedOrder && isOrderMatchingRider(updatedOrder, currentDriverId, riders)) {
-          playBeep(987.77, 0.1);
-          setTimeout(() => playBeep(1318.51, 0.2), 120);
+          playBeep(987.77, 0.15);
+          setTimeout(() => playBeep(1318.51, 0.25), 120);
+          triggerPhoneNotification(
+            type === 'NEW_ORDER_ASSIGNED' ? "Novo Pedido Atribuído! 📦" : "Atualização de Pedido ⚡",
+            `Pedido #${updatedOrder.id} (${updatedOrder.clientName || 'Cliente'}) recebido no dispositivo.`,
+            'success'
+          );
+          if (onSaveLogs) {
+            onSaveLogs([{
+              id: `log-push-rec-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              time: getSaoPauloTime(),
+              type: 'success',
+              message: `[PUSH ENTREGUE] Notificação push do pedido #${updatedOrder.id} recebida com sucesso no dispositivo do condutor (${selectedRider?.name || currentDriverId}).`,
+              orderId: updatedOrder.id
+            }]);
+          }
         }
       } else if (type === 'REQUEST_ORDERS_SYNC') {
         // Parent or peer requested orders sync
@@ -1087,7 +1107,7 @@ export default function RiderAppSimulator({
     return () => {
       unsub();
     };
-  }, [selectedRiderId, selectedRider, riders, onUpdateOrders]);
+  }, [selectedRiderId, selectedRider, riders, onUpdateOrders, onSaveLogs]);
 
   // Manual explicit synchronization of today's orders with system
   const handleManualSyncTodayOrders = async () => {
@@ -3955,19 +3975,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     <span className="text-[9.5px] text-blue-200 font-bold tracking-widest uppercase block">Aplicativo de Campo do Entregador</span>
                   </div>
 
-                  {/* Locked Driver Device Banner */}
-                  {lockedRiderId && (
-                    <div className="bg-emerald-500/20 border border-emerald-500/40 rounded-2xl p-3 text-left space-y-1 my-2">
-                      <div className="flex items-center gap-1.5 font-black text-emerald-300 text-[10.5px] uppercase tracking-wide">
-                        <Shield size={14} className="text-emerald-400 shrink-0" />
-                        <span>Dispositivo Vinculado Exclusivo</span>
-                      </div>
-                      <p className="text-[10px] text-emerald-100 font-medium leading-relaxed">
-                        Este link foi gerado exclusivamente para o condutor <strong className="text-white font-bold">{riders.find(r => r.id === lockedRiderId)?.name || 'Atribuído'}</strong> ({riders.find(r => r.id === lockedRiderId)?.vehicle || 'Veículo'}).
-                      </p>
-                    </div>
-                  )}
-
                   {/* Form Container */}
                   <form 
                     onSubmit={async (e) => {
@@ -4135,84 +4142,26 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                     className="space-y-3.5 my-3"
                   >
                     <div className="space-y-3">
-                      {/* Driver Identification Header */}
-                      {lockedRiderId ? (
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-[9.5px] font-bold text-emerald-300 uppercase tracking-wider block">
-                              🔒 Condutor Selecionado
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setLockedRiderId(null);
-                                setPhoneInput('');
-                                setPasswordInput('');
-                                if (typeof window !== 'undefined') {
-                                  localStorage.removeItem('vinimap_locked_rider_id');
-                                }
-                              }}
-                              className="text-[9.5px] text-blue-300 hover:text-white underline cursor-pointer"
-                            >
-                              Trocar de condutor
-                            </button>
-                          </div>
-                          <div className="bg-slate-800/90 border border-emerald-500/40 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-inner">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0 shadow-xs">
-                                <User size={14} className="text-emerald-300" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="font-extrabold text-xs text-white truncate">
-                                  {riders.find(r => r.id === lockedRiderId)?.name || 'Condutor Cadastrado'}
-                                </div>
-                                <div className="text-[9.5px] text-emerald-200 font-medium truncate">
-                                  {riders.find(r => r.id === lockedRiderId)?.vehicle || 'Veículo'} — {riders.find(r => r.id === lockedRiderId)?.phone || 'Vnimap'}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                      <div>
+                        <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">
+                          Identificação do Condutor (Telefone ou Dispositivo)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-blue-300">
+                            <Phone size={13} />
+                          </span>
+                          <input 
+                            type="text"
+                            placeholder="Ex: 11970791804 ou (11) 97079-1804"
+                            value={phoneInput}
+                            onChange={(e) => setPhoneInput(e.target.value)}
+                            className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/15 focus:border-white/35 rounded-xl py-2 pl-8 pr-3 text-xs text-white placeholder-blue-300/60 focus:outline-none transition-all font-medium"
+                          />
                         </div>
-                      ) : (
-                        <div>
-                          <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">
-                            Identificação do Condutor (Telefone ou Dispositivo)
-                          </label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-blue-300">
-                              <Phone size={13} />
-                            </span>
-                            <input 
-                              type="text"
-                              placeholder="Ex: 11970791804 ou (11) 97079-1804"
-                              value={phoneInput}
-                              onChange={(e) => setPhoneInput(e.target.value)}
-                              className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/15 focus:border-white/35 rounded-xl py-2 pl-8 pr-3 text-xs text-white placeholder-blue-300/60 focus:outline-none transition-all font-medium"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {lockedRiderId && (
-                        <div>
-                          <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">Dispositivo / Telefone</label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-blue-300">
-                              <Phone size={12} />
-                            </span>
-                            <input 
-                              type="text"
-                              placeholder="Ex: 11970791804 ou Telefone"
-                              value={phoneInput}
-                              onChange={(e) => setPhoneInput(e.target.value)}
-                              className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/15 focus:border-white/35 rounded-xl py-2 pl-8 pr-3 text-xs text-white placeholder-blue-300/60 focus:outline-none transition-all font-medium"
-                            />
-                          </div>
-                        </div>
-                      )}
+                      </div>
 
                       <div>
-                        <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">Senha de Acesso</label>
+                        <label className="text-[9.5px] font-bold text-blue-200 uppercase tracking-wider block mb-1">Senha de Acesso Exclusiva</label>
                         <div className="relative">
                           <span className="absolute left-3 top-2.5 text-blue-300">
                             <Shield size={12} />
@@ -4252,16 +4201,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <span>{deferredPrompt ? '⚡ Instalar App no Celular' : '📱 Instalar / Baixar Aplicativo'}</span>
                     </button>
 
-                    {/* Diagnostic Inspector Button for Verification */}
-                    <button
-                      type="button"
-                      onClick={() => setIsDiagnosticOpen(true)}
-                      className="w-full py-2 bg-slate-800/80 hover:bg-slate-700 text-amber-300 font-bold text-[10.5px] rounded-xl border border-amber-500/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <Bug size={13} className="text-amber-400" />
-                      <span>Painel de Diagnóstico & Alocações</span>
-                    </button>
-
                   </form>
 
                   {/* Footer Terms */}
@@ -4278,47 +4217,44 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                 <div className="flex-1 flex flex-col overflow-hidden">
                   
                   {/* APP TOP ACTION HEADER */}
-                  <div className="bg-white border-b border-slate-200/50 px-3 py-2.5 shrink-0 flex items-center justify-between shadow-xs relative z-30">
-                    <div className="flex items-center gap-2 min-w-0">
+                  <div className="bg-white border-b border-slate-200/80 px-3 py-2 shrink-0 flex items-center justify-between gap-2 shadow-xs relative z-30">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       {/* Hamburger Menu Toggle Button */}
                       <button
                         type="button"
                         onClick={() => setIsDrawerMenuOpen(true)}
-                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all cursor-pointer flex items-center justify-center shrink-0"
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0"
                         title="Abrir Menu Lateral do Condutor"
                       >
                         <Menu size={16} />
                       </button>
 
-                      <img src={selectedRider?.avatar} className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="font-extrabold text-[11px] truncate text-slate-800">{selectedRider?.name}</div>
-                        <div className="text-[9px] text-slate-400 font-bold uppercase">{selectedRider?.vehicle}</div>
+                      <div className="relative shrink-0">
+                        <img 
+                          src={selectedRider?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} 
+                          className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-2xs" 
+                          alt={selectedRider?.name || 'Condutor'}
+                        />
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="font-black text-xs truncate text-slate-800 leading-tight">{selectedRider?.name || 'Condutor'}</div>
+                        <div className="text-[9px] text-slate-500 font-bold uppercase truncate mt-0.5">{selectedRider?.vehicle || 'Veículo'}</div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {/* Quick Sync Button */}
                       <button
                         type="button"
                         disabled={isSyncingWithSystem}
                         onClick={handleManualSyncTodayOrders}
-                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 font-extrabold text-[9.5px] rounded-lg border border-sky-200 transition-all flex items-center gap-1 cursor-pointer"
+                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 font-extrabold text-[10px] rounded-lg border border-sky-200 transition-all flex items-center gap-1 cursor-pointer shrink-0"
                         title="Sincronizar Lançamentos do Dia com o Sistema"
                       >
                         <RefreshCw size={11} className={`text-sky-600 ${isSyncingWithSystem ? "animate-spin" : ""}`} />
                         <span>{isSyncingWithSystem ? 'Sinc...' : 'Sinc'}</span>
-                      </button>
-
-                      {/* Diagnostic Inspector Button */}
-                      <button
-                        type="button"
-                        onClick={() => setIsDiagnosticOpen(true)}
-                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-extrabold text-[9.5px] rounded-lg border border-amber-200 transition-all flex items-center gap-1 cursor-pointer"
-                        title="Painel de Diagnóstico & Rastreamento de Alocações"
-                      >
-                        <Bug size={11} className="text-amber-600" />
-                        <span>Diag</span>
                       </button>
 
                       {/* GPS Localização Button */}
@@ -4331,9 +4267,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             startRealGpsTracking();
                           }
                         }}
-                        className={`px-2 py-1 font-extrabold text-[9.5px] rounded-lg border transition-all flex items-center gap-1 cursor-pointer ${
+                        className={`px-2 py-1 font-extrabold text-[10px] rounded-lg border transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
                           isRealGpsActive
-                            ? 'bg-emerald-500 text-white border-emerald-600 animate-pulse'
+                            ? 'bg-emerald-500 text-white border-emerald-600 animate-pulse shadow-xs'
                             : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
                         }`}
                         title="Localizar via GPS do Celular"
@@ -4342,31 +4278,11 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         <span>{isRealGpsActive ? 'GPS On' : 'GPS'}</span>
                       </button>
 
-                      {/* Full screen toggle */}
-                      <button
-                        type="button"
-                        onClick={() => setIsUserFullScreen(!isUserFullScreen)}
-                        className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-[9.5px] rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
-                        title={isUserFullScreen ? "Sair da Tela Cheia" : "Abrir em Tela Cheia"}
-                      >
-                        {isUserFullScreen ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
-                        <span>{isUserFullScreen ? 'Sair' : 'Tela Cheia'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleTriggerInstallPwa}
-                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-[9.5px] rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
-                        title="Instalar Aplicativo no Dispositivo"
-                      >
-                        <Download size={11} className="text-emerald-600" />
-                        <span>Instalar</span>
-                      </button>
-
+                      {/* Logout Button */}
                       <button
                         type="button"
                         onClick={handleDriverLogout}
-                        className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-[9.5px] rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                        className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-[10px] rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer shrink-0"
                         title="Desconectar / Sair da Conta do Condutor"
                       >
                         <LogOut size={11} className="text-rose-600" />
@@ -4528,18 +4444,6 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             >
                               <Download size={15} />
                               <span>Instalar Aplicativo PWA</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsDiagnosticOpen(true);
-                                setIsDrawerMenuOpen(false);
-                              }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-amber-400 hover:bg-amber-950/30 transition-all cursor-pointer"
-                            >
-                              <Bug size={15} />
-                              <span>Painel de Diagnóstico</span>
                             </button>
                           </div>
 
@@ -4815,29 +4719,29 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                         </div>
 
                         {/* STATUS DAS ENTREGAS GRIDS - 5 CARDS: TOTAL GERAL, NÃO INICIADO, EM ROTA, CONCLUÍDO, OCORRÊNCIA */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">📊 Resumo das Entregas</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">📊 Resumo das Entregas</span>
                             {focusedOrder && (
-                              <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 animate-pulse">
+                              <span className="text-[8.5px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
                                 Toque no card p/ mudar status
                               </span>
                             )}
                           </div>
                           
                           {/* Top Row: Total Geral & Não Iniciado */}
-                          <div className="grid grid-cols-2 gap-1.5">
+                          <div className="grid grid-cols-2 gap-2">
                             {/* 1. Total Geral */}
-                            <div className="bg-gradient-to-br from-indigo-50/90 to-blue-50/70 border border-indigo-200/80 rounded-xl p-2 flex flex-col justify-between shadow-3xs">
-                              <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                                  <Package size={11} />
+                            <div className="bg-gradient-to-br from-indigo-50/90 to-blue-50/70 border border-indigo-200/80 rounded-xl p-2.5 flex flex-col justify-between min-w-0 shadow-3xs">
+                              <div className="flex items-center justify-between mb-1.5 w-full min-w-0">
+                                <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                                  <Package size={12} />
                                 </div>
-                                <span className="text-[7.5px] font-bold text-indigo-600 uppercase bg-indigo-100/70 px-1.5 py-0.2 rounded">Plantão</span>
+                                <span className="text-[8px] font-black text-indigo-700 uppercase bg-indigo-100/80 px-1.5 py-0.5 rounded shrink-0">Plantão</span>
                               </div>
-                              <div>
-                                <span className="text-[8.5px] font-bold text-indigo-900 uppercase block truncate">Total Geral</span>
-                                <span className="text-base font-black text-indigo-950 font-mono leading-none">{totalAssignedCount}</span>
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-black text-indigo-900 uppercase block truncate">Total Geral</span>
+                                <span className="text-lg font-black text-indigo-950 font-mono leading-tight">{totalAssignedCount}</span>
                               </div>
                             </div>
 
@@ -4845,52 +4749,52 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Não iniciado')}
-                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
+                              className={`text-left border rounded-xl p-2.5 flex flex-col justify-between min-w-0 shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-amber-50/90 border-amber-300 hover:border-amber-500 hover:bg-amber-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  ? 'bg-amber-50/90 border-amber-300 hover:border-amber-500 hover:bg-amber-100/50 cursor-pointer hover:scale-[1.01] active:scale-[0.98]'
                                   : 'bg-amber-50/40 border-amber-200/60 cursor-default'
                               }`}
                             >
-                              <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-amber-500 text-white flex items-center justify-center shadow-xs">
-                                  <Clock size={11} />
+                              <div className="flex items-center justify-between mb-1.5 w-full min-w-0">
+                                <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                                  <Clock size={12} />
                                 </div>
                                 {focusedOrder ? (
-                                  <span className="text-[7px] font-bold text-amber-600 uppercase bg-amber-100 px-1 py-0.2 rounded">Mudar</span>
+                                  <span className="text-[7.5px] font-bold text-amber-700 uppercase bg-amber-100 px-1.5 py-0.5 rounded shrink-0">Mudar</span>
                                 ) : (
-                                  <span className="text-[7px] font-semibold text-amber-600">Pendente</span>
+                                  <span className="text-[7.5px] font-bold text-amber-700 uppercase bg-amber-100/60 px-1.5 py-0.5 rounded shrink-0">Pendente</span>
                                 )}
                               </div>
-                              <div>
-                                <span className="text-[8.5px] font-bold text-amber-800 uppercase block truncate">Não Iniciado</span>
-                                <span className="text-base font-black text-amber-900 font-mono leading-none">{naoIniciadoCount}</span>
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-black text-amber-800 uppercase block truncate">Não Iniciado</span>
+                                <span className="text-lg font-black text-amber-900 font-mono leading-tight">{naoIniciadoCount}</span>
                               </div>
                             </button>
                           </div>
 
                           {/* Bottom Row: Em Rota, Concluído, Ocorrência */}
-                          <div className="grid grid-cols-3 gap-1.5">
+                          <div className="grid grid-cols-3 gap-2">
                             {/* 3. Em Rota */}
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Em rota')}
-                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
+                              className={`text-left border rounded-xl p-2 flex flex-col justify-between min-w-0 shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-sky-50/90 border-sky-300 hover:border-sky-500 hover:bg-sky-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  ? 'bg-sky-50/90 border-sky-300 hover:border-sky-500 hover:bg-sky-100/50 cursor-pointer hover:scale-[1.01] active:scale-[0.98]'
                                   : 'bg-sky-50/40 border-sky-200/60 cursor-default'
                               }`}
                             >
-                              <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-sky-500 text-white flex items-center justify-center shadow-xs">
+                              <div className="flex items-center justify-between mb-1 w-full min-w-0">
+                                <div className="w-5 h-5 rounded-md bg-sky-500 text-white flex items-center justify-center shadow-xs shrink-0">
                                   <Truck size={11} />
                                 </div>
                                 {focusedOrder ? (
-                                  <span className="text-[7px] font-bold text-sky-600 uppercase bg-sky-100 px-1 py-0.2 rounded">Mudar</span>
+                                  <span className="text-[7px] font-bold text-sky-700 uppercase bg-sky-100 px-1 py-0.5 rounded shrink-0">Mudar</span>
                                 ) : null}
                               </div>
-                              <div>
-                                <span className="text-[8px] font-bold text-sky-800 uppercase block truncate">Em Rota</span>
-                                <span className="text-sm font-black text-sky-950 font-mono leading-none">{emRotaCount}</span>
+                              <div className="min-w-0">
+                                <span className="text-[8px] font-black text-sky-800 uppercase block truncate">Em Rota</span>
+                                <span className="text-base font-black text-sky-950 font-mono leading-tight">{emRotaCount}</span>
                               </div>
                             </button>
 
@@ -4898,23 +4802,23 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Concluído')}
-                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
+                              className={`text-left border rounded-xl p-2 flex flex-col justify-between min-w-0 shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-emerald-50/90 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  ? 'bg-emerald-50/90 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100/50 cursor-pointer hover:scale-[1.01] active:scale-[0.98]'
                                   : 'bg-emerald-50/40 border-emerald-200/60 cursor-default'
                               }`}
                             >
-                              <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                              <div className="flex items-center justify-between mb-1 w-full min-w-0">
+                                <div className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
                                   <CheckCircle2 size={11} />
                                 </div>
                                 {focusedOrder ? (
-                                  <span className="text-[7px] font-bold text-emerald-600 uppercase bg-emerald-100 px-1 py-0.2 rounded">Mudar</span>
+                                  <span className="text-[7px] font-bold text-emerald-700 uppercase bg-emerald-100 px-1 py-0.5 rounded shrink-0">Mudar</span>
                                 ) : null}
                               </div>
-                              <div>
-                                <span className="text-[8px] font-bold text-emerald-800 uppercase block truncate">Concluído</span>
-                                <span className="text-sm font-black text-emerald-950 font-mono leading-none">{completedCount}</span>
+                              <div className="min-w-0">
+                                <span className="text-[8px] font-black text-emerald-800 uppercase block truncate">Concluído</span>
+                                <span className="text-base font-black text-emerald-950 font-mono leading-tight">{completedCount}</span>
                               </div>
                             </button>
 
@@ -4922,23 +4826,23 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                             <button
                               type="button"
                               onClick={() => handleCardStatusClick('Ocorrência')}
-                              className={`text-left border rounded-xl p-2 flex flex-col justify-between shadow-3xs transition-all ${
+                              className={`text-left border rounded-xl p-2 flex flex-col justify-between min-w-0 shadow-3xs transition-all ${
                                 focusedOrder
-                                  ? 'bg-rose-50/90 border-rose-300 hover:border-rose-500 hover:bg-rose-100/50 cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                                  ? 'bg-rose-50/90 border-rose-300 hover:border-rose-500 hover:bg-rose-100/50 cursor-pointer hover:scale-[1.01] active:scale-[0.98]'
                                   : 'bg-rose-50/40 border-rose-200/60 cursor-default'
                               }`}
                             >
-                              <div className="flex items-center justify-between mb-1 w-full">
-                                <div className="w-5 h-5 rounded-md bg-rose-500 text-white flex items-center justify-center shadow-xs">
+                              <div className="flex items-center justify-between mb-1 w-full min-w-0">
+                                <div className="w-5 h-5 rounded-md bg-rose-500 text-white flex items-center justify-center shadow-xs shrink-0">
                                   <AlertTriangle size={11} />
                                 </div>
                                 {focusedOrder ? (
-                                  <span className="text-[7px] font-bold text-rose-600 uppercase bg-rose-100 px-1 py-0.2 rounded">Mudar</span>
+                                  <span className="text-[7px] font-bold text-rose-700 uppercase bg-rose-100 px-1 py-0.5 rounded shrink-0">Mudar</span>
                                 ) : null}
                               </div>
-                              <div>
-                                <span className="text-[8px] font-bold text-rose-800 uppercase block truncate">Ocorrência</span>
-                                <span className="text-sm font-black text-rose-950 font-mono leading-none">{occurrenceCount}</span>
+                              <div className="min-w-0">
+                                <span className="text-[8px] font-black text-rose-800 uppercase block truncate">Ocorrência</span>
+                                <span className="text-base font-black text-rose-950 font-mono leading-tight">{occurrenceCount}</span>
                               </div>
                             </button>
                           </div>
@@ -4976,9 +4880,9 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <div className="w-full h-full flex flex-col relative">
                         
                         {/* TOP OVERLAY: REAL GPS TRACKING & GOOGLE MAPS CONTROLS */}
-                        <div className="absolute top-3 left-3 right-3 z-20 flex flex-col gap-2">
-                          <div className="bg-slate-900/90 text-white backdrop-blur-md rounded-2xl p-2.5 border border-white/10 shadow-xl flex items-center justify-between gap-2">
-                            {/* Real GPS Toggle / Locate Me Button */}
+                        <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex flex-col gap-1.5 pointer-events-none">
+                          <div className="bg-slate-900/90 text-white backdrop-blur-md rounded-xl p-2 border border-white/10 shadow-lg flex items-center justify-between gap-2 pointer-events-auto">
+                            {/* Real GPS Toggle */}
                             <button
                               type="button"
                               onClick={() => {
@@ -4988,38 +4892,40 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                   startRealGpsTracking();
                                 }
                               }}
-                              className={`px-3 py-1.5 rounded-xl text-[10px] font-extrabold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                              className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
                                 isRealGpsActive
-                                  ? 'bg-emerald-500 text-slate-950 font-black animate-pulse'
+                                  ? 'bg-emerald-500 text-slate-950 animate-pulse'
                                   : 'bg-blue-600 hover:bg-blue-700 text-white'
                               }`}
                             >
                               <Compass size={12} className={isRealGpsActive ? "animate-spin" : ""} />
-                              <span>{isRealGpsActive ? 'GPS Ativo (Transmitindo)' : 'Usar GPS do Celular'}</span>
+                              <span>{isRealGpsActive ? 'GPS Ativo' : 'Ativar GPS'}</span>
                             </button>
 
-                            {/* Open Google Maps Button */}
-                            {currentNextOrder ? (
-                              <a
-                                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentNextOrder.address)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => prepareExternalMapNavigation(currentNextOrder)}
-                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-extrabold flex items-center gap-1.5 shadow-sm transition-all"
-                              >
-                                <Navigation size={12} />
-                                <span>Google Maps</span>
-                              </a>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={captureInstantLocation}
-                                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-extrabold flex items-center gap-1 border border-white/10 cursor-pointer"
-                              >
-                                <MapPin size={11} className="text-amber-400" />
-                                <span>Capturar Posição</span>
-                              </button>
-                            )}
+                            {/* Open Google Maps Button or Capture */}
+                            <div className="flex items-center gap-1.5">
+                              {currentNextOrder ? (
+                                <a
+                                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentNextOrder.address)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => prepareExternalMapNavigation(currentNextOrder)}
+                                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black flex items-center gap-1.5 shadow-xs transition-all"
+                                >
+                                  <Navigation size={11} />
+                                  <span>Google Maps</span>
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={captureInstantLocation}
+                                  className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[10px] font-extrabold flex items-center gap-1 border border-white/10 cursor-pointer"
+                                >
+                                  <MapPin size={11} className="text-amber-400" />
+                                  <span>Capturar</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           {/* Button to Return to Selected Order */}
@@ -5030,29 +4936,20 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                                 setActiveTab('tasks');
                                 setCurrentScreen('details');
                               }}
-                              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] py-2 px-3 rounded-2xl flex items-center justify-center gap-1.5 shadow-lg cursor-pointer transition-all border border-blue-400/30"
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] py-1.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition-all border border-blue-400/30 pointer-events-auto"
                             >
-                              <ArrowLeft size={13} />
-                              <span>Voltar ao Pedido Selecionado (#{selectedOrder.id})</span>
+                              <ArrowLeft size={12} />
+                              <span>Voltar ao Pedido #{selectedOrder.id}</span>
                             </button>
                           )}
 
-                          {/* Real GPS live coordinates badge */}
+                          {/* Compact GPS status badge */}
                           {isRealGpsActive && realGpsData && (
-                            <div className="bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-[9px] px-3 py-1 rounded-xl font-mono flex items-center justify-between backdrop-blur-md shadow-md">
-                              <span>Lat: {realGpsData.lat.toFixed(5)}, Lng: {realGpsData.lng.toFixed(5)}</span>
+                            <div className="bg-slate-900/80 border border-emerald-500/40 text-emerald-300 text-[8.5px] px-2.5 py-0.5 rounded-lg font-mono flex items-center justify-between backdrop-blur-md shadow-xs pointer-events-auto">
+                              <span>Lat: {realGpsData.lat.toFixed(4)}, Lng: {realGpsData.lng.toFixed(4)}</span>
                               <span className="font-bold text-emerald-400">±{Math.round(realGpsData.accuracy)}m</span>
                             </div>
                           )}
-
-                          {/* Service Worker Map Tiles Cache status badge */}
-                          <div className="bg-slate-900/80 border border-slate-700/60 text-slate-300 text-[8.5px] px-2.5 py-1 rounded-xl font-medium flex items-center justify-between backdrop-blur-md">
-                            <span className="flex items-center gap-1.5 font-bold text-blue-300">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              Cache Offline de Tiles & Leaflet Ativo
-                            </span>
-                            <span className="text-emerald-400 text-[8px] font-mono font-bold">Modo Sem 4G Pronto</span>
-                          </div>
                         </div>
 
                         {/* Leaflet instance inside phone */}

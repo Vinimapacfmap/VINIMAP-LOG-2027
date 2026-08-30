@@ -8,6 +8,7 @@ import { Order, DeliveryRider, ClientPartner } from '../types';
 import { formatToBrazilianDate } from '../utils/dateUtils';
 import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
 import { getPartnerDisplayName } from '../utils/partnerUtils';
+import { isMockOrder, MOCK_CLIENT_IDS, MOCK_RIDER_IDS } from '../utils/orderConsistency';
 import { DriverBillingModal } from './DriverBillingModal';
 import ExportConfigModal from './ExportConfigModal';
 import { 
@@ -65,10 +66,15 @@ interface AdvancedReportsProps {
 }
 
 export default function AdvancedReports({ orders, riders, clientPartners = [], onUpdateRider }: AdvancedReportsProps) {
-  // Extract all unique months from orders
+  // Strictly filter out any mock orders from all analytical calculations
+  const cleanOrders = useMemo(() => (orders || []).filter(o => !isMockOrder(o)), [orders]);
+  // Strictly filter out any mock riders
+  const cleanRiders = useMemo(() => (riders || []).filter(r => !MOCK_RIDER_IDS.includes(r.id)), [riders]);
+
+  // Extract all unique months from clean real orders
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
-    orders.forEach(o => {
+    cleanOrders.forEach(o => {
       if (o.date) {
         const parts = o.date.split('-');
         if (parts.length >= 2) {
@@ -100,21 +106,21 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
       };
       return parse(a) - parse(b);
     });
-  }, [orders]);
+  }, [cleanOrders]);
 
   // Comparison Months Selection
   const [monthA, setMonthA] = useState<string>(() => {
     if (availableMonths.length >= 2) {
       return availableMonths[availableMonths.length - 2];
     }
-    return availableMonths[0] || 'Junho/2026';
+    return availableMonths[0] || '';
   });
 
   const [monthB, setMonthB] = useState<string>(() => {
     if (availableMonths.length >= 1) {
       return availableMonths[availableMonths.length - 1];
     }
-    return 'Julho/2026';
+    return '';
   });
 
   // Filter option: use all orders vs only concluded ones
@@ -153,14 +159,14 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
   // Filtered orders list based on toggle
   const targetOrders = useMemo(() => {
     if (useOnlyDelivered) {
-      return orders.filter(o => o.status !== 'Cancelado');
+      return cleanOrders.filter(o => o.status !== 'Cancelado');
     }
-    return orders;
-  }, [orders, useOnlyDelivered]);
+    return cleanOrders;
+  }, [cleanOrders, useOnlyDelivered]);
 
   // Compute metrics for each rider
   const ridersReportData = useMemo(() => {
-    const ridersList = riders || [];
+    const ridersList = cleanRiders;
     const riderMap: Record<string, {
       id: string;
       name: string;
@@ -182,7 +188,7 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
       successRate: number;
     }> = {};
 
-    // Initialize with known riders from props
+    // Initialize with known real riders from props
     ridersList.forEach(r => {
       riderMap[r.id] = {
         id: r.id,
@@ -206,39 +212,9 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
       };
     });
 
-    // Accumulate all orders (including past ones)
-    orders.forEach(order => {
-      if (!order.riderId) return;
-
-      if (!riderMap[order.riderId]) {
-        let inferredName = `Condutor #${order.riderId.substring(0, 5)}`;
-        if (order.history) {
-          const assignLog = order.history.find(h => h.action.includes('rider') || h.action.includes('condutor') || h.action.includes('entregador'));
-          if (assignLog && assignLog.details) {
-            inferredName = assignLog.details;
-          }
-        }
-        riderMap[order.riderId] = {
-          id: order.riderId,
-          name: inferredName,
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
-          vehicle: 'Moto',
-          rating: 4.8,
-          status: 'Offline',
-          phone: '(11) 99999-0000',
-          totalOrders: 0,
-          completed: 0,
-          inRoute: 0,
-          delivering: 0,
-          occurrences: 0,
-          cancelled: 0,
-          notStarted: 0,
-          totalValue: 0,
-          avgValue: 0,
-          commission: 0,
-          successRate: 100,
-        };
-      }
+    // Accumulate all clean real orders
+    cleanOrders.forEach(order => {
+      if (!order.riderId || !riderMap[order.riderId]) return;
 
       const rData = riderMap[order.riderId];
       rData.totalOrders += 1;
@@ -274,7 +250,7 @@ export default function AdvancedReports({ orders, riders, clientPartners = [], o
         successRate: Math.min(100, Math.round(rate * 10) / 10),
       };
     }).sort((a, b) => b.completed - a.completed);
-  }, [orders, riders]);
+  }, [cleanOrders, cleanRiders, clientPartners]);
 
   // Set default selected rider for drill down if empty
   const activeReportRider = useMemo(() => {

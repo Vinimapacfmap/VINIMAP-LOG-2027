@@ -37,6 +37,21 @@ interface ActivityFeedProps {
 
 type FilterType = 'all' | 'success' | 'warning' | 'danger' | 'info';
 
+export const isPushErrorLog = (log: ActivityLog): boolean => {
+  const text = `${log.message} ${log.type} ${log.orderId || ''}`.toLowerCase();
+  return (
+    text.includes('falha de notificação') ||
+    text.includes('falha de notificacao') ||
+    text.includes('push delivery error') ||
+    text.includes('falha no push') ||
+    text.includes('falha de push') ||
+    text.includes('push delivery failed') ||
+    text.includes('erro de sincronização') ||
+    text.includes('erro de sincronizacao') ||
+    (log.type === 'danger' && text.includes('push'))
+  );
+};
+
 export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProps) {
   // Filter States
   const [selectedType, setSelectedType] = useState<FilterType>('all');
@@ -45,6 +60,7 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
   const [orderIdFilter, setOrderIdFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [isPushErrorsOnly, setIsPushErrorsOnly] = useState<boolean>(false);
   
   // UI & Pagination States
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -97,20 +113,29 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
     let warning = 0;
     let danger = 0;
     let info = 0;
+    let pushErrors = 0;
 
     logs.forEach(log => {
+      if (isPushErrorLog(log)) pushErrors++;
       if (log.type === 'success') success++;
       else if (log.type === 'warning') warning++;
       else if (log.type === 'danger') danger++;
       else info++;
     });
 
-    return { total: logs.length, success, warning, danger, info };
+    return { total: logs.length, success, warning, danger, info, pushErrors };
   }, [logs]);
 
   // Filter application
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
+      // 0. Dedicated Filter: Push Delivery Errors & Sync Failures
+      if (isPushErrorsOnly) {
+        if (!isPushErrorLog(log)) {
+          return false;
+        }
+      }
+
       // 1. Filter by Log Type
       if (selectedType !== 'all' && log.type !== selectedType) {
         return false;
@@ -150,7 +175,7 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
 
       return true;
     });
-  }, [logs, selectedType, orderIdFilter, startDate, endDate, searchQuery]);
+  }, [logs, selectedType, orderIdFilter, startDate, endDate, searchQuery, isPushErrorsOnly]);
 
   // Sorting
   const sortedLogs = useMemo(() => {
@@ -168,16 +193,18 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
   // Active filters count
   const activeFiltersCount = useMemo(() => {
     let count = 0;
+    if (isPushErrorsOnly) count++;
     if (selectedType !== 'all') count++;
     if (startDate) count++;
     if (endDate) count++;
     if (orderIdFilter.trim()) count++;
     if (searchQuery.trim()) count++;
     return count;
-  }, [selectedType, startDate, endDate, orderIdFilter, searchQuery]);
+  }, [selectedType, startDate, endDate, orderIdFilter, searchQuery, isPushErrorsOnly]);
 
   // Reset all filters
   const handleResetFilters = () => {
+    setIsPushErrorsOnly(false);
     setSelectedType('all');
     setStartDate('');
     setEndDate('');
@@ -356,27 +383,28 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
         </div>
 
         {/* Quick Type Filter KPI Chips */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
           {/* Total */}
           <button
             type="button"
             onClick={() => {
+              setIsPushErrorsOnly(false);
               setSelectedType('all');
               setCurrentPage(1);
             }}
             className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-              selectedType === 'all'
+              !isPushErrorsOnly && selectedType === 'all'
                 ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-900/20'
                 : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
             }`}
           >
             <div>
-              <span className={`text-[10px] font-bold uppercase tracking-wider block ${selectedType === 'all' ? 'text-slate-300' : 'text-slate-500'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${!isPushErrorsOnly && selectedType === 'all' ? 'text-slate-300' : 'text-slate-500'}`}>
                 Todos os Logs
               </span>
               <span className="text-base font-extrabold">{stats.total}</span>
             </div>
-            <div className={`p-1.5 rounded-lg ${selectedType === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
+            <div className={`p-1.5 rounded-lg ${!isPushErrorsOnly && selectedType === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
               <Bell size={14} />
             </div>
           </button>
@@ -385,22 +413,23 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
           <button
             type="button"
             onClick={() => {
+              setIsPushErrorsOnly(false);
               setSelectedType(prev => prev === 'success' ? 'all' : 'success');
               setCurrentPage(1);
             }}
             className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-              selectedType === 'success'
+              !isPushErrorsOnly && selectedType === 'success'
                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-600/20'
                 : 'bg-emerald-50/40 text-emerald-900 border-emerald-200/80 hover:bg-emerald-50'
             }`}
           >
             <div>
-              <span className={`text-[10px] font-bold uppercase tracking-wider block ${selectedType === 'success' ? 'text-emerald-100' : 'text-emerald-700'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${!isPushErrorsOnly && selectedType === 'success' ? 'text-emerald-100' : 'text-emerald-700'}`}>
                 Sucesso
               </span>
               <span className="text-base font-extrabold">{stats.success}</span>
             </div>
-            <div className={`p-1.5 rounded-lg ${selectedType === 'success' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-600'}`}>
+            <div className={`p-1.5 rounded-lg ${!isPushErrorsOnly && selectedType === 'success' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-600'}`}>
               <CheckCircle2 size={14} />
             </div>
           </button>
@@ -409,22 +438,23 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
           <button
             type="button"
             onClick={() => {
+              setIsPushErrorsOnly(false);
               setSelectedType(prev => prev === 'warning' ? 'all' : 'warning');
               setCurrentPage(1);
             }}
             className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-              selectedType === 'warning'
+              !isPushErrorsOnly && selectedType === 'warning'
                 ? 'bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-500/20'
                 : 'bg-amber-50/40 text-amber-900 border-amber-200/80 hover:bg-amber-50'
             }`}
           >
             <div>
-              <span className={`text-[10px] font-bold uppercase tracking-wider block ${selectedType === 'warning' ? 'text-amber-100' : 'text-amber-700'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${!isPushErrorsOnly && selectedType === 'warning' ? 'text-amber-100' : 'text-amber-700'}`}>
                 Alertas
               </span>
               <span className="text-base font-extrabold">{stats.warning}</span>
             </div>
-            <div className={`p-1.5 rounded-lg ${selectedType === 'warning' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-700'}`}>
+            <div className={`p-1.5 rounded-lg ${!isPushErrorsOnly && selectedType === 'warning' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-700'}`}>
               <AlertTriangle size={14} />
             </div>
           </button>
@@ -433,22 +463,23 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
           <button
             type="button"
             onClick={() => {
+              setIsPushErrorsOnly(false);
               setSelectedType(prev => prev === 'danger' ? 'all' : 'danger');
               setCurrentPage(1);
             }}
             className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-              selectedType === 'danger'
+              !isPushErrorsOnly && selectedType === 'danger'
                 ? 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-600/20'
                 : 'bg-rose-50/40 text-rose-900 border-rose-200/80 hover:bg-rose-50'
             }`}
           >
             <div>
-              <span className={`text-[10px] font-bold uppercase tracking-wider block ${selectedType === 'danger' ? 'text-rose-100' : 'text-rose-700'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${!isPushErrorsOnly && selectedType === 'danger' ? 'text-rose-100' : 'text-rose-700'}`}>
                 Erros / Crítico
               </span>
               <span className="text-base font-extrabold">{stats.danger}</span>
             </div>
-            <div className={`p-1.5 rounded-lg ${selectedType === 'danger' ? 'bg-rose-700 text-white' : 'bg-rose-100 text-rose-600'}`}>
+            <div className={`p-1.5 rounded-lg ${!isPushErrorsOnly && selectedType === 'danger' ? 'bg-rose-700 text-white' : 'bg-rose-100 text-rose-600'}`}>
               <ShieldAlert size={14} />
             </div>
           </button>
@@ -457,25 +488,139 @@ export default function ActivityFeed({ logs, onViewLogsClick }: ActivityFeedProp
           <button
             type="button"
             onClick={() => {
+              setIsPushErrorsOnly(false);
               setSelectedType(prev => prev === 'info' ? 'all' : 'info');
               setCurrentPage(1);
             }}
-            className={`col-span-2 sm:col-span-1 p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-              selectedType === 'info'
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+              !isPushErrorsOnly && selectedType === 'info'
                 ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-600/20'
                 : 'bg-blue-50/40 text-blue-900 border-blue-200/80 hover:bg-blue-50'
             }`}
           >
             <div>
-              <span className={`text-[10px] font-bold uppercase tracking-wider block ${selectedType === 'info' ? 'text-blue-100' : 'text-blue-700'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${!isPushErrorsOnly && selectedType === 'info' ? 'text-blue-100' : 'text-blue-700'}`}>
                 Informativo
               </span>
               <span className="text-base font-extrabold">{stats.info}</span>
             </div>
-            <div className={`p-1.5 rounded-lg ${selectedType === 'info' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-600'}`}>
+            <div className={`p-1.5 rounded-lg ${!isPushErrorsOnly && selectedType === 'info' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-600'}`}>
               <Info size={14} />
             </div>
           </button>
+
+          {/* Falhas de Notificação / Push Delivery Errors Filter Chip */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsPushErrorsOnly(prev => !prev);
+              setSelectedType('all');
+              setCurrentPage(1);
+            }}
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+              isPushErrorsOnly
+                ? 'bg-red-700 text-white border-red-700 shadow-md ring-2 ring-red-700/30'
+                : stats.pushErrors > 0
+                ? 'bg-rose-50/80 text-rose-950 border-rose-300 hover:bg-rose-100 animate-pulse'
+                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+            }`}
+            title="Filtrar erros de sincronização e falhas de notificação push"
+          >
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isPushErrorsOnly ? 'text-rose-100' : stats.pushErrors > 0 ? 'text-rose-800' : 'text-slate-500'}`}>
+                Falhas de Push
+              </span>
+              <span className="text-base font-extrabold">{stats.pushErrors}</span>
+            </div>
+            <div className={`p-1.5 rounded-lg ${isPushErrorsOnly ? 'bg-red-800 text-white' : stats.pushErrors > 0 ? 'bg-rose-200 text-rose-800' : 'bg-slate-200 text-slate-600'}`}>
+              <AlertTriangle size={14} />
+            </div>
+          </button>
+        </div>
+
+        {/* 1.1 HIGHLIGHTED DIAGNOSTIC PANEL: SYNC & PUSH NOTIFICATION DELIVERY */}
+        <div className="mt-4 p-3.5 rounded-xl border border-rose-100 bg-gradient-to-r from-rose-50/60 via-amber-50/30 to-blue-50/40 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <div className="p-2 rounded-lg bg-rose-500 text-white mt-0.5 shrink-0 shadow-xs">
+              <ShieldAlert size={16} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Painel de Diagnóstico: Sincronização & Push</span>
+                {stats.pushErrors > 0 ? (
+                  <span className="px-2 py-0.5 bg-rose-100 border border-rose-300 text-rose-700 text-[10px] font-extrabold rounded-full">
+                    {stats.pushErrors} Falha(s) Detectada(s)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 bg-emerald-100 border border-emerald-300 text-emerald-700 text-[10px] font-extrabold rounded-full">
+                    Sincronização Ativa
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Rastreamento em tempo real de entrega de notificações push, alocações de pedidos e integridade do barramento Firestore/Sync Bus.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Diagnostic Actions */}
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setIsPushErrorsOnly(true);
+                setSelectedType('all');
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                isPushErrorsOnly 
+                  ? 'bg-red-600 text-white border-red-600 shadow-xs' 
+                  : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50'
+              }`}
+            >
+              <AlertTriangle size={12} />
+              <span>Ver Falhas de Push ({stats.pushErrors})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsPushErrorsOnly(false);
+                setOrderIdFilter('150079');
+                setCurrentPage(1);
+              }}
+              className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+              title="Filtrar logs do pedido 150079"
+            >
+              <Package size={12} className="text-blue-600" />
+              <span>Rastrear Pedido 150079</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsPushErrorsOnly(false);
+                setSearchQuery('11970791804');
+                setCurrentPage(1);
+              }}
+              className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+              title="Filtrar logs do condutor 11970791804"
+            >
+              <Search size={12} className="text-blue-600" />
+              <span>Condutor 11970791804</span>
+            </button>
+
+            {(isPushErrorsOnly || orderIdFilter || searchQuery) && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                title="Limpar filtros rápidos"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

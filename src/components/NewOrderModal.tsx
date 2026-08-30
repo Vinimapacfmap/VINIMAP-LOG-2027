@@ -4,9 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { Order, OrderPriority, ClientPartner } from '../types';
+import { Order, OrderPriority, ClientPartner, DeliveryRider } from '../types';
 import { getSaoPauloISODate, getSaoPauloTime } from '../utils/dateUtils';
 import { getCoordinatesFromCep, geocodeAddressBackend } from '../utils/locationUtils';
+import { getCachedDeliveryRiders } from '../utils/partnerUtils';
 import CepInput, { ViaCepData } from './CepInput';
 import AddressAutocompleteInput from './AddressAutocompleteInput';
 import { AddressLookupResult } from '../utils/addressLookupService';
@@ -29,11 +30,13 @@ import { motion, AnimatePresence } from 'motion/react';
 interface NewOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (newOrder: Omit<Order, 'id' | 'status' | 'createdAt'>) => void;
+  onSubmit: (newOrder: Omit<Order, 'id' | 'status' | 'createdAt'> & { id?: string; customOrderId?: string; riderId?: string }) => void;
   clientPartners: ClientPartner[];
+  riders?: DeliveryRider[];
 }
 
-export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartners }: NewOrderModalProps) {
+export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartners, riders }: NewOrderModalProps) {
+  const [customOrderId, setCustomOrderId] = useState('');
   const [clientName, setClientName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -44,6 +47,7 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
   const [value, setValue] = useState('0');
   const [priority, setPriority] = useState<OrderPriority>('Média');
   const [itemsCount, setItemsCount] = useState('1');
+  const [allocatedRiderId, setAllocatedRiderId] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   
   // New Filterable fields
@@ -53,6 +57,8 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
   const [partnerName, setPartnerName] = useState('');
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepError, setCepError] = useState('');
+
+  const availableRiders = (riders && riders.length > 0) ? riders : getCachedDeliveryRiders();
 
   const handleSearchCep = async (cepValue: string) => {
     const cleanCep = cepValue.replace(/\D/g, '');
@@ -154,7 +160,13 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
     const realNowTime = getSaoPauloTime();
     const realNowDate = getSaoPauloISODate();
 
+    const cleanCustomId = customOrderId.trim();
+    const finalRiderId = allocatedRiderId.trim() || undefined;
+
     onSubmit({
+      id: cleanCustomId || undefined,
+      customOrderId: cleanCustomId || undefined,
+      riderId: finalRiderId,
       clientName,
       phone: phone || '(11) 99999-9999',
       email: cleanEmail,
@@ -181,13 +193,15 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
         'HorarioInicio': realNowTime,
         'HorarioAbertura': realNowTime,
         'HoraLancamento': realNowTime,
-        'DataLancamento': realNowDate
+        'DataLancamento': realNowDate,
+        ...(cleanCustomId ? { 'NumeroPedido': cleanCustomId, 'IdPersonalizado': cleanCustomId } : {})
       }
     });
 
     setIsSuccess(true);
     setTimeout(() => {
       // Reset form states
+      setCustomOrderId('');
       setClientName('');
       setPhone('');
       setEmail('');
@@ -198,6 +212,7 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
       setValue('0');
       setPriority('Média');
       setItemsCount('1');
+      setAllocatedRiderId('');
       setCep('');
       setPartnerName(clientPartners?.[0]?.id || '');
       setDate(getSaoPauloISODate());
@@ -265,6 +280,48 @@ export default function NewOrderModal({ isOpen, onClose, onSubmit, clientPartner
                 {/* Form Fields */}
                 <div className="p-6 space-y-4 flex-1 overflow-y-auto" id="new-order-form-fields">
                   
+                  {/* Order ID & Rider Allocation Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Optional Custom Order ID / Code */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                        Nº / Código do Pedido <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+                      </label>
+                      <div className="relative group">
+                        <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                          type="text"
+                          placeholder="Ex: 150079, ZCO-150079..."
+                          value={customOrderId}
+                          onChange={(e) => setCustomOrderId(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Allocated Driver / Condutor */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                        Alocar Condutor <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+                      </label>
+                      <div className="relative group">
+                        <Truck size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <select
+                          value={allocatedRiderId}
+                          onChange={(e) => setAllocatedRiderId(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all cursor-pointer"
+                        >
+                          <option value="">Não Alocar Agora (Pendente)</option>
+                          {availableRiders.map((r, idx) => (
+                            <option key={`rider-opt-${r.id}-${idx}`} value={r.id}>
+                              {r.name} ({r.phone || r.deviceNumber || r.id})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Client Name */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Nome do Cliente *</label>

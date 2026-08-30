@@ -262,8 +262,32 @@ export function sanitizeOrderConsistency(
   return { order: updated, modified: isModified };
 }
 
+export const MOCK_CLIENT_IDS = ['CL1-001', 'CL1-002', 'CL1-003', 'CL1-004', 'CL1-005', 'CL1-006', 'CL1-007', 'cli-1', 'cli-2', 'cli-3', 'cli-4', 'cli-5', 'cli-6', 'cli-7'];
+export const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5', 'rid-1', 'rid-2', 'rid-3', 'rid-4', 'rid-5', 'mot-1', 'mot-2', 'mot-3'];
+export const MOCK_ORDER_IDS = [
+  'ORD-101', 'ORD-102', 'ORD-103', 'ORD-104', 'ORD-105', 'ORD-106', 'ORD-107', 'ORD-108', 'ORD-109', 'ORD-110',
+  'ORD-111', 'ORD-112', 'ORD-113', 'ORD-114', 'ORD-115', 'PED-101', 'PED-102', 'PED-103', 'ped-1', 'ped-2', 'ped-3', 'ped-4', 'ped-5'
+];
+
 /**
- * Sanitizes an array of orders for consistency.
+ * Identifies whether an order is an artificial / mock order so it can be definitively excluded.
+ */
+export function isMockOrder(order: Partial<Order>): boolean {
+  if (!order) return false;
+  const id = (order.id || '').toString().trim();
+  if (!id) return false;
+  if (MOCK_ORDER_IDS.includes(id)) return true;
+  if (/^ORD-\d+$/i.test(id)) return true;
+  if (/^ped-[1-9]\b/i.test(id)) return true;
+  if (/^PED-10[1-9]$/i.test(id)) return true;
+  if (order.clientId && MOCK_CLIENT_IDS.includes(order.clientId)) return true;
+  if (order.clientCode && MOCK_CLIENT_IDS.includes(order.clientCode)) return true;
+  if (order.riderId && MOCK_RIDER_IDS.includes(order.riderId)) return true;
+  return false;
+}
+
+/**
+ * Sanitizes an array of orders for consistency and strictly excludes any mock orders.
  * Returns the sanitized array, whether any order was modified, and a list of modified orders to persist back to DB.
  */
 export function sanitizeOrdersListConsistency(
@@ -281,7 +305,10 @@ export function sanitizeOrdersListConsistency(
   let hasModified = false;
   const modifiedOrders: Order[] = [];
 
-  const sanitizedOrders = orders.map(o => {
+  // Filter out any mock order permanently
+  const realOrders = orders.filter(o => !isMockOrder(o));
+
+  const sanitizedOrders = realOrders.map(o => {
     const res = sanitizeOrderConsistency(o, todayIso);
     if (res.modified) {
       hasModified = true;

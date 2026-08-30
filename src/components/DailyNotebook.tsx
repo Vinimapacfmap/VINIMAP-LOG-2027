@@ -44,68 +44,17 @@ export default function DailyNotebook() {
     const saved = localStorage.getItem('vinimap_daily_notes');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Filter out legacy mock notes
+          return parsed.filter(n => !['note-1', 'note-2', 'note-3', 'note-4'].includes(n.id));
+        }
       } catch (e) {
         console.error('Erro ao decodificar notas locais', e);
       }
     }
     
-    // Default rich pre-populated mock notes
-    return [
-      {
-        id: 'note-1',
-        title: '💡 Otimização de rotas com CEPs',
-        content: 'Ideia de criar faixas de CEPs dinâmicas para os principais parceiros (Burger King e Droga Raia) para calcular automaticamente a taxa correta. O modelo de planilha excel já está importando com sucesso e facilitará muito a distribuição das zonas de entrega.',
-        category: 'Ideia',
-        createdAt: '2026-07-07T10:15:00.000Z',
-        pinned: true,
-        tags: ['otimizacao', 'ceps', 'planilha'],
-        todos: [
-          { id: 't1', text: 'Importar modelo Excel de teste', completed: true },
-          { id: 't2', text: 'Validar faixas de CEP de São Paulo', completed: true },
-          { id: 't3', text: 'Testar simulação rápida de CEP no modal', completed: false }
-        ],
-        color: 'bg-indigo-50/70 border-indigo-200 text-indigo-950'
-      },
-      {
-        id: 'note-2',
-        title: '📊 Acompanhamento Financeiro - Fechamento',
-        content: 'Verificar repasses de 85% para os condutores com status de entrega concluído. O faturamento total de hoje está com margem positiva de 15%. Lembrete de emitir o extrato unificado de repasses em PDF para o financeiro geral.',
-        category: 'Financeiro',
-        createdAt: '2026-07-07T09:30:00.000Z',
-        pinned: false,
-        tags: ['repasses', 'financeiro', 'pdf'],
-        todos: [
-          { id: 't4', text: 'Gerar extrato consolidado de repasses', completed: false },
-          { id: 't5', text: 'Checar saldos e reembolsos pendentes', completed: false }
-        ],
-        color: 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-      },
-      {
-        id: 'note-3',
-        title: '⚡ URGENTE: Ajuste de Tarifas Paulista',
-        content: 'Devido ao aumento de tráfito na região da Av. Paulista no horário de pico (17h30 às 19h30), avaliar a aplicação de uma taxa dinâmica incremental temporária para pedidos urgentes no Centro.',
-        category: 'Urgente',
-        createdAt: '2026-07-06T17:45:00.000Z',
-        pinned: false,
-        tags: ['urgente', 'paulista', 'tarifas'],
-        todos: [
-          { id: 't6', text: 'Discutir reajuste com os principais restaurantes', completed: true },
-          { id: 't7', text: 'Atualizar faixas de CEP excepcionais', completed: true }
-        ],
-        color: 'bg-rose-50/70 border-rose-200 text-rose-950'
-      },
-      {
-        id: 'note-4',
-        title: '🛵 Escalas e Plantão dos Condutores',
-        content: 'Escala dos condutores ativos para cobrir o centro expandido hoje:\n- Ana Silva (Centro) - Veículo: Moto\n- Pedro Santos (Centro)\n- Beatriz Lima (Zona Oeste)\nManter contato rápido via telefone se houver incidentes ou se o clima piorar (risco de chuva).',
-        category: 'Operacional',
-        createdAt: '2026-07-07T08:00:00.000Z',
-        pinned: false,
-        tags: ['condutores', 'escala', 'operacao'],
-        color: 'bg-blue-50/70 border-blue-200 text-blue-950'
-      }
-    ];
+    return [];
   });
 
   // Save notes to LocalStorage

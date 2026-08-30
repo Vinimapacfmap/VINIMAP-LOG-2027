@@ -46,16 +46,12 @@ import {
 } from '../utils/indexedDbSync';
 import { INITIAL_RIDERS, INITIAL_ORDERS, INITIAL_LOGS } from '../data/mock';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from '../data/financialMock';
+import { isMockOrder, MOCK_CLIENT_IDS, MOCK_RIDER_IDS, MOCK_ORDER_IDS } from '../utils/orderConsistency';
+
+export { isMockOrder, MOCK_CLIENT_IDS, MOCK_RIDER_IDS, MOCK_ORDER_IDS };
 
 // Default client partners set to empty to permanently exclude mocked partners
 export const INITIAL_CLIENT_PARTNERS: ClientPartner[] = [];
-
-// Known list of mock client partner IDs to allow permanent deletion across Firestore and Supabase
-export const MOCK_CLIENT_IDS = ['CL1-001', 'CL1-002', 'CL1-003', 'CL1-004', 'CL1-005', 'CL1-006', 'CL1-007'];
-
-// Known list of mock rider and mock order IDs to allow permanent deletion in real mode
-export const MOCK_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
-export const MOCK_ORDER_IDS: string[] = [];
 
 // Helper function to recursively remove undefined fields before saving to Firestore
 function removeUndefinedFields<T>(obj: T): T {
@@ -187,12 +183,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.warn(`Firestore [${operationType}] handled error on path "${path}":`, errMessage);
 }
 
-// Helper functions for seeding (Auto-seed disabled: when list is empty, returns clean state without repopulating mocks)
+// Helper functions for seeding (Permanently disabled: No mock data seeding anywhere)
 export async function seedInitialDataIfEmpty(mappedInitialOrders: Order[], force: boolean = false) {
-  if (!force) {
-    // Auto-seed rule disabled: when collection is empty or list.length === 0, keep clean database ([]), never re-populate mock
-    return;
-  }
+  // Permanently disabled: The system operates exclusively with real user data and never seeds mock records.
+  return;
+}
+
+async function _deprecatedSeedInitialData(mappedInitialOrders: Order[], force: boolean = false) {
   if (getIsFirestoreQuotaExceeded()) {
     console.log('Quota diária do Firestore excedida. Pulando restauração remota do Firestore.');
     return;
@@ -766,6 +763,30 @@ export async function dbPurgeMockRidersAndOrders(): Promise<void> {
     }
   }
 
+  // Scan Firestore orders for any orphaned/residual mock orders
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      const ordersSnap = await getDocs(collection(db, 'orders'));
+      if (!ordersSnap.empty) {
+        const batch = writeBatch(db);
+        let count = 0;
+        ordersSnap.docs.forEach(docSnap => {
+          const orderData = docSnap.data() as Order;
+          if (isMockOrder(orderData)) {
+            batch.delete(docSnap.ref);
+            count++;
+          }
+        });
+        if (count > 0) {
+          await batch.commit();
+          console.log(`[Mock Purge] Excluídos ${count} pedidos mockados residuais do Firestore.`);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not scan Firestore for residual mock orders:', err);
+    }
+  }
+
   // Also clean up local caches
   try {
     if (typeof window !== 'undefined') {
@@ -783,12 +804,25 @@ export async function dbPurgeMockRidersAndOrders(): Promise<void> {
         const parsed = JSON.parse(backupRaw);
         if (parsed.deliveryRiders && Array.isArray(parsed.deliveryRiders)) {
           parsed.deliveryRiders = parsed.deliveryRiders.filter((r: any) => !MOCK_RIDER_IDS.includes(r.id));
-          localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
         }
+        if (parsed.clientPartners && Array.isArray(parsed.clientPartners)) {
+          parsed.clientPartners = parsed.clientPartners.filter((c: any) => !MOCK_CLIENT_IDS.includes(c.id));
+        }
+        if (parsed.orders && Array.isArray(parsed.orders)) {
+          parsed.orders = parsed.orders.filter((o: any) => !isMockOrder(o));
+        }
+        localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
       }
     }
   } catch (e) {
     console.warn('Could not clean local storage caches during rider purge:', e);
+  }
+
+  // Delete mock orders from IndexedDB
+  try {
+    await deleteOrdersFromIndexedDb(MOCK_ORDER_IDS);
+  } catch (e) {
+    console.warn('Could not purge mock orders from IndexedDB:', e);
   }
 }
 
@@ -1011,30 +1045,11 @@ export async function dbDeleteCompanyHub(hubId: string) {
   }
 }
 
-// General Clear operations to reset demo state
-export async function dbResetToDemoState(mappedOrders: Order[]) {
-  if (getIsFirestoreQuotaExceeded()) return;
-  try {
-    const batch = writeBatch(db);
-    
-    mappedOrders.forEach(o => batch.set(doc(db, 'orders', o.id), removeUndefinedFields(o)));
-    INITIAL_CLIENT_PARTNERS.forEach(c => batch.set(doc(db, 'clientPartners', c.id), removeUndefinedFields(c)));
-    INITIAL_RIDERS.forEach(r => batch.set(doc(db, 'deliveryRiders', r.id), removeUndefinedFields(r)));
-    INITIAL_LOGS.forEach(l => batch.set(doc(db, 'activityLogs', l.id), removeUndefinedFields(l)));
-    INITIAL_FINANCIAL_TRANSACTIONS.forEach(t => batch.set(doc(db, 'financialTransactions', t.id), removeUndefinedFields(t)));
-    INITIAL_COMPANY_HUBS.forEach(h => batch.set(doc(db, 'companyHubs', h.id), removeUndefinedFields(h)));
-    
-    // Reset purged flag in systemConfig/state
-    batch.set(doc(db, 'systemConfig', 'state'), { purged: false, restoredAt: new Date().toISOString() });
-
-    await batch.commit();
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('system_purged');
-    }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'bulk_reset');
-  }
+// General Clear operations to clean mock data
+export async function dbResetToDemoState(mappedOrders: Order[] = []) {
+  // Purge any mock data definitively
+  await dbPurgeMockClientPartners();
+  await dbPurgeMockRidersAndOrders();
 }
 
 // Applies remote Supabase state to Firestore to sync active UI state

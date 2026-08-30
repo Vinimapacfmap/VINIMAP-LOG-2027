@@ -359,35 +359,23 @@ export default function App() {
       urlView === 'rider' ||
       urlView === 'driver_mobile' ||
       urlMode === 'rider' ||
+      params.get('app') === 'driver' ||
       Boolean(urlRiderId);
 
-    const isPwaDisplay = 
-      window.matchMedia('(display-mode: standalone)').matches || 
-      (navigator as any).standalone === true ||
-      document.referrer.includes('android-app://');
-
-    const isMobileDevice = typeof window !== 'undefined' && (
-      window.innerWidth <= 768 ||
-      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
-    );
-
-    const storedRiderId = localStorage.getItem('vinimap_driver_id');
-    const isDriverAppStored = localStorage.getItem('vinimap_is_driver_app') === 'true';
-    const isPwaWithRider = isPwaDisplay && (isDriverAppStored || Boolean(storedRiderId));
-    const hasDriverAppStored = isDriverAppStored || isPwaWithRider;
-
-    if (isExplicitRiderParam || hasDriverAppStored || isPwaDisplay) {
+    if (isExplicitRiderParam) {
       setIsStandaloneRider(true);
       setIsRealDeviceMode(true);
       setActiveSection('dispositivo_condutor');
       
+      const storedRiderId = localStorage.getItem('vinimap_driver_id');
       const effectiveRiderId = urlRiderId || storedRiderId;
       if (effectiveRiderId) {
         setSelectedRiderId(effectiveRiderId);
       }
     } else {
-      // Clean standard state: do not lock user out of Admin Login / Admin Dashboard
+      // Standard entry: always route to Admin Panel (AdminLogin if not authenticated or Admin Dashboard)
       setIsStandaloneRider(false);
+      setIsRealDeviceMode(false);
     }
   }, [setIsAdminAuthenticated]);
 
@@ -2226,16 +2214,23 @@ export default function App() {
   };
 
   // Triggered when a new order is dispatched
-  const handleCreateOrder = async (newOrderData: Omit<Order, 'id' | 'status' | 'createdAt'>) => {
-    let maxNum = 1000;
-    orders.forEach(o => {
-      const num = parseInt(String(o.id || '').replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num >= maxNum && num < 999999) {
-        maxNum = num;
-      }
-    });
-    const candidateId = `ped-${maxNum + 1}`;
-    const nextId = orders.some(o => o.id === candidateId) ? `ped-${Date.now().toString().slice(-6)}` : candidateId;
+  const handleCreateOrder = async (newOrderData: Omit<Order, 'id' | 'status' | 'createdAt'> & { id?: string; customOrderId?: string; riderId?: string }) => {
+    let finalOrderId = '';
+    if (newOrderData.id && String(newOrderData.id).trim()) {
+      finalOrderId = String(newOrderData.id).trim();
+    } else if (newOrderData.customOrderId && String(newOrderData.customOrderId).trim()) {
+      finalOrderId = String(newOrderData.customOrderId).trim();
+    } else {
+      let maxNum = 1000;
+      orders.forEach(o => {
+        const num = parseInt(String(o.id || '').replace(/\D/g, ''), 10);
+        if (!isNaN(num) && num >= maxNum && num < 999999) {
+          maxNum = num;
+        }
+      });
+      const candidateId = `ped-${maxNum + 1}`;
+      finalOrderId = orders.some(o => o.id === candidateId) ? `ped-${Date.now().toString().slice(-6)}` : candidateId;
+    }
     
     // Auto geocode if coordinates are missing
     let finalLat = newOrderData.lat;
@@ -2254,9 +2249,30 @@ export default function App() {
 
     const orderCreationTime = formatOrderTime(newOrderData.horarioInicial || getSaoPauloTime());
     const orderCreationDate = newOrderData.date || getSaoPauloISODate();
+
+    let resolvedRiderId: string | undefined = undefined;
+    let resolvedRiderName = '';
+    const rawDataWithDriver = { ...(newOrderData.rawData || {}) };
+
+    if (newOrderData.riderId && String(newOrderData.riderId).trim()) {
+      const targetRider = findRiderByIdentifier(riders, newOrderData.riderId) || riders.find(r => r.id === newOrderData.riderId);
+      resolvedRiderId = targetRider ? targetRider.id : String(newOrderData.riderId).trim();
+      resolvedRiderName = targetRider ? targetRider.name : String(newOrderData.riderId).trim();
+      
+      rawDataWithDriver['Condutor'] = resolvedRiderName;
+      rawDataWithDriver['NomeCondutor'] = resolvedRiderName;
+      rawDataWithDriver['Entregador'] = resolvedRiderName;
+      rawDataWithDriver['NomeEntregador'] = resolvedRiderName;
+      rawDataWithDriver['DispositivoCondutor'] = targetRider?.deviceNumber || targetRider?.phone || resolvedRiderName;
+      rawDataWithDriver['riderId'] = resolvedRiderId;
+      rawDataWithDriver['TelefoneCondutor'] = targetRider?.phone || (targetRider ? '' : resolvedRiderId);
+      rawDataWithDriver['phone'] = targetRider?.phone || (targetRider ? '' : resolvedRiderId);
+    }
+
     const initialOrder: Order = {
       ...newOrderData,
-      id: nextId,
+      id: finalOrderId,
+      riderId: resolvedRiderId,
       status: 'Não iniciado',
       createdAt: orderCreationTime,
       horarioInicial: orderCreationTime,
@@ -2264,7 +2280,7 @@ export default function App() {
       lat: finalLat,
       lng: finalLng,
       rawData: {
-        ...(newOrderData.rawData || {}),
+        ...rawDataWithDriver,
         'HorarioInicio': orderCreationTime,
         'HorarioAbertura': orderCreationTime,
         'HoraLancamento': orderCreationTime,
@@ -2276,17 +2292,24 @@ export default function App() {
 
     try {
       setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
-      await dbSaveOrder(newOrder);
+      realtimeSyncBus.broadcast('NEW_ORDER_ASSIGNED', newOrder);
+      realtimeSyncBus.broadcastOrderStatusChanged(newOrder);
+
+      const promises: Promise<any>[] = [dbSaveOrder(newOrder)];
 
       // Create activity timeline log
       const newLog: ActivityLog = {
         id: generateUniqueLogId('log'),
         time: newOrder.createdAt,
-        message: `Novo pedido #${newOrder.id} recebido de ${newOrder.clientName} (${newOrder.region}) - Não iniciado.`,
+        message: resolvedRiderId 
+          ? `[PUSH DISPATCH] Pedido #${newOrder.id} lançado e alocado ao condutor ${resolvedRiderName} (ID/Tel: ${resolvedRiderId}). Disparando push para dispositivo.`
+          : `Novo pedido #${newOrder.id} recebido de ${newOrder.clientName} (${newOrder.region}) - Não iniciado.`,
         type: 'info',
         orderId: newOrder.id
       };
-      await dbAddActivityLog(newLog);
+      promises.push(dbAddActivityLog(newLog));
+
+      await Promise.all(promises);
     } catch (err: any) {
       console.error(err);
       alert(`Erro ao salvar pedido: ${err.message || err}`);
@@ -3035,8 +3058,16 @@ export default function App() {
         updatedRaw['NomeCondutor'] = targetRider.name;
         updatedRaw['Entregador'] = targetRider.name;
         updatedRaw['NomeEntregador'] = targetRider.name;
-        updatedRaw['DispositivoCondutor'] = targetRider.deviceNumber || targetRider.name;
+        updatedRaw['DispositivoCondutor'] = targetRider.deviceNumber || targetRider.phone || targetRider.name;
         updatedRaw['riderId'] = targetRider.id;
+        updatedRaw['TelefoneCondutor'] = targetRider.phone || targetRider.deviceNumber || targetRider.id;
+        updatedRaw['phone'] = targetRider.phone || targetRider.deviceNumber || targetRider.id;
+      } else {
+        updatedRaw['Condutor'] = riderId;
+        updatedRaw['NomeCondutor'] = riderId;
+        updatedRaw['riderId'] = riderId;
+        updatedRaw['TelefoneCondutor'] = riderId;
+        updatedRaw['phone'] = riderId;
       }
 
       const initialUpdatedOrder: Order = { 
@@ -3052,6 +3083,7 @@ export default function App() {
       const updatedOrder = validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners);
 
       setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+      realtimeSyncBus.broadcast('NEW_ORDER_ASSIGNED', updatedOrder);
       realtimeSyncBus.broadcastOrderStatusChanged(updatedOrder);
 
       const promises: Promise<any>[] = [];
@@ -3091,7 +3123,7 @@ export default function App() {
       const newLog: ActivityLog = {
         id: generateUniqueLogId('log'),
         time: nowTime,
-        message: `Entregador ${riderName} vinculado ao pedido #${orderId}.`,
+        message: `[PUSH DISPATCH] Pedido #${orderId} alocado com sucesso ao condutor ${riderName} (ID/Tel: ${actualRiderId}). Disparando notificação push e sincronização em tempo real para o dispositivo.`,
         type: 'info',
         orderId
       };
@@ -4244,6 +4276,7 @@ export default function App() {
               onActiveRiderChange={setSelectedRiderId}
               isStandalone={true}
               isRealDevice={isRealDeviceMode}
+              onExitToAdmin={handleExitToAdmin}
             />
           </main>
         </div>
@@ -7477,6 +7510,7 @@ export default function App() {
         onClose={() => setIsNewOrderOpen(false)} 
         onSubmit={handleCreateOrder} 
         clientPartners={clientPartners}
+        riders={riders}
       />
 
       {/* Driver Billing Modal */}

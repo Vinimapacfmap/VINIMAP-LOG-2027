@@ -404,7 +404,10 @@ export function isOrderMatchingRider(
         normalizedKey.includes('motorista') ||
         normalizedKey.includes('dispositivo') ||
         normalizedKey.includes('rider') ||
-        normalizedKey.includes('driver')
+        normalizedKey.includes('driver') ||
+        normalizedKey.includes('telefone') ||
+        normalizedKey.includes('celular') ||
+        normalizedKey.includes('phone')
       ) {
         addCandidate(rawVal);
       }

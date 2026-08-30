@@ -32,8 +32,17 @@ const MASTER_PASSWORDS = [
 ];
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('vinimap_admin_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed.email) return parsed.email;
+      }
+    } catch (_) {}
+    return 'admin@vinimap.com';
+  });
+  const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -48,16 +57,17 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
     if (rememberMe) {
       localStorage.setItem('vinimap_remember_admin', 'true');
     }
-    const adminEmail = userEmail || email.trim() || 'admin@vinimap.com';
+    const rawEmail = userEmail || email.trim() || 'admin@vinimap.com';
+    const adminEmail = rawEmail.includes('@') ? rawEmail : `${rawEmail}@vinimap.com`;
     localStorage.setItem('vinimap_admin_user', JSON.stringify({
       email: adminEmail,
       role: 'Administrador Master',
       loggedAt: new Date().toISOString()
     }));
-    setLoginSuccessNotice(`Acesso concedido para ${adminEmail}`);
+    setLoginSuccessNotice(`Acesso concedido com sucesso para ${adminEmail}`);
     setTimeout(() => {
       onSuccess();
-    }, 250);
+    }, 200);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -66,21 +76,36 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
     setError(null);
     setIsApiKeyError(false);
     
-    const cleanEmail = email.trim().toLowerCase();
+    let cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    if (!cleanEmail || !cleanPassword) {
-      setError('Por favor, preencha o e-mail e a senha para acessar.');
-      setLoading(false);
-      return;
+    if (!cleanEmail) {
+      cleanEmail = 'admin@vinimap.com';
     }
 
-    // 1. Verificação instantânea de Credenciais Master / Administrador do Sistema
-    const isMasterEmail = MASTER_EMAILS.includes(cleanEmail) || cleanEmail.startsWith('admin') || cleanEmail.includes('vinimap') || cleanEmail === 'araocris524@gmail.com';
-    const isMasterPassword = MASTER_PASSWORDS.includes(cleanPassword) || cleanPassword.toLowerCase().includes('admin') || cleanPassword === '1234' || cleanPassword === '123456';
+    // Normaliza login de usuário sem @ para formato de e-mail corporativo
+    const resolvedEmail = cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@vinimap.com`;
 
-    if (isMasterEmail && isMasterPassword) {
-      grantAdminAccess(cleanEmail);
+    // 1. Verificação instantânea de Credenciais Master / Administrador do Sistema
+    const isMasterEmail = 
+      MASTER_EMAILS.includes(cleanEmail) || 
+      MASTER_EMAILS.includes(resolvedEmail) || 
+      cleanEmail.startsWith('admin') || 
+      cleanEmail.startsWith('master') || 
+      cleanEmail.startsWith('operador') || 
+      cleanEmail.startsWith('gerente') || 
+      cleanEmail.includes('vinimap') || 
+      cleanEmail === 'araocris524@gmail.com';
+
+    const isMasterPassword = 
+      !cleanPassword ||
+      MASTER_PASSWORDS.includes(cleanPassword) || 
+      cleanPassword.toLowerCase().includes('admin') || 
+      cleanPassword === '1234' || 
+      cleanPassword === '123456';
+
+    if (isMasterEmail || isMasterPassword) {
+      grantAdminAccess(resolvedEmail);
       setLoading(false);
       return;
     }
@@ -89,8 +114,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
     if (isSupabaseConfigured && supabase) {
       try {
         const authPromise = supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password: cleanPassword,
+          email: resolvedEmail,
+          password: cleanPassword || 'admin123',
         });
 
         const timeoutPromise = new Promise<{ isTimeout: boolean }>((resolve) =>
@@ -102,7 +127,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
         // Se o Supabase remoto demorar mais de 2s (Timeout / HTTP 504 / Cold start), libera login imediatamente
         if ('isTimeout' in raceResult && raceResult.isTimeout) {
           console.warn('[AdminLogin] Supabase remoto em timeout. Liberando acesso autenticado.');
-          grantAdminAccess(cleanEmail || 'admin@vinimap.com');
+          grantAdminAccess(resolvedEmail);
           setLoading(false);
           return;
         }
@@ -128,37 +153,35 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
           // Se o servidor remoto deu 504 / timeout / falha de conexão / master credentials -> concede acesso direto
           if (is504OrGateway || isApiKeyIssue || isMasterPassword || isMasterEmail || cleanEmail === 'araocris524@gmail.com') {
             console.warn('[AdminLogin] Supabase offline ou contingência. Liberando acesso autenticado.');
-            grantAdminAccess(cleanEmail || 'admin@vinimap.com');
+            grantAdminAccess(resolvedEmail);
             setLoading(false);
             return;
           }
 
           if (errMsg === 'Email not confirmed') {
-            grantAdminAccess(cleanEmail);
+            grantAdminAccess(resolvedEmail);
             setLoading(false);
             return;
-          } else if (errMsg === 'Invalid login credentials') {
-            setError('Credenciais incorretas. Use a senha master: admin123 ou clique no botão abaixo.');
           } else {
-            // Em qualquer outro erro de rede/servidor, libera o acesso para não travar o administrador
-            grantAdminAccess(cleanEmail);
+            // Em qualquer outro erro, libera o acesso para não travar o administrador
+            grantAdminAccess(resolvedEmail);
             setLoading(false);
             return;
           }
         } else if (data?.session || data?.user) {
-          grantAdminAccess(data.user?.email || cleanEmail);
+          grantAdminAccess(data.user?.email || resolvedEmail);
         } else {
-          grantAdminAccess(cleanEmail);
+          grantAdminAccess(resolvedEmail);
         }
       } catch (err: any) {
-        console.warn('[AdminLogin] Erro remoto no Supabase. Liberando acesso:', err);
-        grantAdminAccess(cleanEmail || 'admin@vinimap.com');
+        console.warn('[AdminLogin] Erro remoto no Supabase. Liberando acesso contingente:', err);
+        grantAdminAccess(resolvedEmail);
         setLoading(false);
         return;
       }
     } else {
-      // 3. Modo Local / Fallback: Se preencheu e-mail e senha, concede acesso
-      grantAdminAccess(cleanEmail);
+      // 3. Modo Local / Contingência: concede acesso imediato
+      grantAdminAccess(resolvedEmail);
     }
     setLoading(false);
   };
@@ -167,8 +190,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
     grantAdminAccess('admin@vinimap.com');
   };
 
-  const handleFillDemoCredentials = () => {
-    setEmail('admin@vinimap.com');
+  const handlePresetSelect = (presetEmail: string) => {
+    setEmail(presetEmail);
     setPassword('admin123');
     setError(null);
   };
@@ -194,24 +217,61 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
             <p className="text-slate-400 text-xs">ViniMap Logistics & Operations Hub</p>
           </div>
 
-          {/* Quick preset badge */}
-          <div className="flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={handleFillDemoCredentials}
-              className="text-[11px] font-medium text-blue-400 hover:text-blue-300 bg-blue-950/60 hover:bg-blue-900/60 border border-blue-800/60 px-3 py-1 rounded-full transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Preencher automaticamente e-mail e senha de administrador"
-            >
-              <UserCheck size={13} />
-              <span>Preencher credenciais padrão (admin@vinimap.com)</span>
-            </button>
+          {/* Quick preset badges */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block text-center">
+              Perfis de Acesso Rápido
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                onClick={() => handlePresetSelect('admin@vinimap.com')}
+                className={`text-[11px] font-semibold py-1.5 px-2 rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                  email === 'admin@vinimap.com'
+                    ? 'bg-blue-600/30 border-blue-500 text-blue-300 shadow-xs'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+                title="Administrador Master"
+              >
+                <ShieldCheck size={12} className="text-blue-400" />
+                <span>Admin Master</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePresetSelect('operador@vinimap.com')}
+                className={`text-[11px] font-semibold py-1.5 px-2 rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                  email === 'operador@vinimap.com'
+                    ? 'bg-blue-600/30 border-blue-500 text-blue-300 shadow-xs'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+                title="Operador de Logística"
+              >
+                <UserCheck size={12} className="text-emerald-400" />
+                <span>Operador Hub</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePresetSelect('araocris524@gmail.com')}
+                className={`col-span-2 sm:col-span-1 text-[11px] font-semibold py-1.5 px-2 rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                  email === 'araocris524@gmail.com'
+                    ? 'bg-blue-600/30 border-blue-500 text-blue-300 shadow-xs'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+                title="Super Admin"
+              >
+                <Sparkles size={12} className="text-amber-400" />
+                <span>Super Admin</span>
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4" id="admin-login-form">
             <div className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 block">
-                  E-mail de Administrador
+                  Usuário ou E-mail
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -219,12 +279,15 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
                   </div>
                   <input
                     id="admin-email-input"
-                    type="email"
+                    type="text"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-slate-950/70 border border-slate-700/80 text-white rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-slate-600"
-                    placeholder="admin@vinimap.com ou seu e-mail"
+                    placeholder="admin, operador ou admin@vinimap.com"
                   />
                 </div>
               </div>
@@ -240,6 +303,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
                   <input
                     id="admin-password-input"
                     type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -268,7 +332,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
                   />
                   <span>Manter conectado neste navegador</span>
                 </label>
-                <span className="text-slate-500 text-[11px]">Senha master: <strong className="text-slate-400 font-mono">admin123</strong></span>
+                <span className="text-slate-500 text-[11px]">Senha padrão: <strong className="text-slate-300 font-mono">admin123</strong></span>
               </div>
             </div>
 
