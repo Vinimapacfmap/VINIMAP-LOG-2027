@@ -147,6 +147,13 @@ class RealtimeSyncBus {
   }
 
   /**
+   * Helper: Broadcast order delete
+   */
+  public broadcastOrderDelete(orderId: string) {
+    this.broadcast('ORDER_DELETED', { orderId });
+  }
+
+  /**
    * Helper: Broadcast batch orders update
    */
   public broadcastOrdersBatch(orders: Order[]) {

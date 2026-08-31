@@ -13,6 +13,9 @@ import { isSupabaseConfigured } from '../supabase';
 import { db } from '../firebase';
 import { getIsFirestoreQuotaExceeded, isQuotaError, setIsFirestoreQuotaExceeded } from '../lib/dbService';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { enqueueOfflineOperation, flushIndexedDbOperationsQueue, deleteOrdersFromIndexedDb, OfflineOpType } from './indexedDbSync';
+import { sanitizeOrderConsistency } from './orderConsistency';
+import { realtimeSyncBus } from './realtimeSync';
 
 export type QueuePriority = 'HIGH' | 'NORMAL' | 'LOW';
 export type QueueAction = 'UPSERT' | 'DELETE';
@@ -204,6 +207,19 @@ class SyncRetryQueueManager {
 
     this.saveTasks(tasks);
 
+    // Also persist to IndexedDB operations store
+    const isUnassigned = !order.riderId || order.riderId === 'unassigned' || order.riderId === 'desalocar';
+    const opType: OfflineOpType = isUnassigned ? 'DEALLOCATE' : 'ALLOCATE';
+    enqueueOfflineOperation({
+      id: `op_order_${orderId}`,
+      entityType: 'ORDER',
+      operationType: opType,
+      entityId: orderId,
+      payload: order,
+      priority: task.priority,
+      timestamp: new Date().toISOString()
+    }).catch(() => {});
+
     // If explicit priority is LOW, let the background queue process it asynchronously without blocking or flooding
     if (explicitPriority === 'LOW') {
       setTimeout(() => {
@@ -218,7 +234,7 @@ class SyncRetryQueueManager {
     if (this.isOnline) {
       return await this.executeTask(task);
     } else {
-      console.log(`[SyncRetryQueue] 📴 Offline: Pedido #${orderId} colocado na fila de re-tentativa (Prioridade: ${priority}).`);
+      console.log(`[SyncRetryQueue] 📴 Offline: Pedido #${orderId} colocado na fila de re-tentativa IndexedDB (Prioridade: ${priority}).`);
       return false;
     }
   }
@@ -251,6 +267,18 @@ class SyncRetryQueueManager {
     }
 
     this.saveTasks(tasks);
+
+    // Persist to IndexedDB operations store
+    enqueueOfflineOperation({
+      id: `op_del_${orderId}`,
+      entityType: 'ORDER',
+      operationType: 'DELETE',
+      entityId: orderId,
+      priority: explicitPriority,
+      timestamp: new Date().toISOString()
+    }).catch(() => {});
+
+    deleteOrdersFromIndexedDb(orderId).catch(() => {});
 
     if (explicitPriority === 'LOW') {
       setTimeout(() => {
@@ -355,6 +383,23 @@ class SyncRetryQueueManager {
         try {
           localStorage.setItem(LAST_SYNC_KEY, String(this.lastSuccessfulSyncAt));
         } catch (_) {}
+
+        // Remove from IndexedDB operations queue
+        import('./indexedDbSync').then(({ removeOfflineOperation }) => {
+          removeOfflineOperation(`op_order_${orderId}`).catch(() => {});
+          removeOfflineOperation(`op_del_${orderId}`).catch(() => {});
+          removeOfflineOperation(task.id).catch(() => {});
+        }).catch(() => {});
+
+        // Broadcast to all active clients / tabs / RiderApp simulators
+        if (action === 'DELETE') {
+          realtimeSyncBus.broadcastOrderDelete(orderId);
+        } else if (orderData) {
+          realtimeSyncBus.broadcastOrderUpdate(orderData);
+          realtimeSyncBus.broadcastOrderStatusChanged(orderData);
+          realtimeSyncBus.broadcast('ORDERS_BATCH_UPDATED', [orderData]);
+        }
+
         console.log(`[SyncRetryQueue] ✅ Pedido #${orderId} sincronizado com sucesso no backend.`);
         return true;
       } else {

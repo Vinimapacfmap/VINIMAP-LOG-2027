@@ -2,20 +2,39 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * ViniMap Pro - IndexedDB Persistent Offline Sync Queue
- * Stores offline order updates and GPS coordinates with automated synchronization upon network recovery.
+ * ViniMap Pro - IndexedDB Persistent Offline Operations & Sync Queue
+ * Stores dashboard offline operations (deallocations, allocations, status updates),
+ * driver actions, and GPS coordinates with automated synchronization upon network recovery.
  */
 
 import { Order, DeliveryRider } from '../types';
 import { db } from '../firebase';
-import { doc, updateDoc, setDoc } from 'firebase/firestore';
-import { sbSaveOrder } from '../lib/supabaseService';
+import { doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { sbSaveOrder, sbDeleteOrder } from '../lib/supabaseService';
 import { sanitizeOrderConsistency } from './orderConsistency';
+import { realtimeSyncBus } from './realtimeSync';
 
 const DB_NAME = 'vinimap_offline_sync_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_GPS = 'offline_gps_queue';
 const STORE_ORDERS = 'offline_order_queue';
+const STORE_OPERATIONS = 'offline_operations_queue';
+
+export type OfflineOpType = 'DEALLOCATE' | 'ALLOCATE' | 'UPDATE_STATUS' | 'UPDATE' | 'DELETE' | 'BULK_UPDATE';
+
+export interface DashboardOfflineOperation {
+  id: string;
+  entityType: 'ORDER' | 'RIDER' | 'CLIENT';
+  operationType: OfflineOpType;
+  entityId: string;
+  payload?: any;
+  priority?: 'HIGH' | 'NORMAL' | 'LOW';
+  timestamp: string;
+  createdAt: number;
+  retryCount: number;
+  status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED';
+  lastError?: string;
+}
 
 export interface OfflineGpsRecord {
   id?: number;
@@ -43,7 +62,7 @@ export interface OfflineOrderAction {
 }
 
 // Open IndexedDB safely
-function openDatabase(): Promise<IDBDatabase> {
+export function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.indexedDB) {
       reject(new Error('IndexedDB not supported in this environment'));
@@ -60,11 +79,195 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!idb.objectStoreNames.contains(STORE_ORDERS)) {
         idb.createObjectStore(STORE_ORDERS, { keyPath: 'id', autoIncrement: true });
       }
+      if (!idb.objectStoreNames.contains(STORE_OPERATIONS)) {
+        const opStore = idb.createObjectStore(STORE_OPERATIONS, { keyPath: 'id' });
+        opStore.createIndex('createdAt', 'createdAt', { unique: false });
+        opStore.createIndex('entityId', 'entityId', { unique: false });
+        opStore.createIndex('status', 'status', { unique: false });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+
+/**
+ * Enqueues an offline dashboard operation into IndexedDB
+ */
+export async function enqueueOfflineOperation(
+  op: Omit<DashboardOfflineOperation, 'id' | 'createdAt' | 'retryCount' | 'status'> & { id?: string }
+): Promise<string> {
+  const now = Date.now();
+  const opId = op.id || `op_${op.entityType.toLowerCase()}_${op.entityId}_${now}_${Math.random().toString(36).slice(2, 7)}`;
+  
+  const record: DashboardOfflineOperation = {
+    ...op,
+    id: opId,
+    createdAt: now,
+    retryCount: 0,
+    status: 'PENDING'
+  };
+
+  try {
+    const idb = await openDatabase();
+    const tx = idb.transaction(STORE_OPERATIONS, 'readwrite');
+    const store = tx.objectStore(STORE_OPERATIONS);
+    store.put(record);
+    console.log(`[IndexedDB Operations Queue] 📥 Operação enfileirada: ${op.operationType} #${op.entityId} (ID: ${opId})`);
+  } catch (err) {
+    console.warn('[IndexedDB Operations Queue] Erro ao gravar no IndexedDB, usando fallback:', err);
+    try {
+      const fallbackKey = 'vinimap_offline_ops_fallback';
+      const existing = JSON.parse(localStorage.getItem(fallbackKey) || '[]');
+      const filtered = existing.filter((item: DashboardOfflineOperation) => item.id !== opId);
+      filtered.push(record);
+      if (filtered.length > 200) filtered.shift();
+      localStorage.setItem(fallbackKey, JSON.stringify(filtered));
+    } catch (_) {}
+  }
+
+  // Trigger sync attempt in background if online
+  if (typeof navigator !== 'undefined' && navigator.onLine) {
+    setTimeout(() => {
+      flushIndexedDbOperationsQueue().catch(() => {});
+    }, 50);
+  }
+
+  return opId;
+}
+
+/**
+ * Gets all pending offline operations from IndexedDB
+ */
+export async function getAllOfflineOperations(): Promise<DashboardOfflineOperation[]> {
+  try {
+    const idb = await openDatabase();
+    return new Promise((resolve) => {
+      const tx = idb.transaction(STORE_OPERATIONS, 'readonly');
+      const store = tx.objectStore(STORE_OPERATIONS);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch (_) {
+    try {
+      const fallback = localStorage.getItem('vinimap_offline_ops_fallback');
+      return fallback ? JSON.parse(fallback) : [];
+    } catch {
+      return [];
+    }
+  }
+}
+
+/**
+ * Removes an operation from IndexedDB upon successful sync
+ */
+export async function removeOfflineOperation(opId: string): Promise<void> {
+  try {
+    const idb = await openDatabase();
+    const tx = idb.transaction(STORE_OPERATIONS, 'readwrite');
+    const store = tx.objectStore(STORE_OPERATIONS);
+    store.delete(opId);
+  } catch (err) {
+    console.warn('[IndexedDB Operations Queue] Erro ao remover operação do IndexedDB:', err);
+  }
+
+  try {
+    const fallbackKey = 'vinimap_offline_ops_fallback';
+    const raw = localStorage.getItem(fallbackKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const filtered = parsed.filter((item: DashboardOfflineOperation) => item.id !== opId);
+      localStorage.setItem(fallbackKey, JSON.stringify(filtered));
+    }
+  } catch (_) {}
+}
+
+/**
+ * Clears the operations store in IndexedDB
+ */
+export async function clearOfflineOperationsStore(): Promise<void> {
+  try {
+    const idb = await openDatabase();
+    const tx = idb.transaction(STORE_OPERATIONS, 'readwrite');
+    const store = tx.objectStore(STORE_OPERATIONS);
+    store.clear();
+  } catch (_) {}
+  try {
+    localStorage.removeItem('vinimap_offline_ops_fallback');
+  } catch (_) {}
+}
+
+/**
+ * Flushes all pending dashboard operations from IndexedDB to Firestore & Supabase,
+ * and broadcasts updates via RealtimeSyncBus.
+ */
+let isFlushingOperations = false;
+
+export async function flushIndexedDbOperationsQueue(): Promise<{ synced: number; failed: number }> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return { synced: 0, failed: 0 };
+  }
+
+  if (isFlushingOperations) {
+    return { synced: 0, failed: 0 };
+  }
+
+  isFlushingOperations = true;
+  let synced = 0;
+  let failed = 0;
+
+  try {
+    const ops = await getAllOfflineOperations();
+    if (ops.length === 0) {
+      isFlushingOperations = false;
+      return { synced: 0, failed: 0 };
+    }
+
+    // Sort by createdAt ascending (FIFO)
+    ops.sort((a, b) => a.createdAt - b.createdAt);
+
+    console.log(`[IndexedDB Operations Queue] 🚀 Sincronizando ${ops.length} operações offline pendentes com a nuvem...`);
+
+    for (const op of ops) {
+      try {
+        if (op.entityType === 'ORDER') {
+          if (op.operationType === 'DELETE') {
+            await deleteDoc(doc(db, 'orders', op.entityId)).catch(() => {});
+            await sbDeleteOrder(op.entityId).catch(() => {});
+            realtimeSyncBus.broadcastOrderDelete(op.entityId);
+          } else {
+            // DEALLOCATE, ALLOCATE, UPDATE_STATUS, UPDATE
+            const orderPayload: Order = op.payload;
+            if (orderPayload) {
+              const { order: sanitized } = sanitizeOrderConsistency(orderPayload);
+              await setDoc(doc(db, 'orders', op.entityId), sanitized, { merge: true });
+              await sbSaveOrder(sanitized).catch(() => {});
+              
+              // Broadcast locally and across tabs so Driver App updates immediately
+              realtimeSyncBus.broadcastOrderUpdate(sanitized);
+              realtimeSyncBus.broadcastOrderStatusChanged(sanitized);
+              realtimeSyncBus.broadcast('ORDERS_BATCH_UPDATED', [sanitized]);
+            }
+          }
+        }
+
+        await removeOfflineOperation(op.id);
+        synced++;
+        console.log(`[IndexedDB Operations Queue] ✅ Operação #${op.entityId} (${op.operationType}) sincronizada com sucesso.`);
+      } catch (err: any) {
+        failed++;
+        console.warn(`[IndexedDB Operations Queue] ⚠️ Falha ao sincronizar operação #${op.entityId}:`, err);
+      }
+    }
+  } catch (err) {
+    console.warn('[IndexedDB Operations Queue] Erro no ciclo de flush:', err);
+  } finally {
+    isFlushingOperations = false;
+  }
+
+  return { synced, failed };
 }
 
 /**
@@ -118,6 +321,9 @@ export async function flushIndexedDbSyncQueue(
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return { gpsSynced: 0, ordersSynced: 0 };
   }
+
+  // Also flush dashboard operations
+  flushIndexedDbOperationsQueue().catch(() => {});
 
   let gpsSynced = 0;
   let ordersSynced = 0;
@@ -241,16 +447,29 @@ export async function deleteOrdersFromIndexedDb(orderIds: string[] | string): Pr
 
   try {
     const idb = await openDatabase();
-    const tx = idb.transaction(STORE_ORDERS, 'readwrite');
-    const store = tx.objectStore(STORE_ORDERS);
-    const getAllReq = store.getAll();
+    const tx = idb.transaction([STORE_ORDERS, STORE_OPERATIONS], 'readwrite');
+    const storeOrders = tx.objectStore(STORE_ORDERS);
+    const getAllReq = storeOrders.getAll();
 
     getAllReq.onsuccess = () => {
       const records: OfflineOrderAction[] = getAllReq.result || [];
       records.forEach(rec => {
         if (rec.id && (idsToDelete.has(rec.orderId) || idsToDelete.has(String(rec.id)))) {
           try {
-            store.delete(rec.id);
+            storeOrders.delete(rec.id);
+          } catch (_) {}
+        }
+      });
+    };
+
+    const storeOps = tx.objectStore(STORE_OPERATIONS);
+    const getAllOps = storeOps.getAll();
+    getAllOps.onsuccess = () => {
+      const ops: DashboardOfflineOperation[] = getAllOps.result || [];
+      ops.forEach(op => {
+        if (idsToDelete.has(op.entityId) || idsToDelete.has(op.id)) {
+          try {
+            storeOps.delete(op.id);
           } catch (_) {}
         }
       });
@@ -295,10 +514,31 @@ export async function clearAllIndexedDbStores(): Promise<void> {
   }
 }
 
-// Auto-register online event listener to trigger synchronization
+// Auto-register online and visibility event listeners to trigger immediate synchronization
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
-    console.log('[IndexedDB Sync] 🌐 Conexão restabelecida. Sincronizando fila persistente do condutor...');
+    console.log('[IndexedDB Operations Queue] 🌐 Conexão restabelecida. Sincronizando operações offline...');
+    flushIndexedDbOperationsQueue().catch(() => {});
     flushIndexedDbSyncQueue().catch(() => {});
   });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && navigator.onLine) {
+      flushIndexedDbOperationsQueue().catch(() => {});
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    if (navigator.onLine) {
+      flushIndexedDbOperationsQueue().catch(() => {});
+    }
+  });
+
+  // Background interval check every 8 seconds
+  setInterval(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      flushIndexedDbOperationsQueue().catch(() => {});
+    }
+  }, 8000);
 }
+

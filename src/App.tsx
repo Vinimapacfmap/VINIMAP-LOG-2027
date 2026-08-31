@@ -67,8 +67,10 @@ import { realtimeSyncBus } from './utils/realtimeSync';
 import { 
   deleteOrdersFromIndexedDb, 
   clearIndexedDbOrdersStore, 
-  clearAllIndexedDbStores 
+  clearAllIndexedDbStores,
+  flushIndexedDbOperationsQueue
 } from './utils/indexedDbSync';
+import { syncRetryQueue } from './utils/syncRetryQueue';
 import {
   getSavedFilterDateFrom,
   getSavedFilterDateTo,
@@ -1009,9 +1011,11 @@ export default function App() {
     };
 
     const handleNetworkOnline = () => {
-      console.log('[Network] 🌐 Conexão restabelecida. Reconectando serviços em tempo real...');
+      console.log('[Network] 🌐 Conexão restabelecida. Reconectando serviços e sincronizando operações offline em IndexedDB...');
       setIsOfflineFallbackActive(false);
       setOfflineFallbackReason('');
+      flushIndexedDbOperationsQueue().catch(() => {});
+      syncRetryQueue.processQueue(true).catch(() => {});
     };
 
     const handleNetworkOffline = () => {
