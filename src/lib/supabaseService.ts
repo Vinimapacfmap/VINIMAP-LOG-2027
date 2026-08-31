@@ -24,17 +24,26 @@ export function mapOrderToDb(o: Order) {
   
   if (isUnassigned) {
     delete cleanRawData.riderId;
+    delete cleanRawData.driverId;
+    delete cleanRawData.RiderId;
+    delete cleanRawData.DriverId;
     delete cleanRawData.Condutor;
     delete cleanRawData.condutor;
     delete cleanRawData.NomeCondutor;
     delete cleanRawData.nomeCondutor;
     delete cleanRawData.Entregador;
     delete cleanRawData.entregador;
+    delete cleanRawData.NomeEntregador;
+    delete cleanRawData.nomeEntregador;
     delete cleanRawData.Motorista;
     delete cleanRawData.motorista;
     delete cleanRawData.DispositivoCondutor;
     delete cleanRawData.dispositivoCondutor;
+    delete cleanRawData.TelefoneCondutor;
+    delete cleanRawData.telefoneCondutor;
+    delete cleanRawData.telefone_condutor;
     delete cleanRawData.riderName;
+    delete cleanRawData.driverName;
   }
 
   const mergedRawData = {

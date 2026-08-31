@@ -867,22 +867,12 @@ export default function App() {
           const existingScore = getOrderTimestampScore(existing);
           const incScore = getOrderTimestampScore(inc);
 
-          // If existing order has an allocated rider and incoming does not (or incoming is older), keep existing
-          const existingHasRider = Boolean(existing.riderId && existing.riderId !== 'unassigned' && existing.riderId !== 'desalocar');
-          const incHasRider = Boolean(inc.riderId && inc.riderId !== 'unassigned' && inc.riderId !== 'desalocar');
-
-          if (existingHasRider && !incHasRider && incScore <= existingScore) {
-            map.set(inc.id, { ...inc, ...existing });
-            return;
-          }
-
-          if (existingScore >= incScore) {
-            // Existing in-memory state is newer or equal (e.g. recent allocation/status change)
+          if (existingScore > incScore) {
+            // Existing in-memory state is strictly newer
             map.set(inc.id, { ...inc, ...existing });
           } else {
-            // Incoming is strictly newer; merge incoming but preserve assigned rider if incoming is unassigned
-            const mergedRiderId = inc.riderId || existing.riderId;
-            map.set(inc.id, { ...existing, ...inc, riderId: mergedRiderId });
+            // Incoming is newer or equal; incoming state is authoritative
+            map.set(inc.id, { ...existing, ...inc });
           }
         }
       });
@@ -2986,17 +2976,26 @@ export default function App() {
         const isoNow = new Date().toISOString();
         const cleanedRawData = currentOrder.rawData ? { ...currentOrder.rawData } : {};
         delete cleanedRawData.riderId;
+        delete cleanedRawData.driverId;
+        delete cleanedRawData.RiderId;
+        delete cleanedRawData.DriverId;
         delete cleanedRawData.Condutor;
         delete cleanedRawData.condutor;
         delete cleanedRawData.NomeCondutor;
         delete cleanedRawData.nomeCondutor;
         delete cleanedRawData.Entregador;
         delete cleanedRawData.entregador;
+        delete cleanedRawData.NomeEntregador;
+        delete cleanedRawData.nomeEntregador;
         delete cleanedRawData.Motorista;
         delete cleanedRawData.motorista;
         delete cleanedRawData.DispositivoCondutor;
         delete cleanedRawData.dispositivoCondutor;
+        delete cleanedRawData.TelefoneCondutor;
+        delete cleanedRawData.telefoneCondutor;
+        delete cleanedRawData.telefone_condutor;
         delete cleanedRawData.riderName;
+        delete cleanedRawData.driverName;
 
         const initialUpdatedOrder: Order = {
           ...currentOrder,
@@ -3008,11 +3007,17 @@ export default function App() {
           rawData: cleanedRawData,
           history: [...(currentOrder.history || []), historyEntry]
         };
+        delete (initialUpdatedOrder as any).driverId;
+        delete (initialUpdatedOrder as any).assignedDriver;
+        delete (initialUpdatedOrder as any).entregadorId;
+        delete (initialUpdatedOrder as any).motoristaId;
 
         const updatedOrder = validateAndRecalculateOrderFreight(initialUpdatedOrder, clientPartners);
 
         setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
         realtimeSyncBus.broadcastOrderStatusChanged(updatedOrder);
+        realtimeSyncBus.broadcastOrderUpdate(updatedOrder);
+        realtimeSyncBus.broadcast('ORDERS_BATCH_UPDATED', [updatedOrder]);
         if (updatedRiderObj) {
           setRiders(prev => prev.map(r => r.id === updatedRiderObj.id ? updatedRiderObj : r));
           realtimeSyncBus.broadcastRiderUpdate(updatedRiderObj);

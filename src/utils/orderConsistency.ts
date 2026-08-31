@@ -84,30 +84,11 @@ export function sanitizeOrderConsistency(
     }
   }
 
-  // Normalize riderId - handle object, driverId, assignedDriver, and empty/placeholder values
+  // Normalize riderId - handle object and empty/placeholder values
   if (updated.riderId && typeof updated.riderId === 'object') {
     const obj: any = updated.riderId;
     updated.riderId = obj.id || obj.name || obj.deviceNumber || undefined;
     isModified = true;
-  }
-
-  // If riderId is missing, check alternative fields (driverId, assignedDriver, driver, rider, rawData)
-  if (!updated.riderId) {
-    const altCandidate = (updated as any).driverId ||
-      (typeof (updated as any).assignedDriver === 'object' ? (updated as any).assignedDriver?.id : (updated as any).assignedDriver) ||
-      (typeof (updated as any).driver === 'object' ? (updated as any).driver?.id : (updated as any).driver) ||
-      (typeof (updated as any).rider === 'object' ? (updated as any).rider?.id : (updated as any).rider) ||
-      (updated as any).entregadorId ||
-      (updated as any).motoristaId ||
-      updated.rawData?.riderId ||
-      updated.rawData?.driverId ||
-      updated.rawData?.RiderId ||
-      updated.rawData?.DriverId;
-
-    if (altCandidate && typeof altCandidate === 'string' && altCandidate.trim() !== '') {
-      updated.riderId = altCandidate.trim();
-      isModified = true;
-    }
   }
 
   if (updated.riderId) {
@@ -132,10 +113,26 @@ export function sanitizeOrderConsistency(
     }
   }
 
-  // If order is unassigned, ensure rawData does not have conflicting stale rider identifiers
+  // If order is unassigned, ensure driverValue is 0 and driver candidate fields are clean
   if (!updated.riderId) {
     if (updated.driverValue && updated.driverValue > 0) {
       updated.driverValue = 0;
+      isModified = true;
+    }
+    if ((updated as any).driverId) {
+      delete (updated as any).driverId;
+      isModified = true;
+    }
+    if ((updated as any).assignedDriver) {
+      delete (updated as any).assignedDriver;
+      isModified = true;
+    }
+    if ((updated as any).entregadorId) {
+      delete (updated as any).entregadorId;
+      isModified = true;
+    }
+    if ((updated as any).motoristaId) {
+      delete (updated as any).motoristaId;
       isModified = true;
     }
   }
@@ -280,8 +277,9 @@ export function isMockOrder(order: Partial<Order>): boolean {
   if (/^ORD-\d+$/i.test(id)) return true;
   if (/^ped-[1-9]\b/i.test(id)) return true;
   if (/^PED-10[1-9]$/i.test(id)) return true;
-  if (order.clientId && MOCK_CLIENT_IDS.includes(order.clientId)) return true;
-  if (order.clientCode && MOCK_CLIENT_IDS.includes(order.clientCode)) return true;
+  const raw = order as any;
+  if (raw?.clientId && MOCK_CLIENT_IDS.includes(raw.clientId)) return true;
+  if (raw?.clientCode && MOCK_CLIENT_IDS.includes(raw.clientCode)) return true;
   if (order.riderId && MOCK_RIDER_IDS.includes(order.riderId)) return true;
   return false;
 }

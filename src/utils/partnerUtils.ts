@@ -294,7 +294,7 @@ export function findRiderByIdentifier(
 /**
  * Checks if an order matches a selected rider/driver filter value (by ID, name, phone, deviceNumber, CPF).
  * When an order has an active `order.riderId`, that assignment is authoritative and exclusive.
- * Also checks candidate top-level fields (driverId, assignedDriver, driver, rider) and rawData attributes.
+ * An unassigned order (no riderId) will only match unassigned/sem condutor queries and never a specific driver.
  */
 export function isOrderMatchingRider(
   order: { riderId?: any; driverId?: any; assignedDriver?: any; driver?: any; rider?: any; entregadorId?: any; motoristaId?: any; rawData?: Record<string, any>; status?: any },
@@ -322,146 +322,79 @@ export function isOrderMatchingRider(
     cleanFilter === 'nao alocado' ||
     cleanFilter === 'não alocado' ||
     cleanFilter === 'nao vinculado' ||
-    cleanFilter === 'não vinculado'
+    cleanFilter === 'não vinculado' ||
+    cleanFilter === 'desalocar'
   ) {
     if (order.status === 'Cancelado') return false;
-    
-    // Check if any rider candidate exists
-    const candidates: string[] = [];
-    const collectCandidate = (val: any) => {
-      if (val === undefined || val === null) return;
-      if (typeof val === 'object') {
-        if (val.id) collectCandidate(val.id);
-        if (val.name) collectCandidate(val.name);
-        return;
-      }
-      const s = String(val).trim();
-      if (s && !['unassigned', 'desalocar', 'undefined', 'null', 'sem condutor', 'não alocado', 'nao alocado', 'não vinculado', 'nao vinculado'].includes(s.toLowerCase())) {
-        candidates.push(s);
-      }
-    };
+    const rId = String(order.riderId || '').trim().toLowerCase();
+    return !rId || rId === 'unassigned' || rId === 'desalocar' || rId === 'undefined' || rId === 'null';
+  }
 
-    collectCandidate(order.riderId);
-    collectCandidate(order.driverId);
-    collectCandidate(order.assignedDriver);
-    collectCandidate(order.driver);
-    collectCandidate(order.rider);
-    collectCandidate(order.entregadorId);
-    collectCandidate(order.motoristaId);
+  // Resolve the assigned driver identifier from the order
+  const rawRiderId = order.riderId || order.driverId || order.assignedDriver || order.entregadorId || order.motoristaId;
+  const cleanOrderRider = String(rawRiderId || '').trim();
 
-    return candidates.length === 0;
+  // If the order has NO assigned driver, it CANNOT match any specific driver
+  if (
+    !cleanOrderRider ||
+    cleanOrderRider.toLowerCase() === 'unassigned' ||
+    cleanOrderRider.toLowerCase() === 'desalocar' ||
+    cleanOrderRider.toLowerCase() === 'undefined' ||
+    cleanOrderRider.toLowerCase() === 'null' ||
+    cleanOrderRider.toLowerCase() === 'sem condutor'
+  ) {
+    return false;
   }
 
   const availableRiders = (riders && riders.length > 0) ? riders : getCachedDeliveryRiders();
   const filterDigits = cleanFilter.replace(/\D/g, '');
   const targetRider = findRiderByIdentifier(availableRiders, cleanFilter);
 
-  // Collect all potential driver references from this order (top-level and objects)
-  const candidateValues: string[] = [];
-  const addCandidate = (val: any) => {
-    if (val === undefined || val === null) return;
-    if (typeof val === 'object') {
-      if (val.id) addCandidate(val.id);
-      if (val.name) addCandidate(val.name);
-      if (val.phone) addCandidate(val.phone);
-      if (val.deviceNumber) addCandidate(val.deviceNumber);
-      return;
-    }
-    const str = String(val).trim();
-    if (
-      str && 
-      str.toLowerCase() !== 'unassigned' && 
-      str.toLowerCase() !== 'desalocar' && 
-      str.toLowerCase() !== 'undefined' && 
-      str.toLowerCase() !== 'null' && 
-      str.toLowerCase() !== 'sem condutor' && 
-      str.toLowerCase() !== 'não alocado' && 
-      str.toLowerCase() !== 'nao alocado' && 
-      str.toLowerCase() !== 'não vinculado' && 
-      str.toLowerCase() !== 'nao vinculado'
-    ) {
-      candidateValues.push(str);
-    }
-  };
+  const candLower = cleanOrderRider.toLowerCase();
+  const candDigits = candLower.replace(/\D/g, '');
 
-  addCandidate(order.riderId);
-  addCandidate(order.driverId);
-  addCandidate(order.assignedDriver);
-  addCandidate(order.driver);
-  addCandidate(order.rider);
-  addCandidate(order.entregadorId);
-  addCandidate(order.motoristaId);
+  // Exact match with filter string
+  if (candLower === cleanFilter) return true;
+  if (candLower.length >= 3 && cleanFilter.length >= 3) {
+    if (candLower.includes(cleanFilter) || cleanFilter.includes(candLower)) return true;
+  }
 
-  // Also collect from rawData
-  const rawData = order.rawData || {};
-  for (const k of Object.keys(rawData)) {
-    const rawVal = rawData[k];
-    if (rawVal !== undefined && rawVal !== null) {
-      const normalizedKey = String(k).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (
-        normalizedKey.includes('condutor') ||
-        normalizedKey.includes('entregador') ||
-        normalizedKey.includes('motorista') ||
-        normalizedKey.includes('dispositivo') ||
-        normalizedKey.includes('rider') ||
-        normalizedKey.includes('driver') ||
-        normalizedKey.includes('telefone') ||
-        normalizedKey.includes('celular') ||
-        normalizedKey.includes('phone')
-      ) {
-        addCandidate(rawVal);
-      }
+  // Phone / Device / ID digits match
+  if (filterDigits.length >= 6 && candDigits.length >= 6) {
+    if (candDigits === filterDigits || areDigitsMatching(candDigits, filterDigits)) {
+      return true;
     }
   }
 
-  // 1. Direct comparison of candidates against cleanFilter and targetRider
-  for (const candidate of candidateValues) {
-    const candLower = candidate.toLowerCase();
-    const candDigits = candLower.replace(/\D/g, '');
+  // Compare against resolved target rider
+  if (targetRider) {
+    const tId = String(targetRider.id || '').trim().toLowerCase();
+    const tName = String(targetRider.name || '').trim().toLowerCase();
+    const tPhoneDigits = String(targetRider.phone || '').replace(/\D/g, '');
+    const tDeviceDigits = String(targetRider.deviceNumber || '').replace(/\D/g, '');
+    const tCpfDigits = String(targetRider.cpfCnpj || '').replace(/\D/g, '');
 
-    // Exact or substring match with filter string
-    if (candLower === cleanFilter) return true;
-    if (candLower.length >= 3 && cleanFilter.length >= 3) {
-      if (candLower.includes(cleanFilter) || cleanFilter.includes(candLower)) return true;
-    }
+    if (candLower === tId || candLower === tName) return true;
+    if (tName && candLower.length >= 3 && (candLower.includes(tName) || tName.includes(candLower))) return true;
+    if (tPhoneDigits && areDigitsMatching(candDigits, tPhoneDigits)) return true;
+    if (tDeviceDigits && (candDigits === tDeviceDigits || areDigitsMatching(candDigits, tDeviceDigits))) return true;
+    if (tCpfDigits && areDigitsMatching(candDigits, tCpfDigits)) return true;
+  }
 
-    // Phone / Device / ID digits match
-    if (filterDigits.length >= 6 && candDigits.length >= 6) {
-      if (candDigits === filterDigits || areDigitsMatching(candDigits, filterDigits)) {
-        return true;
-      }
-    }
+  // Compare by looking up the order's rider in the directory
+  const candRider = findRiderByIdentifier(availableRiders, cleanOrderRider);
+  if (candRider) {
+    const cId = String(candRider.id || '').trim().toLowerCase();
+    const cName = String(candRider.name || '').trim().toLowerCase();
+    if (cId === cleanFilter || cName === cleanFilter) return true;
+    if (cName && (cleanFilter.includes(cName) || cName.includes(cleanFilter))) return true;
 
-    // Target rider resolved comparison (targetRider represents the driver being filtered for)
-    if (targetRider) {
-      const tId = String(targetRider.id || '').trim().toLowerCase();
-      const tName = String(targetRider.name || '').trim().toLowerCase();
-      const tPhoneDigits = String(targetRider.phone || '').replace(/\D/g, '');
-      const tDeviceDigits = String(targetRider.deviceNumber || '').replace(/\D/g, '');
-      const tCpfDigits = String(targetRider.cpfCnpj || '').replace(/\D/g, '');
+    const cPhoneDigits = String(candRider.phone || '').replace(/\D/g, '');
+    if (filterDigits.length >= 8 && areDigitsMatching(cPhoneDigits, filterDigits)) return true;
+    const cDeviceDigits = String(candRider.deviceNumber || '').replace(/\D/g, '');
+    if (filterDigits.length >= 8 && areDigitsMatching(cDeviceDigits, filterDigits)) return true;
 
-      if (candLower === tId || candLower === tName) return true;
-      if (tName && candLower.length >= 3 && (candLower.includes(tName) || tName.includes(candLower))) return true;
-      if (tPhoneDigits && areDigitsMatching(candDigits, tPhoneDigits)) return true;
-      if (tDeviceDigits && (candDigits === tDeviceDigits || areDigitsMatching(candDigits, tDeviceDigits))) return true;
-      if (tCpfDigits && areDigitsMatching(candDigits, tCpfDigits)) return true;
-    }
-
-    // Assigned rider resolved comparison (check if the candidate points to a registered rider)
-    const candRider = findRiderByIdentifier(availableRiders, candidate);
-    if (candRider) {
-      const cId = String(candRider.id || '').trim().toLowerCase();
-      const cName = String(candRider.name || '').trim().toLowerCase();
-      if (cId === cleanFilter || cName === cleanFilter) return true;
-      if (cName && (cleanFilter.includes(cName) || cName.includes(cleanFilter))) return true;
-
-      const cPhoneDigits = String(candRider.phone || '').replace(/\D/g, '');
-      if (filterDigits.length >= 8 && areDigitsMatching(cPhoneDigits, filterDigits)) return true;
-      const cDeviceDigits = String(candRider.deviceNumber || '').replace(/\D/g, '');
-      if (filterDigits.length >= 8 && areDigitsMatching(cDeviceDigits, filterDigits)) return true;
-
-      if (targetRider && targetRider.id === candRider.id) return true;
-    }
+    if (targetRider && targetRider.id === candRider.id) return true;
   }
 
   return false;
