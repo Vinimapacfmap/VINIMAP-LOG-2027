@@ -595,6 +595,7 @@ export default function Header({
                       if (onLogout) {
                         onLogout();
                       } else {
+                        sessionStorage.removeItem('vinimap_admin_session');
                         localStorage.removeItem('vinimap_admin_session');
                         localStorage.setItem('vinimap_logged_out', 'true');
                         window.location.reload();

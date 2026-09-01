@@ -17,8 +17,10 @@ import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { isSupabaseConfigured } from '../supabase';
 import { fetchAllStateFromSupabase } from '../lib/supabaseService';
-import { verifyAndSanitizeRiderOrders, queueOfflineGpsCoord, queueOfflineOrderAction, flushIndexedDbSyncQueue } from '../utils/indexedDbSync';
-import { hasOrderCompletionEvidence } from '../utils/orderConsistency';
+import { verifyAndSanitizeRiderOrders, queueOfflineGpsCoord, queueOfflineOrderAction, flushIndexedDbSyncQueue, flushIndexedDbOperationsQueue } from '../utils/indexedDbSync';
+import { hasOrderCompletionEvidence, mergeOrders, sanitizeOrdersListConsistency } from '../utils/orderConsistency';
+import { syncRetryQueue } from '../utils/syncRetryQueue';
+import { backgroundSyncCron } from '../utils/backgroundSyncCron';
 
 import { PwaInstallBanner } from './PwaInstallBanner';
 
@@ -617,48 +619,51 @@ export default function RiderAppSimulator({
   const hasInitialFetchedRef = useRef(false);
 
   useEffect(() => {
-    // 1. Initial snapshot / fallback fetch only when orders are completely empty on mount
+    // 1. Initial snapshot / fallback fetch when mounted
     const fetchFreshOnMount = async () => {
-      if (orders.length === 0) {
-        let fetched: Order[] = [];
-        try {
-          const snap = await getDocs(collection(db, 'orders'));
-          snap.forEach(d => {
-            const ord = d.data() as Order;
-            if (ord && ord.id) {
-              fetched.push(ord);
-            }
-          });
-        } catch (e) {
-          console.warn("Direct Firestore read fallback in Driver App:", e);
-        }
-
-        if (fetched.length === 0 && isSupabaseConfigured) {
-          try {
-            const sbState = await fetchAllStateFromSupabase();
-            if (sbState.orders && sbState.orders.length > 0) {
-              fetched = sbState.orders;
-            }
-          } catch (sbErr) {
-            console.warn("Supabase fetch fallback in Driver App:", sbErr);
+      let firestoreOrders: Order[] = [];
+      try {
+        const snap = await getDocs(collection(db, 'orders'));
+        snap.forEach(d => {
+          const ord = d.data() as Order;
+          if (ord && ord.id) {
+            firestoreOrders.push(ord);
           }
-        }
+        });
+      } catch (e) {
+        console.warn("Direct Firestore read fallback in Driver App:", e);
+      }
 
-        if (fetched.length === 0 && typeof window !== 'undefined') {
-          try {
-            const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
-            if (rawBackup) {
-              const parsed = JSON.parse(rawBackup);
-              if (parsed.orders && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
-                fetched = parsed.orders;
-              }
+      let supabaseOrders: Order[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const sbState = await fetchAllStateFromSupabase();
+          if (sbState.orders && sbState.orders.length > 0) {
+            supabaseOrders = sbState.orders;
+          }
+        } catch (sbErr) {
+          console.warn("Supabase fetch fallback in Driver App:", sbErr);
+        }
+      }
+
+      let localOrders: Order[] = [];
+      if (typeof window !== 'undefined') {
+        try {
+          const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+          if (rawBackup) {
+            const parsed = JSON.parse(rawBackup);
+            if (parsed.orders && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+              localOrders = parsed.orders;
             }
-          } catch (_) {}
-        }
+          }
+        } catch (_) {}
+      }
 
-        if (fetched.length > 0 && onUpdateOrders) {
-          onUpdateOrders(fetched);
-        }
+      const merged = mergeOrders(localOrders, mergeOrders(firestoreOrders, supabaseOrders));
+      const { orders: sanitized } = sanitizeOrdersListConsistency(merged);
+
+      if (sanitized.length > 0 && onUpdateOrders) {
+        onUpdateOrders(sanitized);
       }
     };
 
@@ -666,7 +671,43 @@ export default function RiderAppSimulator({
       hasInitialFetchedRef.current = true;
       fetchFreshOnMount();
     }
-  }, [orders.length, onUpdateOrders]);
+  }, [onUpdateOrders]);
+
+  // Periodic and reactive background synchronization for active driver updates (new orders & status changes)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const pullFreshState = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      try {
+        const sbState = await fetchAllStateFromSupabase();
+        if (sbState.orders && sbState.orders.length > 0 && onUpdateOrders) {
+          const { orders: sanitized } = sanitizeOrdersListConsistency(sbState.orders);
+          onUpdateOrders(sanitized);
+        }
+      } catch (err) {
+        // silent fail on background polling
+      }
+    };
+
+    // Poll every 6 seconds
+    const interval = setInterval(pullFreshState, 6000);
+
+    const onOnlineOrFocus = () => {
+      pullFreshState();
+    };
+
+    window.addEventListener('online', onOnlineOrFocus);
+    window.addEventListener('focus', onOnlineOrFocus);
+    document.addEventListener('visibilitychange', onOnlineOrFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', onOnlineOrFocus);
+      window.removeEventListener('focus', onOnlineOrFocus);
+      document.removeEventListener('visibilitychange', onOnlineOrFocus);
+    };
+  }, [onUpdateOrders]);
 
   // Individual Login State
   const [phoneInput, setPhoneInput] = useState<string>('');
@@ -875,6 +916,11 @@ export default function RiderAppSimulator({
   useEffect(() => {
     const handleOnline = () => {
       setIsNetworkOffline(false);
+      // Auto-flush queues and background sync on network recovery
+      syncOfflineQueue().catch(() => {});
+      flushIndexedDbOperationsQueue().catch(() => {});
+      syncRetryQueue.processQueue(true).catch(() => {});
+      backgroundSyncCron.triggerSync(true, 'RIDER_APP_ONLINE').catch(() => {});
     };
     const handleOffline = () => {
       setIsNetworkOffline(true);
@@ -887,7 +933,7 @@ export default function RiderAppSimulator({
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [offlineQueue]);
 
   // Central handler for status updates with offline cache support
   const handleUpdateOrderStatus = (
@@ -1128,22 +1174,26 @@ export default function RiderAppSimulator({
       });
 
       // 3. Fetch directly from Firestore and Supabase for guaranteed fresh data
-      let freshOrders: Order[] = [];
+      let firestoreOrders: Order[] = [];
       try {
         const snap = await getDocs(collection(db, 'orders'));
         snap.forEach(d => {
-          freshOrders.push(d.data() as Order);
+          const ord = d.data() as Order;
+          if (ord && ord.id) {
+            firestoreOrders.push(ord);
+          }
         });
       } catch (e) {
         console.warn("Direct Firestore read fallback:", e);
       }
 
-      // 3b. Supabase fallback / primary fetch if configured
-      if (freshOrders.length === 0 && isSupabaseConfigured) {
+      // 3b. Supabase fetch
+      let supabaseOrders: Order[] = [];
+      if (isSupabaseConfigured) {
         try {
           const sbState = await fetchAllStateFromSupabase();
           if (sbState.orders && sbState.orders.length > 0) {
-            freshOrders = sbState.orders;
+            supabaseOrders = sbState.orders;
           }
         } catch (sbErr) {
           console.warn("Supabase fetch fallback in Driver App:", sbErr);
@@ -1151,24 +1201,28 @@ export default function RiderAppSimulator({
       }
 
       // 3c. Contingency local backup fallback
-      if (freshOrders.length === 0 && typeof window !== 'undefined') {
+      let localOrders: Order[] = [];
+      if (typeof window !== 'undefined') {
         try {
           const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
           if (rawBackup) {
             const parsed = JSON.parse(rawBackup);
             if (parsed.orders && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
-              freshOrders = parsed.orders;
+              localOrders = parsed.orders;
             }
           }
         } catch (_) {}
       }
 
-      if (freshOrders.length > 0 && onUpdateOrders) {
-        onUpdateOrders(freshOrders);
+      const merged = mergeOrders(localOrders, mergeOrders(firestoreOrders, supabaseOrders));
+      const { orders: sanitizedOrders } = sanitizeOrdersListConsistency(merged);
+
+      if (sanitizedOrders.length > 0 && onUpdateOrders) {
+        onUpdateOrders(sanitizedOrders);
       }
 
       // 4. Calculate active orders count for driver feedback
-      const currentList = freshOrders.length > 0 ? freshOrders : orders;
+      const currentList = sanitizedOrders.length > 0 ? sanitizedOrders : orders;
       const activeCount = currentList.filter(isOrderActiveForDriver).length;
 
       playChimeSuccess();

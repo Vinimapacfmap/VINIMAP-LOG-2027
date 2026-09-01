@@ -331,7 +331,19 @@ export function isOrderMatchingRider(
   }
 
   // Resolve the assigned driver identifier from the order
-  const rawRiderId = order.riderId || order.driverId || order.assignedDriver || order.entregadorId || order.motoristaId;
+  const rawRiderId = order.riderId 
+    || order.driverId 
+    || order.assignedDriver 
+    || order.entregadorId 
+    || order.motoristaId
+    || order.rawData?.riderId
+    || order.rawData?.Motorista
+    || order.rawData?.motorista
+    || order.rawData?.Entregador
+    || order.rawData?.entregador
+    || order.rawData?.Condutor
+    || order.rawData?.condutor
+    || order.rawData?.driverId;
   const cleanOrderRider = String(rawRiderId || '').trim();
 
   // If the order has NO assigned driver, it CANNOT match any specific driver

@@ -38,13 +38,16 @@ export function useAppInitialization(): AppInitState {
         window.location.hash === '#login';
 
       if (isExplicitLogin) {
+        sessionStorage.removeItem('vinimap_admin_session');
+        localStorage.removeItem('vinimap_admin_session');
         return false;
       }
 
       const loggedOut = localStorage.getItem('vinimap_logged_out');
       if (loggedOut === 'true') return false;
-      const localSession = localStorage.getItem('vinimap_admin_session');
-      if (localSession === 'true') return true;
+
+      // Only authenticated if active tab session explicitly has session token
+      return sessionStorage.getItem('vinimap_admin_session') === 'true';
     }
     return false;
   });
@@ -155,15 +158,15 @@ export function useAppInitialization(): AppInitState {
                 console.warn('[useAppInitialization] [SUPABASE SESSION TIMEOUT] A chamada supabase.auth.getSession() excedeu 1.5s e acionou timeout de segurança para não travar a UI.', {
                   timestamp: new Date().toISOString()
                 });
-                const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+                const hasLocalSession = sessionStorage.getItem('vinimap_admin_session') === 'true';
                 if (isMounted) setIsAdminAuthenticated(hasLocalSession);
               } else if (raceResult.type === 'error') {
                 console.warn('[useAppInitialization] [SUPABASE SESSION FAIL] Erro de rede ao buscar sessão Supabase.', raceResult.err);
-                const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+                const hasLocalSession = sessionStorage.getItem('vinimap_admin_session') === 'true';
                 if (isMounted) setIsAdminAuthenticated(hasLocalSession);
               } else {
                 const session = raceResult.res.data.session;
-                const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+                const hasLocalSession = sessionStorage.getItem('vinimap_admin_session') === 'true';
                 console.log('[useAppInitialization] [SUPABASE SESSION END] Sessão consultada com sucesso:', {
                   timestamp: new Date().toISOString(),
                   hasRemoteSession: Boolean(session),
@@ -172,12 +175,12 @@ export function useAppInitialization(): AppInitState {
                 });
 
                 if (isMounted) {
-                  setIsAdminAuthenticated(Boolean(session || hasLocalSession));
+                  setIsAdminAuthenticated(Boolean((session && hasLocalSession) || hasLocalSession));
                 }
               }
             } catch (authErr) {
               console.warn('[useAppInitialization] [SUPABASE SESSION CATCH] Exceção geral ao consultar sessão Supabase:', authErr);
-              const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+              const hasLocalSession = sessionStorage.getItem('vinimap_admin_session') === 'true';
               if (isMounted) {
                 setIsAdminAuthenticated(hasLocalSession);
               }
@@ -196,7 +199,7 @@ export function useAppInitialization(): AppInitState {
             (typeof window !== 'undefined' && window.location.hash === '#login');
 
           const loggedOut = localStorage.getItem('vinimap_logged_out');
-          const localSession = localStorage.getItem('vinimap_admin_session') === 'true';
+          const localSession = sessionStorage.getItem('vinimap_admin_session') === 'true';
           if (isMounted) {
             setIsSupabaseReady(false);
             if (loggedOut === 'true' || isExplicitLoginReq) {
@@ -238,15 +241,15 @@ export function useAppInitialization(): AppInitState {
             timestamp: new Date().toISOString()
           });
           const isOut = localStorage.getItem('vinimap_logged_out') === 'true';
-          const hasLocalSession = localStorage.getItem('vinimap_admin_session') === 'true';
+          const hasLocalSession = sessionStorage.getItem('vinimap_admin_session') === 'true';
 
           if (_event === 'SIGNED_OUT' && !hasLocalSession) {
             setIsAdminAuthenticated(false);
           } else if (isOut) {
             setIsAdminAuthenticated(false);
-          } else if (session || hasLocalSession) {
+          } else if (session && hasLocalSession) {
             localStorage.removeItem('vinimap_logged_out');
-            localStorage.setItem('vinimap_admin_session', 'true');
+            sessionStorage.setItem('vinimap_admin_session', 'true');
             setIsAdminAuthenticated(true);
           }
         });

@@ -53,7 +53,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess }) => {
 
   const grantAdminAccess = (userEmail?: string) => {
     localStorage.removeItem('vinimap_logged_out');
-    localStorage.setItem('vinimap_admin_session', 'true');
+    sessionStorage.setItem('vinimap_admin_session', 'true');
     if (rememberMe) {
       localStorage.setItem('vinimap_remember_admin', 'true');
     }

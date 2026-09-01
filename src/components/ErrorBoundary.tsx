@@ -41,7 +41,8 @@ export class ErrorBoundary extends Component<Props, State> {
   private handleClearAndReload = () => {
     try {
       localStorage.removeItem('vinimap_logged_out');
-      localStorage.setItem('vinimap_admin_session', 'true');
+      sessionStorage.removeItem('vinimap_admin_session');
+      localStorage.removeItem('vinimap_admin_session');
     } catch (_) {}
     window.location.reload();
   };

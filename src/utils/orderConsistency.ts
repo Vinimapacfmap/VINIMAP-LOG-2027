@@ -114,6 +114,35 @@ export function sanitizeOrderConsistency(
   }
 
   // If order is unassigned, ensure driverValue is 0 and driver candidate fields are clean
+  if (!updated.riderId && updated.rawData) {
+    const rawRider = (
+      updated.rawData.riderId ||
+      updated.rawData.driverId ||
+      updated.rawData.Motorista ||
+      updated.rawData.motorista ||
+      updated.rawData.Entregador ||
+      updated.rawData.entregador ||
+      updated.rawData.Condutor ||
+      updated.rawData.condutor
+    );
+    if (rawRider && typeof rawRider === 'string' && rawRider.trim() !== '') {
+      const cleanRawRider = rawRider.trim();
+      const isPlaceholder = cleanRawRider.toLowerCase() === 'unassigned' || 
+        cleanRawRider.toLowerCase() === 'desalocar' || 
+        cleanRawRider.toLowerCase() === 'nao alocado' || 
+        cleanRawRider.toLowerCase() === 'não alocado' || 
+        cleanRawRider.toLowerCase() === 'nao vinculado' || 
+        cleanRawRider.toLowerCase() === 'não vinculado' || 
+        cleanRawRider.toLowerCase() === 'sem condutor' || 
+        cleanRawRider.toLowerCase() === 'null' || 
+        cleanRawRider.toLowerCase() === 'undefined';
+      if (!isPlaceholder) {
+        updated.riderId = cleanRawRider;
+        isModified = true;
+      }
+    }
+  }
+
   if (!updated.riderId) {
     if (updated.driverValue && updated.driverValue > 0) {
       updated.driverValue = 0;
@@ -316,4 +345,106 @@ export function sanitizeOrdersListConsistency(
   });
 
   return { orders: sanitizedOrders, hasModified, modifiedOrders };
+}
+
+/**
+ * Robust timestamp parsing for ISO strings, Brazilian date strings (DD/MM/YYYY HH:mm), and numeric timestamps.
+ */
+export function parseOrderTimestamp(val: any): number {
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  const s = String(val).trim();
+  if (!s) return 0;
+
+  const direct = new Date(s).getTime();
+  if (!isNaN(direct) && direct > 0) return direct;
+
+  const match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:(?:\s+às\s+|\s+)(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const year = parseInt(match[3], 10);
+    const hour = match[4] ? parseInt(match[4], 10) : 0;
+    const min = match[5] ? parseInt(match[5], 10) : 0;
+    const sec = match[6] ? parseInt(match[6], 10) : 0;
+    const d = new Date(year, month, day, hour, min, sec);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  return 0;
+}
+
+/**
+ * Calculates a temporal score for an order to determine which state is authoritatively newer.
+ */
+export function getOrderTimestampScore(o: Order): number {
+  if (!o) return 0;
+  let maxTime = 0;
+  if (o.statusUpdatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.statusUpdatedAt));
+  if (o.updatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.updatedAt));
+  if (o.reallocatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.reallocatedAt));
+  if (o.rawData?.statusUpdatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.rawData.statusUpdatedAt));
+  if (o.rawData?.updatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.rawData.updatedAt));
+  if (o.dataConclusao) maxTime = Math.max(maxTime, parseOrderTimestamp(o.dataConclusao));
+  if (o.deliveryDate) maxTime = Math.max(maxTime, parseOrderTimestamp(o.deliveryDate));
+  if (o.occurrenceDate) maxTime = Math.max(maxTime, parseOrderTimestamp(o.occurrenceDate));
+  if (o.history && Array.isArray(o.history) && o.history.length > 0) {
+    o.history.forEach(h => {
+      if (h && h.timestamp) {
+        maxTime = Math.max(maxTime, parseOrderTimestamp(h.timestamp));
+      }
+    });
+  }
+  return maxTime;
+}
+
+/**
+ * Merges two order arrays by ID preserving authoritative newer updates, administrator overrides,
+ * and protecting active states ('Em rota', 'Concluído', 'Ocorrência') from being reverted by stale snapshots.
+ */
+export function mergeOrders(prev: Order[], incoming: Order[]): Order[] {
+  if (!prev || prev.length === 0) return incoming || [];
+  if (!incoming || incoming.length === 0) return prev || [];
+
+  const map = new Map<string, Order>();
+  prev.forEach(o => {
+    if (o && o.id) map.set(o.id, o);
+  });
+
+  incoming.forEach(inc => {
+    if (!inc || !inc.id) return;
+    const existing = map.get(inc.id);
+    if (!existing) {
+      map.set(inc.id, inc);
+    } else {
+      // Administrator override takes absolute precedence
+      if (existing.adminOverride && !inc.adminOverride) {
+        map.set(inc.id, { ...inc, ...existing, status: existing.status, adminOverride: true });
+        return;
+      }
+      if (inc.adminOverride && !existing.adminOverride) {
+        map.set(inc.id, { ...existing, ...inc, status: inc.status, adminOverride: true });
+        return;
+      }
+
+      const existingScore = getOrderTimestampScore(existing);
+      const incScore = getOrderTimestampScore(inc);
+
+      if (existingScore > incScore) {
+        // Existing in-memory state is strictly newer
+        map.set(inc.id, { ...inc, ...existing });
+      } else if (incScore > existingScore) {
+        // Incoming is newer or equal; incoming state is authoritative
+        map.set(inc.id, { ...existing, ...inc });
+      } else {
+        // Equal scores: Protect active statuses ('Em rota', 'Concluído', 'Ocorrência') over default/stale 'Não iniciado'
+        if (existing.status && existing.status !== 'Não iniciado' && inc.status === 'Não iniciado') {
+          map.set(inc.id, { ...inc, ...existing });
+        } else {
+          map.set(inc.id, { ...existing, ...inc });
+        }
+      }
+    }
+  });
+
+  return Array.from(map.values());
 }

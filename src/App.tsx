@@ -62,7 +62,7 @@ import { supabase, isSupabaseConfigured } from './supabase';
 import { fetchAllStateFromSupabase, syncAllStateToSupabase } from './lib/supabaseService';
 import { FinancialTransaction } from './types';
 import { useAppInitialization } from './hooks/useAppInitialization';
-import { sanitizeOrdersListConsistency, sanitizeOrderConsistency } from './utils/orderConsistency';
+import { sanitizeOrdersListConsistency, sanitizeOrderConsistency, mergeOrders, getOrderTimestampScore, parseOrderTimestamp } from './utils/orderConsistency';
 import { realtimeSyncBus } from './utils/realtimeSync';
 import { 
   deleteOrdersFromIndexedDb, 
@@ -71,6 +71,7 @@ import {
   flushIndexedDbOperationsQueue
 } from './utils/indexedDbSync';
 import { syncRetryQueue } from './utils/syncRetryQueue';
+import { backgroundSyncCron } from './utils/backgroundSyncCron';
 import {
   getSavedFilterDateFrom,
   getSavedFilterDateTo,
@@ -337,6 +338,7 @@ export default function App() {
       localStorage.removeItem('vinimap_is_driver_app');
       localStorage.removeItem('vinimap_driver_id');
       localStorage.setItem('vinimap_logged_out', 'true');
+      sessionStorage.removeItem('vinimap_admin_session');
       localStorage.removeItem('vinimap_admin_session');
       setIsStandaloneRider(false);
       setIsRealDeviceMode(false);
@@ -454,6 +456,7 @@ export default function App() {
   const handleLogout = useCallback(async () => {
     clearAllPanelFilters();
     localStorage.setItem('vinimap_logged_out', 'true');
+    sessionStorage.removeItem('vinimap_admin_session');
     localStorage.removeItem('vinimap_admin_session');
     setIsAdminAuthenticated(false);
     if (isSupabaseConfigured && supabase) {
@@ -809,78 +812,6 @@ export default function App() {
   useEffect(() => {
     let isCancelled = false;
 
-    const parseOrderTimestamp = (val?: string | number): number => {
-      if (!val) return 0;
-      if (typeof val === 'number') return val;
-      const s = String(val).trim();
-      if (!s) return 0;
-
-      const direct = new Date(s).getTime();
-      if (!isNaN(direct) && direct > 0) return direct;
-
-      const match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:(?:\s+às\s+|\s+)(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
-      if (match) {
-        const day = parseInt(match[1], 10);
-        const month = parseInt(match[2], 10) - 1;
-        const year = parseInt(match[3], 10);
-        const hour = match[4] ? parseInt(match[4], 10) : 0;
-        const min = match[5] ? parseInt(match[5], 10) : 0;
-        const sec = match[6] ? parseInt(match[6], 10) : 0;
-        const d = new Date(year, month, day, hour, min, sec);
-        if (!isNaN(d.getTime())) return d.getTime();
-      }
-      return 0;
-    };
-
-    const getOrderTimestampScore = (o: Order): number => {
-      if (!o) return 0;
-      let maxTime = 0;
-      if (o.statusUpdatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.statusUpdatedAt));
-      if (o.updatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.updatedAt));
-      if (o.reallocatedAt) maxTime = Math.max(maxTime, parseOrderTimestamp(o.reallocatedAt));
-      if (o.history && Array.isArray(o.history) && o.history.length > 0) {
-        o.history.forEach(h => {
-          if (h && h.timestamp) {
-            maxTime = Math.max(maxTime, parseOrderTimestamp(h.timestamp));
-          }
-        });
-      }
-      return maxTime;
-    };
-
-    const mergeOrders = (prev: Order[], incoming: Order[]): Order[] => {
-      const map = new Map<string, Order>();
-      prev.forEach(o => map.set(o.id, o));
-      incoming.forEach(inc => {
-        const existing = map.get(inc.id);
-        if (!existing) {
-          map.set(inc.id, inc);
-        } else {
-          // Administrator override takes absolute precedence
-          if (existing.adminOverride && !inc.adminOverride) {
-            map.set(inc.id, { ...inc, ...existing, status: existing.status, adminOverride: true });
-            return;
-          }
-          if (inc.adminOverride && !existing.adminOverride) {
-            map.set(inc.id, { ...existing, ...inc, status: inc.status, adminOverride: true });
-            return;
-          }
-
-          const existingScore = getOrderTimestampScore(existing);
-          const incScore = getOrderTimestampScore(inc);
-
-          if (existingScore > incScore) {
-            // Existing in-memory state is strictly newer
-            map.set(inc.id, { ...inc, ...existing });
-          } else {
-            // Incoming is newer or equal; incoming state is authoritative
-            map.set(inc.id, { ...existing, ...inc });
-          }
-        }
-      });
-      return Array.from(map.values());
-    };
-
     const mergeRiders = (prev: DeliveryRider[], incoming: DeliveryRider[]): DeliveryRider[] => {
       const map = new Map<string, DeliveryRider>();
       prev.forEach(r => map.set(r.id, r));
@@ -1016,6 +947,7 @@ export default function App() {
       setOfflineFallbackReason('');
       flushIndexedDbOperationsQueue().catch(() => {});
       syncRetryQueue.processQueue(true).catch(() => {});
+      backgroundSyncCron.triggerSync(true, 'APP_NETWORK_ONLINE').catch(() => {});
     };
 
     const handleNetworkOffline = () => {
@@ -1044,7 +976,7 @@ export default function App() {
         });
         const { orders: sanitizedDocs } = sanitizeOrdersListConsistency(docs);
         const filteredDocs = sanitizedDocs.filter(o => !MOCK_ORDER_IDS.includes(o.id));
-        setOrders(filteredDocs);
+        setOrders(prev => mergeOrders(prev, filteredDocs));
       }, (error) => handleListenerError(error, 'orders'))
     );
 
@@ -4274,11 +4206,8 @@ export default function App() {
               }}
               onUpdateOrders={(updatedOrders) => {
                 if (!updatedOrders || updatedOrders.length === 0) return;
-                setOrders(prev => {
-                  const map = new Map(prev.map(o => [o.id, o]));
-                  updatedOrders.forEach(o => map.set(o.id, o));
-                  return Array.from(map.values());
-                });
+                const { orders: sanitized } = sanitizeOrdersListConsistency(updatedOrders);
+                setOrders(prev => mergeOrders(prev, sanitized));
               }}
               showRiderEarnings={showRiderEarnings}
               activeRiderId={selectedRiderId}
@@ -4298,7 +4227,7 @@ export default function App() {
       <AdminLogin 
         onSuccess={() => {
           localStorage.removeItem('vinimap_logged_out');
-          localStorage.setItem('vinimap_admin_session', 'true');
+          sessionStorage.setItem('vinimap_admin_session', 'true');
           setIsAdminAuthenticated(true);
         }} 
       />
@@ -7475,11 +7404,8 @@ export default function App() {
                   }}
                   onUpdateOrders={(updatedOrders) => {
                     if (!updatedOrders || updatedOrders.length === 0) return;
-                    setOrders(prev => {
-                      const map = new Map(prev.map(o => [o.id, o]));
-                      updatedOrders.forEach(o => map.set(o.id, o));
-                      return Array.from(map.values());
-                    });
+                    const { orders: sanitized } = sanitizeOrdersListConsistency(updatedOrders);
+                    setOrders(prev => mergeOrders(prev, sanitized));
                   }}
                   showRiderEarnings={showRiderEarnings}
                   activeRiderId={selectedRiderId}
