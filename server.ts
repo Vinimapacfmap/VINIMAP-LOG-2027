@@ -33,6 +33,20 @@ app.get('/sw.js', (req, res) => {
 // Parse incoming JSON requests
 app.use(express.json());
 
+// Heartbeat ping endpoint for active driver app sessions to prevent disconnection/sleep
+app.all(['/api/driver/heartbeat', '/api/ping'], (req, res) => {
+  const riderId = req.query.riderId || req.body?.riderId || 'anonymous';
+  const timestamp = new Date().toISOString();
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  return res.json({
+    status: 'ok',
+    alive: true,
+    serverTime: timestamp,
+    riderId: String(riderId),
+    intervalRecommendationSeconds: 30
+  });
+});
+
 // Initialize Google GenAI client lazily to handle missing API keys gracefully
 let aiInstance: GoogleGenAI | null = null;
 

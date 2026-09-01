@@ -793,6 +793,86 @@ export default function RiderAppSimulator({
     };
   }, [onUpdateOrders]);
 
+  // Dedicated 30-second Heartbeat (Pulsação) Engine for Active Driver Sessions
+  // Keeps server connection active, prevents session drops/sleep, and monitors latency
+  const [lastHeartbeatTime, setLastHeartbeatTime] = useState<string>('');
+  const [heartbeatLatencyMs, setHeartbeatLatencyMs] = useState<number>(24);
+  const [isHeartbeatOk, setIsHeartbeatOk] = useState<boolean>(true);
+
+  useEffect(() => {
+    // Only execute if not explicitly logged out or during app activity
+    const sendHeartbeatPing = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setIsHeartbeatOk(false);
+        return;
+      }
+
+      const activeRider = selectedRiderRef.current;
+      const riderIdentifier = activeRider?.id || selectedRiderId || localStorage.getItem('vinimap_driver_id') || 'driver';
+      const startTime = performance.now();
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(`/api/driver/heartbeat?riderId=${encodeURIComponent(riderIdentifier)}&t=${Date.now()}`, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            'X-Driver-Ping': 'true'
+          }
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const latency = Math.round(performance.now() - startTime);
+          setHeartbeatLatencyMs(latency > 0 ? latency : 18);
+          setLastHeartbeatTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          setIsHeartbeatOk(true);
+        } else {
+          // If server returned non-200, try lightweight fallback ping
+          const fallbackRes = await fetch(`/api/health?t=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
+          if (fallbackRes && fallbackRes.ok) {
+            const latency = Math.round(performance.now() - startTime);
+            setHeartbeatLatencyMs(latency > 0 ? latency : 25);
+            setIsHeartbeatOk(true);
+            setLastHeartbeatTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          }
+        }
+      } catch (err) {
+        // Network blip / temporary timeout - keep non-blocking
+        console.debug('[Driver Heartbeat] Ping skipped or timed out:', err);
+      }
+    };
+
+    // 1. Send immediate heartbeat upon mounting / rider activation
+    sendHeartbeatPing();
+
+    // 2. Set precise 30-second recurring interval as requested by user
+    const heartbeatInterval = setInterval(sendHeartbeatPing, 30000);
+
+    // 3. Immediately pulse when device regains focus or visibility
+    const handleReactivation = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        sendHeartbeatPing();
+      }
+    };
+
+    window.addEventListener('focus', handleReactivation);
+    window.addEventListener('online', handleReactivation);
+    document.addEventListener('visibilitychange', handleReactivation);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      window.removeEventListener('focus', handleReactivation);
+      window.removeEventListener('online', handleReactivation);
+      document.removeEventListener('visibilitychange', handleReactivation);
+    };
+  }, [selectedRiderId]);
+
   // Individual Login State
   const [phoneInput, setPhoneInput] = useState<string>('');
   const [passwordInput, setPasswordInput] = useState<string>('');
@@ -1912,10 +1992,26 @@ export default function RiderAppSimulator({
     );
   };
 
-  // Keep GPS alive when returning to app (after opening Google Maps, switching tabs, or unlocking screen)
+  // Keep GPS and Screen alive when returning to app (after opening Google Maps, switching tabs, or unlocking screen)
   useEffect(() => {
+    let wakeLockSentinel: any = null;
+
+    const requestWakeLock = async () => {
+      if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && (navigator as any).wakeLock) {
+        try {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+          console.debug('[Driver App] Screen WakeLock acquired to prevent screen sleep');
+        } catch (e) {
+          // Non-critical, ignored on unsupported browsers or battery saver mode
+        }
+      }
+    };
+
+    requestWakeLock();
+
     const handleReactivateGpsOnFocus = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        requestWakeLock();
         const isLogged = localStorage.getItem('vinimap_driver_logged_in') === 'true';
         if (isLogged) {
           if (typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -1930,6 +2026,11 @@ export default function RiderAppSimulator({
     window.addEventListener('online', handleReactivateGpsOnFocus);
 
     return () => {
+      if (wakeLockSentinel) {
+        try {
+          wakeLockSentinel.release().catch(() => {});
+        } catch (_) {}
+      }
       window.removeEventListener('visibilitychange', handleReactivateGpsOnFocus);
       window.removeEventListener('focus', handleReactivateGpsOnFocus);
       window.removeEventListener('online', handleReactivateGpsOnFocus);
@@ -3980,9 +4081,10 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
                       <span>CACHE LOCAL: {offlineQueue.length} PENDENTE(S)</span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1 text-emerald-400 font-black">
+                    <div className="flex items-center gap-1.5 text-emerald-400 font-black">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span>PING: 24ms (REDE 100%)</span>
+                      <span>PULSO 30s: {heartbeatLatencyMs}ms ({isHeartbeatOk ? 'ONLINE' : 'LENTO'})</span>
+                      {lastHeartbeatTime && <span className="text-slate-400 text-[7px]">[{lastHeartbeatTime}]</span>}
                     </div>
                   )}
 
