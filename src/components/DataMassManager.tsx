@@ -43,6 +43,7 @@ import {
   dbBulkSaveRiders,
   clearLocalSystemCache,
   dbPurgeMockClientPartners,
+  isMockClientPartner,
   MOCK_CLIENT_IDS
 } from '../lib/dbService';
 
@@ -980,7 +981,7 @@ export default function DataMassManager({
                     if (window.confirm('Deseja realmente excluir todos os clientes parceiros mockados de exemplo do banco de dados?')) {
                       try {
                         await dbPurgeMockClientPartners();
-                        setClientPartners(prev => prev.filter(c => !MOCK_CLIENT_IDS.includes(c.id)));
+                        setClientPartners(prev => prev.filter(c => !isMockClientPartner(c)));
                         showToast('Clientes parceiros mockados foram excluídos com sucesso!', 'success');
                       } catch (err: any) {
                         showToast(`Erro ao excluir parceiros mockados: ${err.message || err}`, 'error');

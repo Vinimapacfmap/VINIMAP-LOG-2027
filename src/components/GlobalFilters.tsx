@@ -7,6 +7,7 @@ import { useState, useMemo } from 'react';
 import { formatToBrazilianDate, isOrderInDatePeriod } from '../utils/dateUtils';
 import { isOrderMatchingPartner, isOrderMatchingRider } from '../utils/partnerUtils';
 import { isOrderMatchingGlobalSearch } from '../utils/searchUtils';
+import { isMockClientPartner, isMockRider, isMockOrder } from '../utils/orderConsistency';
 import { Order, DeliveryRider, ClientPartner, OrderStatus } from '../types';
 import { 
   Calendar, 
@@ -102,6 +103,7 @@ export default function GlobalFilters({
   const partnerOptions = useMemo(() => {
     // Pedidos que atendem os outros filtros ativos (período, condutor, status, busca)
     const relevantOrders = orders.filter(order => {
+      if (isMockOrder(order)) return false;
       if (!isOrderInDatePeriod(order, filterDateFrom, filterDateTo)) return false;
       if (searchQuery.trim() && !isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners)) return false;
       if (filterRiderId && !isOrderMatchingRider(order, filterRiderId, riders)) return false;
@@ -112,22 +114,25 @@ export default function GlobalFilters({
     // Mapear contagens por parceiro
     const countsMap = new Map<string, { id: string; name: string; count: number }>();
 
-    // Inicializar com parceiros cadastrados
-    clientPartners.forEach(cp => {
-      countsMap.set(cp.id, { id: cp.id, name: cp.name, count: 0 });
-    });
+    // Inicializar com parceiros cadastrados (excluindo mock)
+    clientPartners
+      .filter(cp => !isMockClientPartner(cp))
+      .forEach(cp => {
+        countsMap.set(cp.id, { id: cp.id, name: cp.name, count: 0 });
+      });
 
     // Contabilizar pedidos
     relevantOrders.forEach(o => {
       const pName = o.partnerName || o.clientName || '';
       if (!pName) return;
+      if (isMockClientPartner({ id: pName, name: pName })) return;
 
       const matchedCp = clientPartners.find(cp => isOrderMatchingPartner(o, cp.id, clientPartners));
-      if (matchedCp) {
+      if (matchedCp && !isMockClientPartner(matchedCp)) {
         const item = countsMap.get(matchedCp.id) || { id: matchedCp.id, name: matchedCp.name, count: 0 };
         item.count += 1;
         countsMap.set(matchedCp.id, item);
-      } else {
+      } else if (!isMockClientPartner({ id: pName, name: pName })) {
         const key = pName.trim();
         const item = countsMap.get(key) || { id: key, name: key, count: 0 };
         item.count += 1;
@@ -136,7 +141,7 @@ export default function GlobalFilters({
     });
 
     return Array.from(countsMap.values())
-      .filter(item => item.count > 0 || clientPartners.some(cp => cp.id === item.id))
+      .filter(item => (item.count > 0 || clientPartners.some(cp => cp.id === item.id && !isMockClientPartner(cp))) && !isMockClientPartner({ id: item.id, name: item.name }))
       .sort((a, b) => {
         if (b.count !== a.count) return b.count - a.count;
         return a.name.localeCompare(b.name, 'pt-BR');
@@ -146,6 +151,7 @@ export default function GlobalFilters({
   // Sincronização 3: Opções de Condutores com contagem dinâmica respeitando período, parceiro, status e busca
   const riderOptions = useMemo(() => {
     const relevantOrders = orders.filter(order => {
+      if (isMockOrder(order)) return false;
       if (!isOrderInDatePeriod(order, filterDateFrom, filterDateTo)) return false;
       if (searchQuery.trim() && !isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners)) return false;
       if (filterPartner && !isOrderMatchingPartner(order, filterPartner, clientPartners)) return false;
@@ -163,20 +169,22 @@ export default function GlobalFilters({
         unassignedCount += 1;
       } else {
         const matchedRider = riders.find(r => isOrderMatchingRider(o, r.id, riders));
-        if (matchedRider) {
+        if (matchedRider && !isMockRider(matchedRider)) {
           riderCounts.set(matchedRider.id, (riderCounts.get(matchedRider.id) || 0) + 1);
-        } else {
+        } else if (!isMockRider({ id: rawRiderId, name: rawRiderId })) {
           riderCounts.set(rawRiderId, (riderCounts.get(rawRiderId) || 0) + 1);
         }
       }
     });
 
-    const list = riders.map(r => ({
-      id: r.id,
-      name: r.name,
-      vehicle: r.vehicle,
-      count: riderCounts.get(r.id) || 0
-    }));
+    const list = riders
+      .filter(r => !isMockRider(r))
+      .map(r => ({
+        id: r.id,
+        name: r.name,
+        vehicle: r.vehicle,
+        count: riderCounts.get(r.id) || 0
+      }));
 
     return {
       riders: list.sort((a, b) => {

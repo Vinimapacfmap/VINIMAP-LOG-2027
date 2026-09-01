@@ -379,10 +379,10 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
     const todayBrStr = getSaoPauloDate(); // e.g. "17/08/2026"
     const headers = REQUIRED_COLUMNS;
     const sampleRow1 = [
-      '1', 'CL1-005', todayBrStr, '901', 'Carlos Silva', 'Av. Paulista, 1000', '01310-100', '11999998888', 'ent-1', 'Apto 42', '120.50', '18:00', 'carlos@email.com', '12345678000199', 'Rápida', 'CH-991', 'DANFE-111', todayBrStr, 'Burger King Paulista', '14:00', todayBrStr, 'São Paulo', 'SP', 'Entregar na portaria', '120.50', '12.00', '-23.5612', '-46.6543', '12345678909', '8.50', 'expresso', todayBrStr
+      '1', 'PARCEIRO-01', todayBrStr, '901', 'Cliente Exemplo 1', 'Av. Paulista, 1000', '01310-100', '11999998888', '', 'Apto 42', '120.50', '18:00', 'cliente1@exemplo.com', '12345678000199', 'Rápida', 'CH-991', 'DANFE-111', todayBrStr, 'Parceiro Modelo Exemplo', '14:00', todayBrStr, 'São Paulo', 'SP', 'Entregar na portaria', '120.50', '12.00', '-23.5612', '-46.6543', '12345678909', '8.50', 'expresso', todayBrStr
     ];
     const sampleRow2 = [
-      '2', 'CL1-006', todayBrStr, '902', 'Ana Souza', 'Rua Augusta, 500', '01304-001', '11988887777', 'ent-2', 'Casa fundos', '75.00', '19:00', 'ana@email.com', '98765432000188', 'Normal', 'CH-992', 'DANFE-222', todayBrStr, 'Bella Augusta', '15:00', todayBrStr, 'São Paulo', 'SP', 'Tocar o interfone', '75.00', '10.00', '-23.5512', '-46.6643', '98765432101', '7.00', '', todayBrStr
+      '2', 'PARCEIRO-02', todayBrStr, '902', 'Cliente Exemplo 2', 'Rua Augusta, 500', '01304-001', '11988887777', '', 'Casa fundos', '75.00', '19:00', 'cliente2@exemplo.com', '98765432000188', 'Normal', 'CH-992', 'DANFE-222', todayBrStr, 'Parceiro Modelo B', '15:00', todayBrStr, 'São Paulo', 'SP', 'Tocar o interfone', '75.00', '10.00', '-23.5512', '-46.6643', '98765432101', '7.00', '', todayBrStr
     ];
 
     const aoaData = [headers, sampleRow1, sampleRow2];

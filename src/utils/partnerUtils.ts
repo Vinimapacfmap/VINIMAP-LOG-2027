@@ -1,14 +1,16 @@
 import { ClientPartner, DeliveryRider, isMatchingClientCode } from '../types';
+import { isMockClientPartner, isMockRider } from './orderConsistency';
 
 // Global cache for client partners to ensure resolution across all components even when props are omitted
 let globalClientPartnersCache: ClientPartner[] = [];
 
 export function setCachedClientPartners(partners: ClientPartner[]) {
   if (Array.isArray(partners)) {
-    globalClientPartnersCache = partners;
+    const clean = partners.filter(p => !isMockClientPartner(p));
+    globalClientPartnersCache = clean;
     try {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('vinimap_cached_client_partners', JSON.stringify(partners));
+        localStorage.setItem('vinimap_cached_client_partners', JSON.stringify(clean));
       }
     } catch {
       // ignore
@@ -18,7 +20,7 @@ export function setCachedClientPartners(partners: ClientPartner[]) {
 
 export function getCachedClientPartners(): ClientPartner[] {
   if (globalClientPartnersCache.length > 0) {
-    return globalClientPartnersCache;
+    return globalClientPartnersCache.filter(p => !isMockClientPartner(p));
   }
   try {
     if (typeof window !== 'undefined') {
@@ -26,8 +28,9 @@ export function getCachedClientPartners(): ClientPartner[] {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          globalClientPartnersCache = parsed;
-          return parsed;
+          const clean = parsed.filter((p: ClientPartner) => !isMockClientPartner(p));
+          globalClientPartnersCache = clean;
+          return clean;
         }
       }
     }
@@ -39,7 +42,7 @@ export function getCachedClientPartners(): ClientPartner[] {
 
 /**
  * Utility to resolve a friendly partner display name from a raw partner string or code.
- * Replaces raw codes (e.g. 'PAR-001', 'CL1-001', 'CL1-014') with full partner names.
+ * Uses only real registered partner names and never synthesizes mock names.
  */
 export function getPartnerDisplayName(
   rawNameOrCode: any,
@@ -55,9 +58,10 @@ export function getPartnerDisplayName(
   }
 
   // Combine provided clientPartners with cached partners if needed
-  const partnersList = (clientPartners && clientPartners.length > 0)
+  const rawList = (clientPartners && clientPartners.length > 0)
     ? clientPartners
     : getCachedClientPartners();
+  const partnersList = rawList.filter(cp => !isMockClientPartner(cp));
 
   // 1. Direct match in clientPartners list
   if (partnersList && partnersList.length > 0) {
@@ -74,39 +78,6 @@ export function getPartnerDisplayName(
     if (matched && matched.name) {
       return matched.name;
     }
-  }
-
-  // 2. Fallback dictionary for standard known codes
-  const defaultCodeMap: Record<string, string> = {
-    'cl1-001': 'Ana Silva',
-    'par-001': 'Ana Silva',
-    'cli-001': 'Ana Silva',
-    'cl1-002': 'Pedro Santos',
-    'par-002': 'Pedro Santos',
-    'cli-002': 'Pedro Santos',
-    'cl1-003': 'Mariana Costa',
-    'par-003': 'Mariana Costa',
-    'cli-003': 'Mariana Costa',
-    'cl1-004': 'Beatriz Lima',
-    'par-004': 'Beatriz Lima',
-    'cli-004': 'Beatriz Lima',
-    'cl1-005': 'Carlos Eduardo',
-    'par-005': 'Carlos Eduardo',
-    'cli-005': 'Carlos Eduardo',
-    'cl1-006': 'Fernanda Oliveira',
-    'par-006': 'Fernanda Oliveira',
-    'cli-006': 'Fernanda Oliveira',
-    'cl1-007': 'Lucas Mendes',
-    'par-007': 'Lucas Mendes',
-    'cli-007': 'Lucas Mendes',
-    'cl1-014': 'Cliente Parceiro 014',
-    'par-014': 'Cliente Parceiro 014',
-    'cli-014': 'Cliente Parceiro 014',
-  };
-
-  const lowerCode = trimmed.toLowerCase();
-  if (defaultCodeMap[lowerCode]) {
-    return defaultCodeMap[lowerCode];
   }
 
   return trimmed;
@@ -184,10 +155,11 @@ let globalDeliveryRidersCache: DeliveryRider[] = [];
 
 export function setCachedDeliveryRiders(riders: DeliveryRider[]) {
   if (Array.isArray(riders) && riders.length > 0) {
-    globalDeliveryRidersCache = riders;
+    const clean = riders.filter(r => !isMockRider(r));
+    globalDeliveryRidersCache = clean;
     try {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('vinimap_cached_delivery_riders', JSON.stringify(riders));
+        localStorage.setItem('vinimap_cached_delivery_riders', JSON.stringify(clean));
       }
     } catch {
       // ignore
@@ -195,11 +167,9 @@ export function setCachedDeliveryRiders(riders: DeliveryRider[]) {
   }
 }
 
-const EXCLUDED_RIDER_IDS = ['ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5'];
-
 export function getCachedDeliveryRiders(): DeliveryRider[] {
   if (globalDeliveryRidersCache.length > 0) {
-    return globalDeliveryRidersCache.filter(r => !EXCLUDED_RIDER_IDS.includes(r.id));
+    return globalDeliveryRidersCache.filter(r => !isMockRider(r));
   }
   try {
     if (typeof window !== 'undefined') {
@@ -207,7 +177,7 @@ export function getCachedDeliveryRiders(): DeliveryRider[] {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const filtered = parsed.filter(r => !EXCLUDED_RIDER_IDS.includes(r.id));
+          const filtered = parsed.filter((r: DeliveryRider) => !isMockRider(r));
           globalDeliveryRidersCache = filtered;
           return filtered;
         }

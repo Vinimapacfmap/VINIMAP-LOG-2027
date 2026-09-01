@@ -46,9 +46,27 @@ import {
 } from '../utils/indexedDbSync';
 import { INITIAL_RIDERS, INITIAL_ORDERS, INITIAL_LOGS } from '../data/mock';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from '../data/financialMock';
-import { isMockOrder, MOCK_CLIENT_IDS, MOCK_RIDER_IDS, MOCK_ORDER_IDS } from '../utils/orderConsistency';
+import { 
+  isMockOrder, 
+  isMockClientPartner, 
+  isMockRider, 
+  MOCK_CLIENT_IDS, 
+  MOCK_RIDER_IDS, 
+  MOCK_ORDER_IDS,
+  MOCK_PARTNER_NAMES,
+  MOCK_RIDER_NAMES
+} from '../utils/orderConsistency';
 
-export { isMockOrder, MOCK_CLIENT_IDS, MOCK_RIDER_IDS, MOCK_ORDER_IDS };
+export { 
+  isMockOrder, 
+  isMockClientPartner, 
+  isMockRider, 
+  MOCK_CLIENT_IDS, 
+  MOCK_RIDER_IDS, 
+  MOCK_ORDER_IDS,
+  MOCK_PARTNER_NAMES,
+  MOCK_RIDER_NAMES
+};
 
 // Default client partners set to empty to permanently exclude mocked partners
 export const INITIAL_CLIENT_PARTNERS: ClientPartner[] = [];
@@ -744,6 +762,56 @@ export async function dbPurgeMockClientPartners(): Promise<void> {
       console.warn(`Could not delete mock client ${mockId}:`, err);
     }
   }
+
+  // Scan Firestore clientPartners collection for any orphaned / residual mock partners
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      const clientsSnap = await getDocs(collection(db, 'clientPartners'));
+      if (!clientsSnap.empty) {
+        const batch = writeBatch(db);
+        let count = 0;
+        clientsSnap.docs.forEach(docSnap => {
+          const clientData = docSnap.data() as ClientPartner;
+          if (isMockClientPartner(clientData) || isMockClientPartner({ id: docSnap.id, name: (clientData as any)?.name })) {
+            batch.delete(docSnap.ref);
+            count++;
+            sbDeleteClientPartner(docSnap.id).catch(() => {});
+          }
+        });
+        if (count > 0) {
+          await batch.commit();
+          console.log(`[Mock Purge] Excluídos ${count} parceiros mockados residuais do Firestore.`);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not scan Firestore for residual mock client partners:', err);
+    }
+  }
+
+  // Also clean up local caches
+  try {
+    if (typeof window !== 'undefined') {
+      const cachedClientsRaw = localStorage.getItem('vinimap_cached_client_partners');
+      if (cachedClientsRaw) {
+        const parsed = JSON.parse(cachedClientsRaw);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(c => !isMockClientPartner(c));
+          localStorage.setItem('vinimap_cached_client_partners', JSON.stringify(filtered));
+        }
+      }
+
+      const backupRaw = localStorage.getItem('vinimap_contingency_backup_latest');
+      if (backupRaw) {
+        const parsed = JSON.parse(backupRaw);
+        if (parsed.clientPartners && Array.isArray(parsed.clientPartners)) {
+          parsed.clientPartners = parsed.clientPartners.filter((c: any) => !isMockClientPartner(c));
+          localStorage.setItem('vinimap_contingency_backup_latest', JSON.stringify(parsed));
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not clean local storage caches during client purge:', e);
+  }
 }
 
 // Function to permanently purge mock riders and mock orders from Firestore, Supabase, and local storage
@@ -763,6 +831,31 @@ export async function dbPurgeMockRidersAndOrders(): Promise<void> {
     }
   }
 
+  // Scan Firestore deliveryRiders collection for any orphaned mock riders
+  if (!getIsFirestoreQuotaExceeded()) {
+    try {
+      const ridersSnap = await getDocs(collection(db, 'deliveryRiders'));
+      if (!ridersSnap.empty) {
+        const batch = writeBatch(db);
+        let count = 0;
+        ridersSnap.docs.forEach(docSnap => {
+          const riderData = docSnap.data() as DeliveryRider;
+          if (isMockRider(riderData) || isMockRider({ id: docSnap.id, name: (riderData as any)?.name })) {
+            batch.delete(docSnap.ref);
+            count++;
+            sbDeleteDeliveryRider(docSnap.id).catch(() => {});
+          }
+        });
+        if (count > 0) {
+          await batch.commit();
+          console.log(`[Mock Purge] Excluídos ${count} motoristas mockados residuais do Firestore.`);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not scan Firestore for residual mock delivery riders:', err);
+    }
+  }
+
   // Scan Firestore orders for any orphaned/residual mock orders
   if (!getIsFirestoreQuotaExceeded()) {
     try {
@@ -775,6 +868,7 @@ export async function dbPurgeMockRidersAndOrders(): Promise<void> {
           if (isMockOrder(orderData)) {
             batch.delete(docSnap.ref);
             count++;
+            sbDeleteOrder(docSnap.id).catch(() => {});
           }
         });
         if (count > 0) {
@@ -794,7 +888,7 @@ export async function dbPurgeMockRidersAndOrders(): Promise<void> {
       if (cachedRidersRaw) {
         const parsed = JSON.parse(cachedRidersRaw);
         if (Array.isArray(parsed)) {
-          const filtered = parsed.filter(r => !MOCK_RIDER_IDS.includes(r.id));
+          const filtered = parsed.filter(r => !isMockRider(r));
           localStorage.setItem('vinimap_cached_delivery_riders', JSON.stringify(filtered));
         }
       }
@@ -803,10 +897,10 @@ export async function dbPurgeMockRidersAndOrders(): Promise<void> {
       if (backupRaw) {
         const parsed = JSON.parse(backupRaw);
         if (parsed.deliveryRiders && Array.isArray(parsed.deliveryRiders)) {
-          parsed.deliveryRiders = parsed.deliveryRiders.filter((r: any) => !MOCK_RIDER_IDS.includes(r.id));
+          parsed.deliveryRiders = parsed.deliveryRiders.filter((r: any) => !isMockRider(r));
         }
         if (parsed.clientPartners && Array.isArray(parsed.clientPartners)) {
-          parsed.clientPartners = parsed.clientPartners.filter((c: any) => !MOCK_CLIENT_IDS.includes(c.id));
+          parsed.clientPartners = parsed.clientPartners.filter((c: any) => !isMockClientPartner(c));
         }
         if (parsed.orders && Array.isArray(parsed.orders)) {
           parsed.orders = parsed.orders.filter((o: any) => !isMockOrder(o));
@@ -1059,13 +1153,13 @@ export async function dbApplyLoadedState(state: any) {
     const batch = writeBatch(db);
     
     if (state.orders) {
-      state.orders.forEach((o: Order) => batch.set(doc(db, 'orders', o.id), removeUndefinedFields(o)));
+      state.orders.filter((o: Order) => !isMockOrder(o)).forEach((o: Order) => batch.set(doc(db, 'orders', o.id), removeUndefinedFields(o)));
     }
     if (state.clients) {
-      state.clients.forEach((c: ClientPartner) => batch.set(doc(db, 'clientPartners', c.id), removeUndefinedFields(c)));
+      state.clients.filter((c: ClientPartner) => !isMockClientPartner(c)).forEach((c: ClientPartner) => batch.set(doc(db, 'clientPartners', c.id), removeUndefinedFields(c)));
     }
     if (state.riders) {
-      state.riders.forEach((r: DeliveryRider) => batch.set(doc(db, 'deliveryRiders', r.id), removeUndefinedFields(r)));
+      state.riders.filter((r: DeliveryRider) => !isMockRider(r)).forEach((r: DeliveryRider) => batch.set(doc(db, 'deliveryRiders', r.id), removeUndefinedFields(r)));
     }
     if (state.logs) {
       state.logs.forEach((l: ActivityLog) => batch.set(doc(db, 'activityLogs', l.id), removeUndefinedFields(l)));

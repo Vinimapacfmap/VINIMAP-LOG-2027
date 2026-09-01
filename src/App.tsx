@@ -92,6 +92,9 @@ import {
   MOCK_CLIENT_IDS,
   MOCK_RIDER_IDS,
   MOCK_ORDER_IDS,
+  isMockClientPartner,
+  isMockRider,
+  isMockOrder,
   dbPurgeMockClientPartners,
   dbPurgeMockRidersAndOrders,
   dbSaveOrder,
@@ -888,7 +891,7 @@ export default function App() {
         const existing = map.get(r.id);
         map.set(r.id, existing ? { ...existing, ...r } : r);
       });
-      return Array.from(map.values()).filter(r => !MOCK_RIDER_IDS.includes(r.id));
+      return Array.from(map.values()).filter(r => !isMockRider(r));
     };
 
     const mergeClients = (prev: ClientPartner[], incoming: ClientPartner[]): ClientPartner[] => {
@@ -898,7 +901,7 @@ export default function App() {
         const existing = map.get(c.id);
         map.set(c.id, existing ? { ...existing, ...c } : c);
       });
-      return Array.from(map.values()).filter(c => !MOCK_CLIENT_IDS.includes(c.id));
+      return Array.from(map.values()).filter(c => !isMockClientPartner(c));
     };
 
     const loadFallbackData = async () => {
@@ -952,12 +955,12 @@ export default function App() {
       // 3. Fallback to initial mock data if React state is empty
       if (isCancelled) return;
       setOrders(prev => {
-        const remaining = prev.filter(o => !MOCK_ORDER_IDS.includes(o.id));
+        const remaining = prev.filter(o => !isMockOrder(o));
         const { orders: sanitized } = sanitizeOrdersListConsistency(remaining);
         return sanitized;
       });
-      setClientPartners(prev => prev.filter(c => !MOCK_CLIENT_IDS.includes(c.id)));
-      setRiders(prev => prev.filter(r => !MOCK_RIDER_IDS.includes(r.id)));
+      setClientPartners(prev => prev.filter(c => !isMockClientPartner(c)));
+      setRiders(prev => prev.filter(r => !isMockRider(r)));
       setLogs(prev => prev.length === 0 ? INITIAL_LOGS : prev);
       setFinancialTransactions(prev => prev.length === 0 ? INITIAL_FINANCIAL_TRANSACTIONS : prev);
       setCompanyHubs(prev => prev.length === 0 ? INITIAL_COMPANY_HUBS : prev);
@@ -1055,7 +1058,7 @@ export default function App() {
         const docs: ClientPartner[] = [];
         snapshot.forEach(doc => {
           const data = doc.data() as ClientPartner;
-          if (!MOCK_CLIENT_IDS.includes(data.id)) {
+          if (!isMockClientPartner(data) && !isMockClientPartner({ id: doc.id, name: (data as any)?.name })) {
             docs.push(data);
           }
         });
@@ -1069,7 +1072,7 @@ export default function App() {
         const docs: DeliveryRider[] = [];
         snapshot.forEach(doc => {
           const data = doc.data() as DeliveryRider;
-          if (!MOCK_RIDER_IDS.includes(data.id)) {
+          if (!isMockRider(data) && !isMockRider({ id: doc.id, name: (data as any)?.name })) {
             docs.push(data);
           }
         });
@@ -2312,10 +2315,12 @@ export default function App() {
   };
 
   const handleImportOrders = (importedOrders: Order[]) => {
-    // Auto-register missing partners in clientPartners state
+    // Auto-register missing partners in clientPartners state (strictly rejecting any mock partners)
     const missingPartners: ClientPartner[] = [];
     importedOrders.forEach(o => {
       if (!o.partnerName) return;
+      if (isMockOrder(o)) return;
+      if (isMockClientPartner({ id: o.partnerName, name: o.partnerName })) return;
       const alreadyExists = clientPartners.some(cp => 
         isMatchingClientCode(o.partnerName, cp.id, cp.codigoCliente)
       );
@@ -2333,6 +2338,7 @@ export default function App() {
             }
           }
           const finalName = partnerNameFromExcel || o.partnerName;
+          if (isMockClientPartner({ id: o.partnerName, name: finalName })) return;
           const newPartner: ClientPartner = {
             id: o.partnerName,
             codigoCliente: o.partnerName,
@@ -2351,11 +2357,12 @@ export default function App() {
       }
     });
 
-    if (missingPartners.length > 0) {
-      missingPartners.forEach(p => dbSaveClientPartner(p));
+    const cleanMissingPartners = missingPartners.filter(p => !isMockClientPartner(p));
+    if (cleanMissingPartners.length > 0) {
+      cleanMissingPartners.forEach(p => dbSaveClientPartner(p));
       setClientPartners(prev => {
         const existingIds = new Set(prev.map(cp => cp.id));
-        const newPartners = missingPartners.filter(p => !existingIds.has(p.id));
+        const newPartners = cleanMissingPartners.filter(p => !existingIds.has(p.id) && !isMockClientPartner(p));
         return [...newPartners, ...prev];
       });
     }
