@@ -59,8 +59,21 @@ export function getSaoPauloISODate(dateInput?: Date | string | number): string {
     if (!clean) {
       return getSaoPauloISODate();
     }
-    // If it's already in YYYY-MM-DD format (e.g. 2026-08-14)
-    const isoPureMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    // If it is an ISO string with time or timezone (e.g. 2026-09-01T01:30:00.000Z or ending in Z), convert to America/Sao_Paulo timezone
+    if (clean.includes('T') || clean.endsWith('Z')) {
+      const d = new Date(clean);
+      if (!isNaN(d.getTime())) {
+        return new Intl.DateTimeFormat('fr-CA', {
+          timeZone: 'America/Sao_Paulo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).format(d);
+      }
+    }
+
+    // If it's a pure YYYY-MM-DD format (e.g. 2026-08-14)
+    const isoPureMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (isoPureMatch) {
       return `${isoPureMatch[1]}-${isoPureMatch[2]}-${isoPureMatch[3]}`;
     }
@@ -125,13 +138,21 @@ export function getSaoPauloDateTimeShort(dateInput?: Date | string | number): st
 }
 
 /**
- * Safely converts an ISO date string (YYYY-MM-DD) or DD-MM-YYYY or DD-MM to Brazilian date format (DD/MM/YYYY)
+ * Safely converts an ISO date string (YYYY-MM-DD) or DD-MM-YYYY or DD-MM or ISO timestamp to Brazilian date format (DD/MM/YYYY)
  * without timezone off-by-one errors.
  */
 export function formatToBrazilianDate(dateString?: string): string {
   if (!dateString) return '';
   const clean = String(dateString).trim();
   if (!clean) return '';
+
+  // If it's an ISO timestamp with time or timezone (e.g. 2026-09-01T01:30:00.000Z or ending in Z), format with America/Sao_Paulo
+  if (clean.includes('T') || clean.endsWith('Z')) {
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) {
+      return getSaoPauloDate(d);
+    }
+  }
 
   // If it's already in DD/MM/YYYY format
   const brFullMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
@@ -149,7 +170,7 @@ export function formatToBrazilianDate(dateString?: string): string {
     const currentYear = new Date().getFullYear();
     return `${shortMatch[1]}/${shortMatch[2]}/${currentYear}`;
   }
-  // If YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
+  // If YYYY-MM-DD
   const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
@@ -193,16 +214,24 @@ export function extractISODateFromTimestamp(timestamp?: string | number): string
   const clean = String(timestamp).trim();
   if (!clean) return null;
 
-  // 1. Format YYYY-MM-DD or YYYY-MM-DD HH:MM:SS or ISO string (e.g. 2026-08-20 or 2026-08-20T14:30:00)
-  const isoMatch = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  // 0. If it has 'T' or ends with 'Z' (ISO datetime timestamp), parse as Date with America/Sao_Paulo timezone
+  if (clean.includes('T') || clean.endsWith('Z')) {
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) {
+      return getSaoPauloISODate(d);
+    }
+  }
+
+  // 1. Format pure YYYY-MM-DD
+  const isoMatch = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (isoMatch) {
     const m = isoMatch[2].padStart(2, '0');
     const d = isoMatch[3].padStart(2, '0');
     return `${isoMatch[1]}-${m}-${d}`;
   }
 
-  // 2. Format YYYY/MM/DD
-  const isoSlashMatch = clean.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  // 2. Format pure YYYY/MM/DD
+  const isoSlashMatch = clean.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
   if (isoSlashMatch) {
     const m = isoSlashMatch[2].padStart(2, '0');
     const d = isoSlashMatch[3].padStart(2, '0');
@@ -258,14 +287,11 @@ export function extractISODateFromTimestamp(timestamp?: string | number): string
     } catch (_) {}
   }
   
-  // 8. Fallback to standard Date parsing
+  // 8. Fallback to standard Date parsing with São Paulo time zone
   try {
     const d = new Date(clean);
     if (!isNaN(d.getTime())) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
+      return getSaoPauloISODate(d);
     }
   } catch (e) {
     // Ignore
@@ -283,14 +309,17 @@ export function formatOrderTime(timeInput?: string | null): string {
   if (!clean) return getSaoPauloTime();
 
   // Handle ISO string e.g. "2026-08-01T15:00:00.000Z"
-  if (clean.includes('T')) {
-    const timePart = clean.split('T')[1];
-    if (timePart) {
-      const parts = timePart.split(':');
-      if (parts.length >= 2) {
-        return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
-      }
+  if (clean.includes('T') || clean.endsWith('Z')) {
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) {
+      return getSaoPauloTime(d);
     }
+  }
+
+  // Handle pure time HH:MM or HH:MM:SS
+  const pureTimeMatch = clean.match(/^(\d{1,2}):(\d{2})/);
+  if (pureTimeMatch) {
+    return `${pureTimeMatch[1].padStart(2, '0')}:${pureTimeMatch[2]}`;
   }
 
   // Handle full datetime e.g. "2026-08-01 15:00:00" or "01/08/2026 15:00"

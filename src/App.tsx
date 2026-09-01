@@ -3162,6 +3162,25 @@ export default function App() {
       finalOrder.adminOverride = true;
       finalOrder.statusUpdatedAt = nowIso;
 
+      if (finalOrder.status === 'Concluído') {
+        const compDate = finalOrder.deliveryDate || finalOrder.dataConclusao || existingOrder?.deliveryDate || existingOrder?.dataConclusao || existingOrder?.date || getSaoPauloISODate();
+        const compTime = finalOrder.deliveryTime || finalOrder.horarioFinal || existingOrder?.deliveryTime || existingOrder?.horarioFinal || getSaoPauloTime();
+        finalOrder.deliveryDate = compDate;
+        finalOrder.dataConclusao = compDate;
+        finalOrder.deliveryTime = compTime;
+        finalOrder.horarioFinal = compTime;
+
+        if (finalOrder.rawData) {
+          finalOrder.rawData.DataConclusao = compDate;
+          finalOrder.rawData.DataEntrega = compDate;
+          finalOrder.rawData.dataConclusao = compDate;
+          finalOrder.rawData.deliveryDate = compDate;
+          finalOrder.rawData.HorarioFinal = compTime;
+          finalOrder.rawData.HorarioEntrega = compTime;
+          finalOrder.rawData.deliveryTime = compTime;
+        }
+      }
+
       if (finalOrder.rawData) {
         finalOrder.rawData.status = finalOrder.status;
         finalOrder.rawData.Situacao = finalOrder.status;
@@ -3173,11 +3192,13 @@ export default function App() {
           delete finalOrder.rawData.DataConclusao;
           delete finalOrder.rawData.dataconclusao;
           delete finalOrder.rawData.dataConclusao;
+          delete finalOrder.rawData.DataEntrega;
         }
       }
 
       if (finalOrder.status !== 'Concluído') {
         finalOrder.dataConclusao = undefined;
+        finalOrder.deliveryDate = undefined;
       }
 
       setOrders(prev => prev.map(o => o.id === finalOrder.id ? finalOrder : o));
@@ -3682,6 +3703,22 @@ export default function App() {
 
           if (updates.status === 'Cancelado') {
             merged.riderId = undefined;
+          }
+
+          if (updates.status === 'Concluído') {
+            const compDate = merged.deliveryDate || merged.dataConclusao || order.deliveryDate || order.dataConclusao || order.date || getSaoPauloISODate();
+            const compTime = merged.deliveryTime || merged.horarioFinal || order.deliveryTime || order.horarioFinal || getSaoPauloTime();
+            merged.deliveryDate = compDate;
+            merged.dataConclusao = compDate;
+            merged.deliveryTime = compTime;
+            merged.horarioFinal = compTime;
+            cleanedRawData.DataConclusao = compDate;
+            cleanedRawData.DataEntrega = compDate;
+            cleanedRawData.dataConclusao = compDate;
+            cleanedRawData.deliveryDate = compDate;
+            cleanedRawData.HorarioFinal = compTime;
+            cleanedRawData.HorarioEntrega = compTime;
+            cleanedRawData.deliveryTime = compTime;
           }
 
           // If updates includes status, append a timeline history entry

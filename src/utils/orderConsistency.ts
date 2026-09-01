@@ -249,11 +249,13 @@ export function sanitizeOrderConsistency(
   // Rule 1: Populate completion or occurrence dates/times ONLY if status is 'Concluído' or 'Ocorrência'.
   if (updated.status === 'Concluído') {
     if (!updated.deliveryDate) {
-      updated.deliveryDate = updated.dataConclusao || (updated.rawData?.DataEntrega ? normalizeToISODate(updated.rawData.DataEntrega) : '') || orderIsoDate || todayIso;
+      const rawDeliveryDate = updated.rawData?.deliveryDate || updated.rawData?.DataEntrega || updated.rawData?.DataConclusao || updated.rawData?.dataconclusao;
+      updated.deliveryDate = updated.dataConclusao || (rawDeliveryDate ? normalizeToISODate(rawDeliveryDate) : '') || orderIsoDate || todayIso;
       isModified = true;
     }
     if (!updated.dataConclusao) {
-      updated.dataConclusao = updated.deliveryDate || orderIsoDate || todayIso;
+      const rawDataConclusao = updated.rawData?.dataConclusao || updated.rawData?.DataConclusao || updated.rawData?.DataEntrega || updated.rawData?.deliveryDate;
+      updated.dataConclusao = updated.deliveryDate || (rawDataConclusao ? normalizeToISODate(rawDataConclusao) : '') || orderIsoDate || todayIso;
       isModified = true;
     }
     if (!updated.deliveryTime && updated.horarioFinal) {

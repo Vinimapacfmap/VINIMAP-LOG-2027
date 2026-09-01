@@ -170,7 +170,7 @@ const COLUMN_LABELS_MAP: Record<string, string> = {
   'DestinatarioCnpjCpf': 'CPF/CNPJ Dest.',
   'ValorCondutor': 'Repasse Condutor',
   'Prioridade': 'Prioridade',
-  'DataConclusao': 'Data Conclusão'
+  'DataConclusao': 'Data Baixa / Conclusão'
 };
 
 const ALL_TOGGLEABLE_COLUMNS = ['Status', ...ALL_SPREADSHEET_COLUMNS];
@@ -181,6 +181,7 @@ const FIRST_10_COLUMNS = [
   'Pedido',
   'CodigoCliente',
   'DataSolicitacao',
+  'DataConclusao',
   'ProcurarPor',
   'Endereco',
   'CEP',
@@ -793,8 +794,13 @@ function OrdersTable({
       const rider = riders.find(r => r.id === order.riderId);
       return rider ? rider.name : 'Não vinculado';
     }
-    if (lowerCol === 'dataconclusao' || lowerCol === 'data de conclusao') {
-      return order.dataConclusao || order.deliveryDate || (order.status === 'Concluído' ? (order.date || getSaoPauloISODate()) : '');
+    if (lowerCol === 'dataconclusao' || lowerCol === 'data de conclusao' || lowerCol === 'databaixa' || lowerCol === 'data de baixa' || lowerCol === 'dataliquidacao') {
+      const rawDate = order.dataConclusao || order.deliveryDate || order.rawData?.DataConclusao || order.rawData?.DataEntrega || order.rawData?.dataconclusao || (order.status === 'Concluído' ? (order.date || getSaoPauloISODate()) : '');
+      return rawDate ? formatToBrazilianDate(rawDate) : '';
+    }
+    if (lowerCol === 'datasolicitacao' || lowerCol === 'data de solicitacao' || lowerCol === 'datalancamento' || lowerCol === 'datalimite' || lowerCol === 'dataagendamento') {
+      const rawDate = order.date || order.rawData?.DataSolicitacao || order.rawData?.DataLancamento || order.rawData?.DataLimite || order.rawData?.DataAgendamento || '';
+      return rawDate ? formatToBrazilianDate(rawDate) : '';
     }
     if (lowerCol === 'horarioinicio' || lowerCol === 'horarioinicial') {
       return order.horarioInicial || order.createdAt || order.rawData?.HorarioInicio || order.rawData?.horarioinicio || order.rawData?.HorarioAbertura || order.rawData?.horarioabertura || getSaoPauloTime();
@@ -2295,11 +2301,6 @@ function OrdersTable({
         }
       ];
       onUpdateStatus(order.id, nextStatus);
-      onUpdateOrder({
-        ...order,
-        status: nextStatus,
-        history: updatedHistory
-      });
     }
   };
 
@@ -3420,10 +3421,17 @@ function OrdersTable({
                                 <span>
                                   {order.itemsCount} {order.itemsCount === 1 ? 'item' : 'itens'}
                                 </span>
-                                {order.date && (
-                                  <span className="text-slate-500 bg-slate-100 border border-slate-200/60 px-1 py-0.2 rounded">
-                                    {formatToBrazilianDate(order.date)}
+                                {order.status === 'Concluído' ? (
+                                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.2 rounded font-extrabold flex items-center gap-0.5" title="Data da Baixa / Conclusão">
+                                    <CheckCircle2 size={9} className="text-emerald-600 shrink-0" />
+                                    <span>Baixa: {formatToBrazilianDate(order.dataConclusao || order.deliveryDate || order.date)}{order.deliveryTime || order.horarioFinal ? ` às ${order.deliveryTime || order.horarioFinal}` : ''}</span>
                                   </span>
+                                ) : (
+                                  order.date && (
+                                    <span className="text-slate-500 bg-slate-100 border border-slate-200/60 px-1 py-0.2 rounded">
+                                      {formatToBrazilianDate(order.date)}
+                                    </span>
+                                  )
                                 )}
                               </div>
                             </td>
