@@ -270,19 +270,103 @@ export default function RiderAppSimulator({
     new URLSearchParams(window.location.search).get('view') === 'driver_mobile'
   ));
 
-  const [selectedRiderId, setSelectedRiderId] = useState<string>('');
-  const [lockedRiderId, setLockedRiderId] = useState<string | null>(null);
+  const [selectedRiderId, setSelectedRiderId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlRiderParam = params.get('riderId');
+      if (urlRiderParam) {
+        const resolved = findRiderByIdentifier(riders, urlRiderParam) ||
+                         findRiderByIdentifier(getCachedDeliveryRiders(), urlRiderParam) ||
+                         findRiderByIdentifier(INITIAL_RIDERS, urlRiderParam);
+        return resolved ? resolved.id : urlRiderParam;
+      }
+      const stored = localStorage.getItem('vinimap_driver_id');
+      if (stored) {
+        const resolved = findRiderByIdentifier(riders, stored) ||
+                         findRiderByIdentifier(getCachedDeliveryRiders(), stored) ||
+                         findRiderByIdentifier(INITIAL_RIDERS, stored);
+        return resolved ? resolved.id : stored;
+      }
+    }
+    return activeRiderId || '';
+  });
+
+  const [lockedRiderId, setLockedRiderId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlRiderParam = params.get('riderId');
+      if (urlRiderParam) return urlRiderParam;
+      const stored = localStorage.getItem('vinimap_driver_id');
+      if (stored) return stored;
+    }
+    return null;
+  });
+
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
   const [deliveryTabFilter, setDeliveryTabFilter] = useState<'pending' | 'completed'>('pending');
   const hasCheckedUrlParamsRef = useRef(false);
 
+  // Resilient cached riders fallback to prevent empty flashes during refresh
+  const effectiveRiders = useMemo(() => {
+    if (riders && riders.length > 0) return riders;
+    const cached = getCachedDeliveryRiders();
+    if (cached && cached.length > 0) return cached;
+    if (typeof window !== 'undefined') {
+      try {
+        const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+        if (rawBackup) {
+          const parsed = JSON.parse(rawBackup);
+          if (parsed.deliveryRiders && Array.isArray(parsed.deliveryRiders) && parsed.deliveryRiders.length > 0) {
+            return parsed.deliveryRiders;
+          }
+        }
+      } catch (_) {}
+    }
+    return INITIAL_RIDERS;
+  }, [riders]);
+
+  // Resilient cached orders fallback to prevent disappearing orders on refresh / sync
+  const effectiveOrders = useMemo(() => {
+    if (orders && orders.length > 0) return orders;
+    if (typeof window !== 'undefined') {
+      try {
+        const rawCached = localStorage.getItem('vinimap_cached_orders');
+        if (rawCached) {
+          const parsed = JSON.parse(rawCached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const { orders: sanitized } = sanitizeOrdersListConsistency(parsed);
+            return sanitized;
+          }
+        }
+        const rawBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+        if (rawBackup) {
+          const parsed = JSON.parse(rawBackup);
+          if (parsed.orders && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+            const { orders: sanitized } = sanitizeOrdersListConsistency(parsed.orders);
+            return sanitized;
+          }
+        }
+      } catch (_) {}
+    }
+    return orders || [];
+  }, [orders]);
+
+  // Hydrate parent orders if empty but cached orders exist
+  useEffect(() => {
+    if ((!orders || orders.length === 0) && effectiveOrders && effectiveOrders.length > 0 && onUpdateOrders) {
+      onUpdateOrders(effectiveOrders);
+    }
+  }, [orders?.length, effectiveOrders?.length, onUpdateOrders]);
+
   const selectedRider = useMemo(() => {
-    return findRiderByIdentifier(riders, selectedRiderId) ||
+    return findRiderByIdentifier(effectiveRiders, selectedRiderId) ||
+           findRiderByIdentifier(riders, selectedRiderId) ||
            findRiderByIdentifier(INITIAL_RIDERS, selectedRiderId) ||
            findRiderByIdentifier(getCachedDeliveryRiders(), selectedRiderId) ||
+           effectiveRiders[0] ||
            riders[0] ||
            INITIAL_RIDERS[0];
-  }, [riders, selectedRiderId]);
+  }, [effectiveRiders, riders, selectedRiderId]);
 
   // Apply dynamic PWA icons & manifest using Headquarters Logo
   useEffect(() => {
@@ -1949,13 +2033,14 @@ export default function RiderAppSimulator({
   const isOrderActiveForDriver = (order: Order) => {
     const storedDriverId = typeof window !== 'undefined' ? localStorage.getItem('vinimap_driver_id') : null;
     const isAssignedToRider = 
+      isOrderMatchingRider(order, selectedRiderId, effectiveRiders) ||
       isOrderMatchingRider(order, selectedRiderId, riders) ||
-      (selectedRider && isOrderMatchingRider(order, selectedRider.id, riders)) ||
-      (selectedRider && isOrderMatchingRider(order, selectedRider.phone, riders)) ||
-      (selectedRider && isOrderMatchingRider(order, selectedRider.deviceNumber, riders)) ||
-      (selectedRider && isOrderMatchingRider(order, selectedRider.name, riders)) ||
-      (lockedRiderId && isOrderMatchingRider(order, lockedRiderId, riders)) ||
-      (storedDriverId && isOrderMatchingRider(order, storedDriverId, riders));
+      (selectedRider && isOrderMatchingRider(order, selectedRider.id, effectiveRiders)) ||
+      (selectedRider && isOrderMatchingRider(order, selectedRider.phone, effectiveRiders)) ||
+      (selectedRider && isOrderMatchingRider(order, selectedRider.deviceNumber, effectiveRiders)) ||
+      (selectedRider && isOrderMatchingRider(order, selectedRider.name, effectiveRiders)) ||
+      (lockedRiderId && isOrderMatchingRider(order, lockedRiderId, effectiveRiders)) ||
+      (storedDriverId && isOrderMatchingRider(order, storedDriverId, effectiveRiders));
 
     if (!isAssignedToRider) return false;
     
@@ -2009,8 +2094,8 @@ export default function RiderAppSimulator({
 
   // Pre-render consistency verification to ensure orders data is clean and valid
   const sanitizedOrdersForRider = useMemo(() => {
-    return verifyAndSanitizeRiderOrders(orders, selectedRiderId, riders);
-  }, [orders, selectedRiderId, riders]);
+    return verifyAndSanitizeRiderOrders(effectiveOrders, selectedRiderId, effectiveRiders);
+  }, [effectiveOrders, selectedRiderId, effectiveRiders]);
 
   const driverActiveOrders = sanitizedOrdersForRider.filter(isOrderActiveForDriver).sort((a, b) => {
     return compareOrdersByCep(a, b);
@@ -2082,27 +2167,28 @@ const getOrderRecipientDoc = (order: Order): string | undefined => {
 
   // Sync / pre-populate protocols based on completed orders of today for the driver
   const completedOrdersFingerprint = useMemo(() => {
-    if (!orders || orders.length === 0) return '';
-    return orders
+    if (!effectiveOrders || effectiveOrders.length === 0) return '';
+    return effectiveOrders
       .filter(o => o.status === 'Concluído' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o))
       .map(o => `${o.id}:${o.status}:${o.riderId || ''}:${o.deliveryDate || ''}:${o.protocolNumber || ''}`)
       .join('|');
-  }, [orders]);
+  }, [effectiveOrders]);
 
   useEffect(() => {
-    if (!orders || orders.length === 0) return;
+    if (!effectiveOrders || effectiveOrders.length === 0) return;
     
     // Find completed orders for this driver or all drivers if no specific rider selected (strictly today)
-    const completed = orders.filter(o => {
+    const completed = effectiveOrders.filter(o => {
       const isConclued = o.status === 'Concluído' || !!getOrderProtocolNumber(o) || !!getOrderSignatureUrl(o);
       if (!isConclued) return false;
       if (selectedRiderId) {
         const matchesRider = 
+          isOrderMatchingRider(o, selectedRiderId, effectiveRiders) ||
           isOrderMatchingRider(o, selectedRiderId, riders) ||
-          (selectedRider && isOrderMatchingRider(o, selectedRider.id, riders)) ||
-          (selectedRider && isOrderMatchingRider(o, selectedRider.phone, riders)) ||
-          (selectedRider && isOrderMatchingRider(o, selectedRider.deviceNumber, riders)) ||
-          (selectedRider && isOrderMatchingRider(o, selectedRider.name, riders));
+          (selectedRider && isOrderMatchingRider(o, selectedRider.id, effectiveRiders)) ||
+          (selectedRider && isOrderMatchingRider(o, selectedRider.phone, effectiveRiders)) ||
+          (selectedRider && isOrderMatchingRider(o, selectedRider.deviceNumber, effectiveRiders)) ||
+          (selectedRider && isOrderMatchingRider(o, selectedRider.name, effectiveRiders));
         if (!matchesRider) return false;
       }
       const rawCompDate = o.dataConclusao || o.deliveryDate || o.rawData?.dataConclusao || o.rawData?.DataConclusao || o.rawData?.DataEntrega || o.date;

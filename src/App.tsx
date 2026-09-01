@@ -276,12 +276,60 @@ export default function App() {
     saveSearchQuery(searchQuery);
   }, [searchQuery]);
 
-  // Core App states with real-time Firebase integration
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [riders, setRiders] = useState<DeliveryRider[]>([]);
+  // Core App states with real-time Firebase integration and instant synchronous local cache hydration
+  const [orders, setOrders] = useState<Order[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+        if (storedBackup) {
+          const parsed = JSON.parse(storedBackup);
+          if (parsed.orders && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+            const { orders: sanitized } = sanitizeOrdersListConsistency(parsed.orders);
+            return sanitized;
+          }
+        }
+        const rawCached = localStorage.getItem('vinimap_cached_orders');
+        if (rawCached) {
+          const parsed = JSON.parse(rawCached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const { orders: sanitized } = sanitizeOrdersListConsistency(parsed);
+            return sanitized;
+          }
+        }
+      } catch (e) {
+        console.warn('Error hydrating initial orders cache:', e);
+      }
+    }
+    return [];
+  });
+
+  const [riders, setRiders] = useState<DeliveryRider[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedBackup = localStorage.getItem('vinimap_contingency_backup_latest');
+        if (storedBackup) {
+          const parsed = JSON.parse(storedBackup);
+          if (parsed.deliveryRiders && Array.isArray(parsed.deliveryRiders) && parsed.deliveryRiders.length > 0) {
+            return parsed.deliveryRiders;
+          }
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
+
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [selectedRiderId, setSelectedRiderId] = useState<string | null>(null);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+
+  // Sync orders into local fast cache for instant zero-latency screen restoration
+  useEffect(() => {
+    if (orders && orders.length > 0 && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('vinimap_cached_orders', JSON.stringify(orders));
+      } catch (e) {}
+    }
+  }, [orders]);
 
   // Sync riders into global cache for resilient resolution across all components
   useEffect(() => {
@@ -290,9 +338,30 @@ export default function App() {
     }
   }, [riders]);
 
-  // Standalone Rider App states
-  const [isStandaloneRider, setIsStandaloneRider] = useState(false);
-  const [isRealDeviceMode, setIsRealDeviceMode] = useState(false);
+  // Standalone Rider App states with synchronous initialization on refresh
+  const [isStandaloneRider, setIsStandaloneRider] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    const urlRiderId = params.get('riderId');
+    const urlView = params.get('view');
+    const urlMode = params.get('mode');
+    const isExplicitLogin = params.get('login') === '1' || params.get('login') === 'true' || urlView === 'login' || urlView === 'admin_login';
+    if (isExplicitLogin) return false;
+    const isDriverStorage = localStorage.getItem('vinimap_is_driver_app') === 'true' || !!localStorage.getItem('vinimap_driver_id');
+    return !!urlRiderId || urlView === 'rider' || urlView === 'driver_mobile' || urlMode === 'rider' || params.get('app') === 'driver' || isDriverStorage;
+  });
+
+  const [isRealDeviceMode, setIsRealDeviceMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    const urlRiderId = params.get('riderId');
+    const urlView = params.get('view');
+    const urlMode = params.get('mode');
+    const isExplicitLogin = params.get('login') === '1' || params.get('login') === 'true' || urlView === 'login' || urlView === 'admin_login';
+    if (isExplicitLogin) return false;
+    const isDriverStorage = localStorage.getItem('vinimap_is_driver_app') === 'true' || !!localStorage.getItem('vinimap_driver_id');
+    return !!urlRiderId || urlView === 'rider' || urlView === 'driver_mobile' || urlMode === 'rider' || params.get('app') === 'driver' || isDriverStorage;
+  });
   const [installMode, setInstallMode] = useState<'real' | 'simulador'>('real');
   const [selectedRiderForInstallId, setSelectedRiderForInstallId] = useState<string | null>(null);
   const [customBaseUrl, setCustomBaseUrl] = useState<string>('');
