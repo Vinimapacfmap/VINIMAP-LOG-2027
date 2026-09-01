@@ -2410,14 +2410,18 @@ export default function App() {
       if (importedDates.length > 0) {
         const minDate = importedDates.reduce((a, b) => (a < b ? a : b));
         const maxDate = importedDates.reduce((a, b) => (a > b ? a : b));
-        setFilterDateFrom(prev => (!prev || minDate < prev ? minDate : prev));
-        setFilterDateTo(prev => (!prev || maxDate > prev ? maxDate : prev));
+        setFilterDateFrom(minDate);
+        setFilterDateTo(maxDate);
       }
-      // Clear restrictive side filters to guarantee visibility in Central de Pedidos
+      // Clear restrictive side filters & search to guarantee 100% visibility in Central de Pedidos
+      setSearchQuery('');
       setFilterPartner('');
       setFilterRiderId('');
       setFilterStatus('');
       setFilterCep('');
+      setFilterShowDelayed(false);
+      setActiveOrderTab('Todos');
+      setActiveSection('pedidos');
     }
 
     // Create activity logs
@@ -7307,6 +7311,7 @@ export default function App() {
                 riders={riders} 
                 clientPartners={clientPartners}
                 onImportOrders={handleImportOrders} 
+                onNavigateToOrders={() => setActiveSection('pedidos')}
               />
             )}
 

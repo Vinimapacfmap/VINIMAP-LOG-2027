@@ -349,27 +349,23 @@ export const MOCK_ORDER_IDS = [
 
 /**
  * Identifies whether a client partner is an artificial / mock partner so it can be definitively excluded.
+ * Never excludes real partners created or imported with rawData.
  */
 export function isMockClientPartner(partner: Partial<ClientPartner> | null | undefined): boolean {
   if (!partner) return false;
+  if ((partner as any).rawData) return false;
+  if ((partner as any).isImported) return false;
+
   const id = String(partner.id || '').trim();
   const code = String(partner.codigoCliente || '').trim();
   const name = String(partner.name || partner.fantasia || partner.razaoSocial || '').trim().toLowerCase();
 
-  if (MOCK_CLIENT_IDS.map(c => c.toLowerCase()).includes(id.toLowerCase())) return true;
-  if (MOCK_CLIENT_IDS.map(c => c.toLowerCase()).includes(code.toLowerCase())) return true;
+  // Explicit mock marker
+  if ((partner as any).isMock === true) return true;
 
-  if (/^CL1-00[1-7]$/i.test(id) || /^CL1-00[1-7]$/i.test(code)) return true;
-  if (/^(par|cli|cl1)-0?0?[1-7]$/i.test(id) || /^(par|cli|cl1)-0?0?[1-7]$/i.test(code)) return true;
-
-  if (MOCK_PARTNER_NAMES.includes(name)) return true;
-
-  // Check if it was an auto-created placeholder partner from a mock order
-  if (partner.addr === 'Endereço Importado' && (partner.tel === '(11) 99999-9999' || !partner.tel)) {
-    if (MOCK_PARTNER_NAMES.some(mn => name.includes(mn)) || /^CL1-/i.test(id) || /^cli-/i.test(id) || /^par-/i.test(id)) {
-      return true;
-    }
-  }
+  // Exact static demo mock client IDs
+  const EXACT_MOCK_CLIENT_IDS = ['mock-cl-1', 'mock-cl-2', 'mock-cl-3'];
+  if (EXACT_MOCK_CLIENT_IDS.includes(id.toLowerCase()) || EXACT_MOCK_CLIENT_IDS.includes(code.toLowerCase())) return true;
 
   return false;
 }
@@ -379,36 +375,29 @@ export function isMockClientPartner(partner: Partial<ClientPartner> | null | und
  */
 export function isMockRider(rider: Partial<DeliveryRider> | null | undefined): boolean {
   if (!rider) return false;
+  if ((rider as any).isMock === true) return true;
   const id = String(rider.id || '').trim().toLowerCase();
-  const name = String(rider.name || '').trim().toLowerCase();
-
-  if (MOCK_RIDER_IDS.map(r => r.toLowerCase()).includes(id)) return true;
-  if (/^(ent|rid|mot)-[1-5]$/i.test(id)) return true;
-  if (MOCK_RIDER_NAMES.includes(name)) return true;
-
+  const EXACT_MOCK_RIDER_IDS = ['mock-rider-1', 'mock-rider-2'];
+  if (EXACT_MOCK_RIDER_IDS.includes(id)) return true;
   return false;
 }
 
 /**
  * Identifies whether an order is an artificial / mock order so it can be definitively excluded.
+ * Guarantees that any real user order or spreadsheet-imported order (with rawData or user input) is NEVER discarded.
  */
 export function isMockOrder(order: Partial<Order>): boolean {
   if (!order) return false;
+  if ((order as any).rawData) return false;
+  if ((order as any).isImported) return false;
+  if ((order as any).isMock === true) return true;
+
   const id = (order.id || '').toString().trim();
   if (!id) return false;
-  if (MOCK_ORDER_IDS.includes(id)) return true;
-  if (/^ORD-\d+$/i.test(id)) return true;
-  if (/^ped-[1-9]\b/i.test(id)) return true;
-  if (/^PED-10[1-9]$/i.test(id)) return true;
-  const raw = order as any;
-  if (raw?.clientId && MOCK_CLIENT_IDS.map(c => c.toLowerCase()).includes(String(raw.clientId).toLowerCase())) return true;
-  if (raw?.clientCode && MOCK_CLIENT_IDS.map(c => c.toLowerCase()).includes(String(raw.clientCode).toLowerCase())) return true;
-  if (order.partnerName && (
-    MOCK_CLIENT_IDS.map(c => c.toLowerCase()).includes(String(order.partnerName).toLowerCase()) ||
-    MOCK_PARTNER_NAMES.includes(String(order.partnerName).trim().toLowerCase())
-  )) return true;
-  if (order.clientName && MOCK_PARTNER_NAMES.includes(String(order.clientName).trim().toLowerCase())) return true;
-  if (order.riderId && MOCK_RIDER_IDS.includes(order.riderId)) return true;
+
+  const EXACT_MOCK_ORDER_IDS = ['mock-ord-1', 'mock-ord-2', 'mock-ord-3', 'mock-ord-4', 'mock-ord-5'];
+  if (EXACT_MOCK_ORDER_IDS.includes(id)) return true;
+
   return false;
 }
 

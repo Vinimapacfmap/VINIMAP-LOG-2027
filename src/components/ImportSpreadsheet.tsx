@@ -37,6 +37,7 @@ interface ImportSpreadsheetProps {
   riders: DeliveryRider[];
   clientPartners: ClientPartner[];
   onImportOrders: (imported: Order[]) => void;
+  onNavigateToOrders?: () => void;
 }
 
 interface ParsedRow {
@@ -47,7 +48,7 @@ interface ParsedRow {
   warnings: string[];
 }
 
-export default function ImportSpreadsheet({ orders, riders, clientPartners, onImportOrders }: ImportSpreadsheetProps) {
+export default function ImportSpreadsheet({ orders, riders, clientPartners, onImportOrders, onNavigateToOrders }: ImportSpreadsheetProps) {
   const [dragActive, setDragActive] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [selectedRowIndexes, setSelectedRowIndexes] = useState<Record<number, boolean>>({});
@@ -743,10 +744,21 @@ export default function ImportSpreadsheet({ orders, riders, clientPartners, onIm
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-800"
+          className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-emerald-800 shadow-sm"
         >
-          <CheckCircle2 className="text-emerald-600 shrink-0" size={18} />
-          <span className="text-xs font-bold">{successMessage}</span>
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="text-emerald-600 shrink-0" size={20} />
+            <span className="text-xs font-bold">{successMessage}</span>
+          </div>
+          {onNavigateToOrders && (
+            <button
+              type="button"
+              onClick={onNavigateToOrders}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer shadow-sm shadow-emerald-200"
+            >
+              Ver na Central de Pedidos →
+            </button>
+          )}
         </motion.div>
       )}
 
