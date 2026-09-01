@@ -547,6 +547,63 @@ export default function App() {
     }
   }, [clientPartners]);
 
+  // Auto-reconcile client partners from orders if clientPartners is missing any partner referenced by orders
+  useEffect(() => {
+    if (!orders || orders.length === 0) return;
+    
+    const missing: ClientPartner[] = [];
+    orders.forEach(o => {
+      const pName = (o.partnerName || o.clientName || '').trim();
+      if (!pName || isMockOrder(o)) return;
+      if (isMockClientPartner({ id: pName, name: pName })) return;
+
+      const exists = (clientPartners || []).some(cp => 
+        isMatchingClientCode(pName, cp.id, cp.codigoCliente) ||
+        (cp.name && cp.name.toLowerCase() === pName.toLowerCase()) ||
+        (cp.fantasia && cp.fantasia.toLowerCase() === pName.toLowerCase())
+      );
+
+      if (!exists) {
+        const alreadyInMissing = missing.some(m => 
+          isMatchingClientCode(pName, m.id, m.codigoCliente) ||
+          (m.name && m.name.toLowerCase() === pName.toLowerCase())
+        );
+        if (!alreadyInMissing) {
+          let displayName = pName;
+          if (o.rawData) {
+            const keys = Object.keys(o.rawData);
+            const nfKey = keys.find(k => k.toLowerCase() === 'nomefantasia');
+            if (nfKey && o.rawData[nfKey]) {
+              displayName = String(o.rawData[nfKey]).trim();
+            }
+          }
+          const newCp: ClientPartner = {
+            id: pName,
+            codigoCliente: pName,
+            name: displayName || pName,
+            type: 'Parceiro',
+            region: o.region || 'São Paulo',
+            tel: '(11) 99999-9999',
+            addr: o.address || 'Cadastrado via pedidos',
+            status: 'Ativo',
+            cep: o.cep || undefined
+          };
+          missing.push(newCp);
+        }
+      }
+    });
+
+    if (missing.length > 0) {
+      setClientPartners(prev => {
+        const existingIds = new Set(prev.map(c => c.id));
+        const toAdd = missing.filter(m => !existingIds.has(m.id));
+        if (toAdd.length === 0) return prev;
+        toAdd.forEach(c => dbSaveClientPartner(c).catch(() => {}));
+        return [...prev, ...toAdd];
+      });
+    }
+  }, [orders, clientPartners]);
+
   // Sync delivery riders into global cache for resilient resolution across all components
   useEffect(() => {
     if (riders && riders.length > 0) {
@@ -4728,39 +4785,54 @@ export default function App() {
               const momGrowthPercent = ((totalRev - juneOrdersBaseline) / juneOrdersBaseline) * 100;
 
               // Filtered & Sorted clients & partners
-              const filteredClients = clientPartners.filter(cp => {
-                const matchesSearch = cp.name.toLowerCase().includes(searchClientQuery.toLowerCase()) ||
-                  cp.tel.includes(searchClientQuery) ||
-                  cp.region.toLowerCase().includes(searchClientQuery.toLowerCase()) ||
-                  cp.addr.toLowerCase().includes(searchClientQuery.toLowerCase()) ||
-                  (cp.cnpj && cp.cnpj.toLowerCase().includes(searchClientQuery.toLowerCase()));
+              const filteredClients = (clientPartners || []).filter(cp => {
+                if (!cp) return false;
+                if (isMockClientPartner(cp)) return false;
+                const anyCp = cp as any;
+                const name = String(cp.name || anyCp.fantasia || anyCp.razaoSocial || '').toLowerCase();
+                const tel = String(cp.tel || anyCp.telefone || anyCp.celular || '').toLowerCase();
+                const region = String(cp.region || anyCp.regiao || '').toLowerCase();
+                const addr = String(cp.addr || anyCp.endereco || '').toLowerCase();
+                const cnpj = String(cp.cnpj || anyCp.cpf || '').toLowerCase();
+                const codigo = String(cp.codigoCliente || cp.id || '').toLowerCase();
+                const q = (searchClientQuery || '').toLowerCase().trim();
+
+                const matchesSearch = !q ||
+                  name.includes(q) ||
+                  tel.includes(q) ||
+                  region.includes(q) ||
+                  addr.includes(q) ||
+                  cnpj.includes(q) ||
+                  codigo.includes(q);
                 
-                const matchesType = selectedClientType === 'Todos' || cp.type === selectedClientType;
+                const matchesType = !selectedClientType || selectedClientType === 'Todos' || cp.type === selectedClientType;
                 return matchesSearch && matchesType;
               }).sort((a, b) => {
+                const anyA = a as any;
+                const anyB = b as any;
                 let valA = '';
                 let valB = '';
                 if (clientSortField === 'codigo') {
                   valA = String(a.codigoCliente || a.id || '');
                   valB = String(b.codigoCliente || b.id || '');
                 } else if (clientSortField === 'name') {
-                  valA = String(a.name || '');
-                  valB = String(b.name || '');
+                  valA = String(a.name || anyA.fantasia || anyA.razaoSocial || '');
+                  valB = String(b.name || anyB.fantasia || anyB.razaoSocial || '');
                 } else if (clientSortField === 'cnpj') {
-                  valA = String(a.cnpj || '');
-                  valB = String(b.cnpj || '');
+                  valA = String(a.cnpj || anyA.cpf || '');
+                  valB = String(b.cnpj || anyB.cpf || '');
                 } else if (clientSortField === 'type') {
                   valA = String(a.type || '');
                   valB = String(b.type || '');
                 } else if (clientSortField === 'region') {
-                  valA = String(a.region || '');
-                  valB = String(b.region || '');
+                  valA = String(a.region || anyA.regiao || '');
+                  valB = String(b.region || anyB.regiao || '');
                 } else if (clientSortField === 'tel') {
-                  valA = String(a.tel || '');
-                  valB = String(b.tel || '');
+                  valA = String(a.tel || anyA.telefone || '');
+                  valB = String(b.tel || anyB.telefone || '');
                 } else if (clientSortField === 'addr') {
-                  valA = String(a.addr || '');
-                  valB = String(b.addr || '');
+                  valA = String(a.addr || anyA.endereco || '');
+                  valB = String(b.addr || anyB.endereco || '');
                 } else if (clientSortField === 'status') {
                   valA = String(a.status || '');
                   valB = String(b.status || '');
@@ -5857,15 +5929,24 @@ export default function App() {
                                       {item.region}
                                     </span>
                                   </td>
-                                  <td className="px-4 py-3.5 font-mono text-[11px]">{item.tel}</td>
-                                  <td className="px-4 py-3.5 max-w-[150px] truncate" title={item.addr}>{item.addr}</td>
+                                  <td className="px-4 py-3.5 font-mono text-[11px]">{item.tel || '-'}</td>
+                                  <td className="px-4 py-3.5 max-w-[150px] truncate" title={item.addr || ''}>{item.addr || '-'}</td>
                                   <td className="px-4 py-3.5 text-center">
                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
                                       item.status === 'Adimplente' || item.status === 'Ativo'
                                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                         : 'bg-amber-50 text-amber-700 border border-amber-100'
                                     }`}>
-                                      {item.status}
+                                      {item.status || 'Ativo'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3.5 text-center">
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
+                                      item.enableCompletionNotifications !== false
+                                        ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                                        : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                    }`}>
+                                      {item.enableCompletionNotifications !== false ? 'Ativo' : 'Inativo'}
                                     </span>
                                   </td>
                                   <td className="px-4 py-3.5 text-center">

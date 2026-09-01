@@ -291,81 +291,42 @@ export function sanitizeOrderConsistency(
 }
 
 export const MOCK_CLIENT_IDS = [
-  'CL1-001', 'CL1-002', 'CL1-003', 'CL1-004', 'CL1-005', 'CL1-006', 'CL1-007', 'CL1-008', 'CL1-009', 'CL1-010', 'CL1-011', 'CL1-012', 'CL1-013', 'CL1-014',
-  'cli-1', 'cli-2', 'cli-3', 'cli-4', 'cli-5', 'cli-6', 'cli-7',
-  'cli-001', 'cli-002', 'cli-003', 'cli-004', 'cli-005', 'cli-006', 'cli-007', 'cli-014',
-  'par-001', 'par-002', 'par-003', 'par-004', 'par-005', 'par-006', 'par-007', 'par-014',
-  'par-1', 'par-2', 'par-3', 'par-4', 'par-5'
+  'mock-cl-1', 'mock-cl-2', 'mock-cl-3'
 ];
 
 export const MOCK_RIDER_IDS = [
-  'ent-1', 'ent-2', 'ent-3', 'ent-4', 'ent-5',
-  'rid-1', 'rid-2', 'rid-3', 'rid-4', 'rid-5',
-  'mot-1', 'mot-2', 'mot-3', 'mot-4', 'mot-5'
+  'mock-rider-1', 'mock-rider-2'
 ];
 
 export const MOCK_PARTNER_NAMES = [
-  'ana silva',
-  'pedro santos',
-  'mariana costa',
-  'beatriz lima',
-  'carlos eduardo',
-  'fernanda oliveira',
-  'lucas mendes',
-  'cliente parceiro 014',
-  'burger king paulista',
-  'bella augusta',
-  'ponto av. paulista',
-  'ponto haddock lobo',
-  'ponto alameda lorena',
-  'ponto faria lima',
-  'ponto rua augusta',
-  'ponto rua pamplona',
-  'ponto paulista express',
-  'livraria cultura',
-  'sesc pompeia',
-  'tech hub berrini',
-  'hospital santa cruz',
-  'distribuidora santana',
-  'comercial tatuapé',
-  'parceiro geral',
-  'exemplo parceiro'
+  'mock-demo-partner'
 ];
 
 export const MOCK_RIDER_NAMES = [
-  'marcos silva',
-  'lucas santos',
-  'matheus oliveira',
-  'gabriel souza',
-  'rodrigo lima',
-  'entregador teste',
-  'motoboy demo'
+  'mock-demo-rider'
 ];
 
 export const MOCK_ORDER_IDS = [
-  'ORD-101', 'ORD-102', 'ORD-103', 'ORD-104', 'ORD-105', 'ORD-106', 'ORD-107', 'ORD-108', 'ORD-109', 'ORD-110',
-  'ORD-111', 'ORD-112', 'ORD-113', 'ORD-114', 'ORD-115', 'PED-101', 'PED-102', 'PED-103', 'ped-1', 'ped-2', 'ped-3', 'ped-4', 'ped-5'
+  'mock-ord-1', 'mock-ord-2', 'mock-ord-3'
 ];
 
 /**
  * Identifies whether a client partner is an artificial / mock partner so it can be definitively excluded.
- * Never excludes real partners created or imported with rawData.
+ * Never excludes real partners created or imported.
  */
 export function isMockClientPartner(partner: Partial<ClientPartner> | null | undefined): boolean {
   if (!partner) return false;
   if ((partner as any).rawData) return false;
   if ((partner as any).isImported) return false;
 
-  const id = String(partner.id || '').trim();
-  const code = String(partner.codigoCliente || '').trim();
-  const name = String(partner.name || partner.fantasia || partner.razaoSocial || '').trim().toLowerCase();
+  const id = String(partner.id || '').trim().toLowerCase();
+  const code = String(partner.codigoCliente || '').trim().toLowerCase();
 
   // Explicit mock marker
   if ((partner as any).isMock === true) return true;
 
-  // Exact static demo mock client IDs
-  const EXACT_MOCK_CLIENT_IDS = ['mock-cl-1', 'mock-cl-2', 'mock-cl-3'];
-  if (EXACT_MOCK_CLIENT_IDS.includes(id.toLowerCase()) || EXACT_MOCK_CLIENT_IDS.includes(code.toLowerCase())) return true;
+  // Only exact synthetic mock IDs
+  if (id.startsWith('mock-cl-') || code.startsWith('mock-cl-')) return true;
 
   return false;
 }
@@ -377,14 +338,13 @@ export function isMockRider(rider: Partial<DeliveryRider> | null | undefined): b
   if (!rider) return false;
   if ((rider as any).isMock === true) return true;
   const id = String(rider.id || '').trim().toLowerCase();
-  const EXACT_MOCK_RIDER_IDS = ['mock-rider-1', 'mock-rider-2'];
-  if (EXACT_MOCK_RIDER_IDS.includes(id)) return true;
+  if (id.startsWith('mock-rider-')) return true;
   return false;
 }
 
 /**
  * Identifies whether an order is an artificial / mock order so it can be definitively excluded.
- * Guarantees that any real user order or spreadsheet-imported order (with rawData or user input) is NEVER discarded.
+ * Guarantees that any real user order or spreadsheet-imported order is NEVER discarded.
  */
 export function isMockOrder(order: Partial<Order>): boolean {
   if (!order) return false;
@@ -392,11 +352,10 @@ export function isMockOrder(order: Partial<Order>): boolean {
   if ((order as any).isImported) return false;
   if ((order as any).isMock === true) return true;
 
-  const id = (order.id || '').toString().trim();
+  const id = (order.id || '').toString().trim().toLowerCase();
   if (!id) return false;
 
-  const EXACT_MOCK_ORDER_IDS = ['mock-ord-1', 'mock-ord-2', 'mock-ord-3', 'mock-ord-4', 'mock-ord-5'];
-  if (EXACT_MOCK_ORDER_IDS.includes(id)) return true;
+  if (id.startsWith('mock-ord-')) return true;
 
   return false;
 }
