@@ -2315,124 +2315,8 @@ function OrdersTable({
     >
       <div className={`bg-white rounded-2xl flex flex-col h-full overflow-hidden ${isFullscreen ? 'shadow-2xl border border-slate-200' : ''}`}>
       
-      {/* 0. INTEGRATED GLOBAL SEARCH BAR INSIDE ORDERS CARD */}
-      <div className="p-3 sm:p-3.5 bg-gradient-to-r from-blue-50/80 via-slate-50 to-white border-b border-slate-200/80 rounded-t-2xl">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-          <div className="relative flex-1">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none" />
-            <input
-              type="text"
-              id="vinimap_orders_table_search_input"
-              name="vinimap_orders_table_search_input"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              data-lpignore="true"
-              data-form-type="other"
-              placeholder="Buscar pedidos por Nº, Cliente, Endereço, CEP, DANFE ou Parceiro..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-              className="w-full pl-10 pr-9 py-2 bg-white border border-blue-200 focus:border-blue-600 rounded-xl text-xs font-extrabold text-slate-900 placeholder:font-normal placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => onSearchChange && onSearchChange('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 cursor-pointer transition-colors"
-                title="Limpar busca"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
-          {searchQuery && (
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-black text-blue-900 bg-blue-100/90 px-3 py-1.5 rounded-xl border border-blue-300 flex items-center gap-1.5 shadow-2xs">
-                <Search size={12} className="text-blue-700" />
-                {filteredOrders.length} {filteredOrders.length === 1 ? 'pedido encontrado' : 'pedidos encontrados'} (busca global)
-              </span>
-              <button
-                type="button"
-                onClick={() => onSearchChange && onSearchChange('')}
-                className="text-xs font-bold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer"
-              >
-                Limpar
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 1. COMPACT STATUS TABS FILTER BAR */}
-      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 rounded-t-2xl flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" id="orders-status-tabs">
-          {[
-            { key: 'Todos', label: 'Todos os Pedidos', activeColor: 'bg-blue-600 text-white shadow-sm shadow-blue-200', count: orders.length },
-            { key: 'Não iniciado', label: 'Não Iniciados', activeColor: 'bg-amber-600 text-white shadow-sm shadow-amber-200', count: orders.filter(o => o.status === 'Não iniciado').length },
-            { key: 'Em rota', label: 'Em Rota', activeColor: 'bg-sky-600 text-white shadow-sm shadow-sky-200', count: orders.filter(o => o.status === 'Em rota' || (o.status as string) === 'Entregando').length },
-            { key: 'Concluído', label: 'Concluídos', activeColor: 'bg-emerald-600 text-white shadow-sm shadow-emerald-200', count: orders.filter(o => o.status === 'Concluído').length },
-            { key: 'Ocorrência', label: 'Ocorrências', activeColor: 'bg-rose-600 text-white shadow-sm shadow-rose-200', count: orders.filter(o => o.status === 'Ocorrência').length },
-            { key: 'Cancelado', label: 'Cancelados', activeColor: 'bg-slate-700 text-white shadow-sm shadow-slate-200', count: orders.filter(o => o.status === 'Cancelado').length }
-          ].map((item) => {
-            const isActive = activeTab === item.key;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => {
-                  setActiveTab(item.key as any);
-                  setCurrentPage(1);
-                  setSelectedIds(new Set());
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-2 ${
-                  isActive 
-                    ? `${item.activeColor}` 
-                    : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-800 border border-slate-200/80 shadow-2xs'
-                }`}
-              >
-                <span>{item.label}</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-black ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  {item.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Quick Batch Selection Button for Current Filter */}
-        <div className="flex items-center gap-2">
-          {sortedOrders.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                const allIds = sortedOrders.map(o => o.id);
-                if (allIds.every(id => selectedIds.has(id))) {
-                  const nextSet = new Set(selectedIds);
-                  allIds.forEach(id => nextSet.delete(id));
-                  setSelectedIds(nextSet);
-                } else {
-                  setSelectedIds(new Set([...selectedIds, ...allIds]));
-                }
-              }}
-              className="px-3 py-1.5 bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-            >
-              <CheckSquare size={13} className="text-blue-600" />
-              <span>
-                {sortedOrders.every(o => selectedIds.has(o.id))
-                  ? `Desmarcar ${activeTab === 'Todos' ? 'todos' : activeTab} (${sortedOrders.length})`
-                  : `Selecionar todos ${activeTab === 'Todos' ? 'pedidos' : activeTab} (${sortedOrders.length})`}
-              </span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 2. ACTIONS & LAYOUT TOOLS CONTROL PANEL */}
-      <div className="p-2 sm:p-3 border-b border-slate-100 bg-slate-50/60">
+      {/* 1. ACTIONS & LAYOUT TOOLS CONTROL PANEL */}
+      <div className="p-2 sm:p-3 border-b border-slate-100 bg-slate-50/60 rounded-t-2xl">
         
         {/* Row 1: Action Buttons & Layout Tools */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -2475,6 +2359,32 @@ function OrdersTable({
               <MapPin size={14} className={showCepGeocodeTool ? 'animate-bounce text-white' : 'text-blue-600'} />
               <span>{showCepGeocodeTool ? 'Ocultar Geocodificação' : 'Buscar & Geocodificar CEP'}</span>
             </button>
+
+            {/* Quick Batch Selection Button for Current List */}
+            {sortedOrders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const allIds = sortedOrders.map(o => o.id);
+                  if (allIds.every(id => selectedIds.has(id))) {
+                    const nextSet = new Set(selectedIds);
+                    allIds.forEach(id => nextSet.delete(id));
+                    setSelectedIds(nextSet);
+                  } else {
+                    setSelectedIds(new Set([...selectedIds, ...allIds]));
+                  }
+                }}
+                className="h-9 px-3.5 bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                title="Selecionar ou desmarcar todos os pedidos listados"
+              >
+                <CheckSquare size={13} className="text-blue-600" />
+                <span>
+                  {sortedOrders.every(o => selectedIds.has(o.id))
+                    ? `Desmarcar todos (${sortedOrders.length})`
+                    : `Selecionar todos (${sortedOrders.length})`}
+                </span>
+              </button>
+            )}
 
             {/* Exportar Button Dropdown */}
             <div className="relative">
