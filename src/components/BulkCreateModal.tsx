@@ -6,7 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { Order, ClientPartner, OrderPriority } from '../types';
 import { getSaoPauloISODate } from '../utils/dateUtils';
-import { X, Plus, Trash2, Save, Sparkles, Clipboard, Check, AlertCircle } from 'lucide-react';
+import { searchCepByAddress, getRegionFromCepOrBairro } from '../utils/addressLookupService';
+import { X, Plus, Trash2, Save, Sparkles, Clipboard, Check, AlertCircle, MapPin, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface BulkCreateModalProps {
@@ -110,6 +111,103 @@ export default function BulkCreateModal({ isOpen, onClose, onSubmit, clientPartn
       [field]: val
     };
     setRows(copy);
+  };
+
+  const handleCepChange = async (index: number, val: string) => {
+    updateRowField(index, 'cep', val);
+    const clean = val.replace(/\D/g, '');
+    if (clean.length === 8) {
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          const logradouro = data.logradouro || '';
+          const bairro = data.bairro || '';
+          const addr = logradouro ? (bairro ? `${logradouro} - ${bairro}` : logradouro) : '';
+          const region = getRegionFromCepOrBairro(clean, bairro, data.localidade || 'São Paulo');
+          setRows(prev => {
+            const next = [...prev];
+            if (next[index]) {
+              next[index] = {
+                ...next[index],
+                cep: `${clean.substring(0, 5)}-${clean.substring(5)}`,
+                ...(addr && (!next[index].address || next[index].address.length < 5) ? { address: addr } : {}),
+                region: ['Centro', 'Zona Sul', 'Zona Oeste', 'Zona Norte', 'Zona Leste'].includes(region) ? region : next[index].region
+              };
+            }
+            return next;
+          });
+        }
+      } catch {
+        // silent
+      }
+    }
+  };
+
+  const handleAddressBlur = async (index: number, addressVal: string) => {
+    if (!addressVal || addressVal.trim().length < 4) return;
+    try {
+      const res = await searchCepByAddress(addressVal);
+      if (res && res.cep) {
+        setRows(prev => {
+          const next = [...prev];
+          if (next[index]) {
+            next[index] = {
+              ...next[index],
+              ...(res.cep && (!next[index].cep || next[index].cep.length < 5) ? { cep: res.cep } : {}),
+              ...(res.region && ['Centro', 'Zona Sul', 'Zona Oeste', 'Zona Norte', 'Zona Leste'].includes(res.region) ? { region: res.region } : {})
+            };
+          }
+          return next;
+        });
+      }
+    } catch {
+      // silent
+    }
+  };
+
+  const [isBulkFilling, setIsBulkFilling] = useState(false);
+  const handleAutoFillAllRows = async () => {
+    setIsBulkFilling(true);
+    try {
+      const updated = await Promise.all(rows.map(async (row) => {
+        let newCep = row.cep;
+        let newAddress = row.address;
+        let newRegion = row.region;
+
+        const cleanCep = (row.cep || '').replace(/\D/g, '');
+        if (cleanCep.length === 8) {
+          try {
+            const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+            const data = await res.json();
+            if (!data.erro) {
+              const full = data.logradouro ? (data.bairro ? `${data.logradouro} - ${data.bairro}` : data.logradouro) : '';
+              if (full && (!newAddress || newAddress.length < 4)) newAddress = full;
+              newRegion = getRegionFromCepOrBairro(cleanCep, data.bairro, data.localidade || 'São Paulo');
+              newCep = `${cleanCep.substring(0, 5)}-${cleanCep.substring(5)}`;
+            }
+          } catch {}
+        } else if (newAddress && newAddress.trim().length >= 4) {
+          try {
+            const res = await searchCepByAddress(newAddress);
+            if (res && res.cep) {
+              if (!newCep || newCep.length < 5) newCep = res.cep;
+              if (res.region) newRegion = res.region;
+            }
+          } catch {}
+        }
+
+        return {
+          ...row,
+          cep: newCep,
+          address: newAddress,
+          region: ['Centro', 'Zona Sul', 'Zona Oeste', 'Zona Norte', 'Zona Leste'].includes(newRegion) ? newRegion : row.region
+        };
+      }));
+      setRows(updated);
+    } finally {
+      setIsBulkFilling(false);
+    }
   };
 
   // Bulk quick-fill column
@@ -322,8 +420,19 @@ export default function BulkCreateModal({ isOpen, onClose, onSubmit, clientPartn
                 </button>
               </div>
 
-              {/* Paste Import trigger */}
-              <div>
+              {/* Quick Actions / Paste Import trigger */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleAutoFillAllRows}
+                  disabled={isBulkFilling}
+                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs cursor-pointer transition-colors flex items-center gap-1.5 shadow-2xs"
+                  title="Consulta automaticamente os CEPs e Endereços de todas as linhas preenchidas"
+                >
+                  <RefreshCw size={13} className={isBulkFilling ? "animate-spin" : ""} />
+                  <span>{isBulkFilling ? "Autopreenchendo..." : "⚡ Autopreencher Endereços / CEPs"}</span>
+                </button>
+
                 <button
                   onClick={() => setShowPasteForm(!showPasteForm)}
                   className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1.5 cursor-pointer underline decoration-dotted"
@@ -421,6 +530,7 @@ export default function BulkCreateModal({ isOpen, onClose, onSubmit, clientPartn
                           type="text"
                           value={row.address}
                           onChange={(e) => updateRowField(index, 'address', e.target.value)}
+                          onBlur={(e) => handleAddressBlur(index, e.target.value)}
                           placeholder="Rua, Número, Bairro"
                           className="w-full border-slate-200 rounded-lg text-xs py-1 px-2 focus:ring-blue-500 focus:border-blue-500"
                           required
@@ -430,9 +540,9 @@ export default function BulkCreateModal({ isOpen, onClose, onSubmit, clientPartn
                         <input
                           type="text"
                           value={row.cep}
-                          onChange={(e) => updateRowField(index, 'cep', e.target.value)}
+                          onChange={(e) => handleCepChange(index, e.target.value)}
                           placeholder="00000-000"
-                          className="w-full border-slate-200 rounded-lg text-xs py-1 px-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full border-slate-200 rounded-lg text-xs py-1 px-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
                         />
                       </td>
                       <td className="px-1 py-1.5">

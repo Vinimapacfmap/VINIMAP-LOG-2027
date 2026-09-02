@@ -329,29 +329,8 @@ export async function searchCepByAddress(
     console.warn('[searchCepByAddress] Nominatim search error:', err);
   }
 
-  // 4. Neighborhood / Landmark Fallback for São Paulo (if specific neighborhood detected)
-  const region = getRegionFromCepOrBairro('', trimmed, city);
-  let fallbackCep = '';
-  if (region === 'Zona Oeste') fallbackCep = '05061-050';
-  else if (region === 'Zona Sul') fallbackCep = '04001-000';
-  else if (region === 'Zona Norte') fallbackCep = '02011-000';
-  else if (region === 'Zona Leste') fallbackCep = '03001-000';
-  else fallbackCep = '01310-100';
-
-  const cleanFallback = fallbackCep.replace(/\D/g, '');
-  const fallbackResult: AddressLookupResult = {
-    cep: fallbackCep,
-    cleanCep: cleanFallback,
-    logradouro: parsed.streetName,
-    bairro: '',
-    localidade: city,
-    uf: state,
-    region,
-    formattedAddress: `${parsed.streetName}, ${city} - ${state}`,
-    source: 'nominatim'
-  };
-
-  return fallbackResult;
+  // 4. Return null if no valid CEP was found for the query
+  return null;
 }
 
 /**

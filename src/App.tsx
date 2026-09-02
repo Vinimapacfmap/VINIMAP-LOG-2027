@@ -13,7 +13,7 @@ import {
 } from './data/mock';
 import { Order, OrderStatus, DeliveryRider, ActivityLog, ClientPartner, OrderHistoryEntry, isMatchingClientCode, CepRange, CepTableHistoryItem, CompanyHub, BillingModelType } from './types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, isOrderInDatePeriod, formatOrderTime, extractISODateFromTimestamp } from './utils/dateUtils';
-import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider, findRiderByIdentifier, setCachedClientPartners, setCachedDeliveryRiders } from './utils/partnerUtils';
+import { getPartnerDisplayName, isOrderMatchingPartner, isOrderMatchingRider, findRiderByIdentifier, setCachedClientPartners, getCachedClientPartners, setCachedDeliveryRiders, getCachedDeliveryRiders } from './utils/partnerUtils';
 import { matchesAddressQuery, compareOrdersByCep, resequenceRiderOrdersByCep } from './utils/addressUtils';
 import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from './utils/searchUtils';
 import { playNotificationAudioAlert } from './utils/notificationUtils';
@@ -490,7 +490,7 @@ export default function App() {
   const [isCepRangesModalOpen, setIsCepRangesModalOpen] = useState(false);
   const [selectedCepRangesClient, setSelectedCepRangesClient] = useState<ClientPartner | null>(null);
 
-  const [clientPartners, setClientPartners] = useState<ClientPartner[]>([]);
+  const [clientPartners, setClientPartners] = useState<ClientPartner[]>(() => getCachedClientPartners());
   const [companyHubs, setCompanyHubs] = useState<CompanyHub[]>(INITIAL_COMPANY_HUBS);
   const [isOfflineFallbackActive, setIsOfflineFallbackActive] = useState<boolean>(false);
   const [offlineFallbackReason, setOfflineFallbackReason] = useState<string>('');
@@ -546,63 +546,6 @@ export default function App() {
       setCachedClientPartners(clientPartners);
     }
   }, [clientPartners]);
-
-  // Auto-reconcile client partners from orders if clientPartners is missing any partner referenced by orders
-  useEffect(() => {
-    if (!orders || orders.length === 0) return;
-    
-    const missing: ClientPartner[] = [];
-    orders.forEach(o => {
-      const pName = (o.partnerName || o.clientName || '').trim();
-      if (!pName || isMockOrder(o)) return;
-      if (isMockClientPartner({ id: pName, name: pName })) return;
-
-      const exists = (clientPartners || []).some(cp => 
-        isMatchingClientCode(pName, cp.id, cp.codigoCliente) ||
-        (cp.name && cp.name.toLowerCase() === pName.toLowerCase()) ||
-        (cp.fantasia && cp.fantasia.toLowerCase() === pName.toLowerCase())
-      );
-
-      if (!exists) {
-        const alreadyInMissing = missing.some(m => 
-          isMatchingClientCode(pName, m.id, m.codigoCliente) ||
-          (m.name && m.name.toLowerCase() === pName.toLowerCase())
-        );
-        if (!alreadyInMissing) {
-          let displayName = pName;
-          if (o.rawData) {
-            const keys = Object.keys(o.rawData);
-            const nfKey = keys.find(k => k.toLowerCase() === 'nomefantasia');
-            if (nfKey && o.rawData[nfKey]) {
-              displayName = String(o.rawData[nfKey]).trim();
-            }
-          }
-          const newCp: ClientPartner = {
-            id: pName,
-            codigoCliente: pName,
-            name: displayName || pName,
-            type: 'Parceiro',
-            region: o.region || 'São Paulo',
-            tel: '(11) 99999-9999',
-            addr: o.address || 'Cadastrado via pedidos',
-            status: 'Ativo',
-            cep: o.cep || undefined
-          };
-          missing.push(newCp);
-        }
-      }
-    });
-
-    if (missing.length > 0) {
-      setClientPartners(prev => {
-        const existingIds = new Set(prev.map(c => c.id));
-        const toAdd = missing.filter(m => !existingIds.has(m.id));
-        if (toAdd.length === 0) return prev;
-        toAdd.forEach(c => dbSaveClientPartner(c).catch(() => {}));
-        return [...prev, ...toAdd];
-      });
-    }
-  }, [orders, clientPartners]);
 
   // Sync delivery riders into global cache for resilient resolution across all components
   useEffect(() => {
@@ -953,10 +896,19 @@ export default function App() {
 
     const mergeClients = (prev: ClientPartner[], incoming: ClientPartner[]): ClientPartner[] => {
       const map = new Map<string, ClientPartner>();
-      prev.forEach(c => map.set(c.id, c));
+      prev.forEach(c => {
+        const id = String(c.id || c.codigoCliente || '').trim();
+        if (id) {
+          map.set(id.toLowerCase(), { ...c, id, codigoCliente: c.codigoCliente || id });
+        }
+      });
       incoming.forEach(c => {
-        const existing = map.get(c.id);
-        map.set(c.id, existing ? { ...existing, ...c } : c);
+        const id = String(c.id || c.codigoCliente || '').trim();
+        if (id) {
+          const key = id.toLowerCase();
+          const existing = map.get(key);
+          map.set(key, existing ? { ...existing, ...c, id, codigoCliente: c.codigoCliente || existing.codigoCliente || id } : { ...c, id, codigoCliente: c.codigoCliente || id });
+        }
       });
       return Array.from(map.values()).filter(c => !isMockClientPartner(c));
     };
@@ -1114,12 +1066,19 @@ export default function App() {
         markFirestoreConnected();
         const docs: ClientPartner[] = [];
         snapshot.forEach(doc => {
-          const data = doc.data() as ClientPartner;
-          if (!isMockClientPartner(data) && !isMockClientPartner({ id: doc.id, name: (data as any)?.name })) {
+          const raw = doc.data() || {};
+          const docId = String(doc.id).trim();
+          const data: ClientPartner = {
+            id: docId,
+            ...(raw as any),
+            codigoCliente: (raw as any)?.codigoCliente || (raw as any)?.id || docId,
+          };
+          if (!isMockClientPartner(data) && !isMockClientPartner({ id: docId, name: (data as any)?.name })) {
             docs.push(data);
           }
         });
         setClientPartners(docs);
+        setCachedClientPartners(docs);
       }, (error) => handleListenerError(error, 'clientPartners'))
     );
 
@@ -1128,12 +1087,18 @@ export default function App() {
         markFirestoreConnected();
         const docs: DeliveryRider[] = [];
         snapshot.forEach(doc => {
-          const data = doc.data() as DeliveryRider;
-          if (!isMockRider(data) && !isMockRider({ id: doc.id, name: (data as any)?.name })) {
+          const raw = doc.data() || {};
+          const docId = String(doc.id).trim();
+          const data: DeliveryRider = {
+            id: docId,
+            ...(raw as any),
+          };
+          if (!isMockRider(data) && !isMockRider({ id: docId, name: (data as any)?.name })) {
             docs.push(data);
           }
         });
         setRiders(docs);
+        setCachedDeliveryRiders(docs);
       }, (error) => handleListenerError(error, 'deliveryRiders'))
     );
 
@@ -1748,7 +1713,7 @@ export default function App() {
   const [isCepSearching, setIsCepSearching] = useState(false);
   const [cepSearchError, setCepSearchError] = useState('');
 
-  const handleSearchCep = async (cepValue: string) => {
+  const handleSearchCep = async (cepValue: string, fillAddress = false) => {
     const cleanCep = cepValue.replace(/\D/g, '');
     if (cleanCep.length !== 8) {
       setCepSearchError('CEP deve conter 8 dígitos.');
@@ -1774,7 +1739,9 @@ export default function App() {
             streetAddress += ` - ${bairro}`;
           }
         }
-        setNewClientAddr(streetAddress);
+        if (fillAddress && streetAddress) {
+          setNewClientAddr(streetAddress);
+        }
         setNewClientCidade(localidade);
         setNewClientEstado(uf);
         setNewClientCep(`${cleanCep.substring(0, 5)}-${cleanCep.substring(5)}`);
@@ -1803,6 +1770,48 @@ export default function App() {
   const [newRiderDeviceNumber, setNewRiderDeviceNumber] = useState('');
   const [newRiderPassword, setNewRiderPassword] = useState('');
   const [newRiderAddress, setNewRiderAddress] = useState('');
+  const [newRiderCep, setNewRiderCep] = useState('');
+  const [newRiderCidade, setNewRiderCidade] = useState('São Paulo');
+  const [newRiderEstado, setNewRiderEstado] = useState('SP');
+  const [riderCepError, setRiderCepError] = useState('');
+
+  const handleSearchRiderCep = async (cepValue: string, fillAddress = false) => {
+    const cleanCep = cepValue.replace(/\D/g, '');
+    if (cleanCep.length !== 8) {
+      setRiderCepError('CEP deve conter 8 dígitos.');
+      return;
+    }
+    setRiderCepError('');
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+      if (data.erro) {
+        setRiderCepError('CEP não encontrado.');
+      } else {
+        const logradouro = data.logradouro || '';
+        const bairro = data.bairro || '';
+        const localidade = data.localidade || 'São Paulo';
+        const uf = data.uf || 'SP';
+        
+        let streetAddress = '';
+        if (logradouro) {
+          streetAddress = logradouro;
+          if (bairro) {
+            streetAddress += ` - ${bairro}`;
+          }
+        }
+        if (fillAddress && streetAddress) {
+          setNewRiderAddress(streetAddress);
+        }
+        setNewRiderCidade(localidade);
+        setNewRiderEstado(uf);
+        setNewRiderCep(`${cleanCep.substring(0, 5)}-${cleanCep.substring(5)}`);
+      }
+    } catch (err) {
+      setRiderCepError('Erro ao buscar CEP na API.');
+      console.error(err);
+    }
+  };
   const [newRiderCpfCnpj, setNewRiderCpfCnpj] = useState('');
   const [newRiderVehiclePlate, setNewRiderVehiclePlate] = useState('');
   const [newRiderCnh, setNewRiderCnh] = useState('');
@@ -1824,28 +1833,50 @@ export default function App() {
   const handleCreateClientPartner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClientName || !newClientTel || !newClientAddr) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
+      alert('Por favor, preencha todos os campos obrigatórios (Nome, Telefone e Endereço).');
       return;
     }
 
     if (editingClient) {
+      const clientId = String(editingClient.id || editingClient.codigoCliente || '').trim();
       const updatedEntry: ClientPartner = {
         ...editingClient,
-        name: newClientName,
-        region: newClientRegion,
-        tel: newClientTel,
-        addr: newClientAddr,
-        status: newClientStatus,
-        cnpj: newClientCNPJ || undefined,
-        cep: newClientCep || undefined,
-        cidade: newClientCidade || 'São Paulo',
-        estado: newClientEstado || 'SP',
+        id: clientId,
+        codigoCliente: editingClient.codigoCliente || clientId,
+        name: newClientName.trim(),
+        type: 'Parceiro',
+        region: newClientRegion || 'Centro',
+        tel: newClientTel.trim(),
+        addr: newClientAddr.trim(),
+        status: newClientStatus || 'Adimplente',
+        cnpj: newClientCNPJ ? newClientCNPJ.trim() : undefined,
+        cep: newClientCep ? newClientCep.trim() : undefined,
+        cidade: newClientCidade ? newClientCidade.trim() : 'São Paulo',
+        estado: newClientEstado ? newClientEstado.trim().toUpperCase() : 'SP',
         enableCompletionNotifications: newClientEnableNotifications,
       };
 
       try {
+        // Optimistic state update with robust ID matching
+        setClientPartners(prev => {
+          let matched = false;
+          const updated = prev.map(c => {
+            const isMatch = (c.id && updatedEntry.id && String(c.id).toLowerCase() === String(updatedEntry.id).toLowerCase()) ||
+                            (c.codigoCliente && updatedEntry.codigoCliente && String(c.codigoCliente).toLowerCase() === String(updatedEntry.codigoCliente).toLowerCase()) ||
+                            (c.id && updatedEntry.codigoCliente && String(c.id).toLowerCase() === String(updatedEntry.codigoCliente).toLowerCase()) ||
+                            (c.codigoCliente && updatedEntry.id && String(c.codigoCliente).toLowerCase() === String(updatedEntry.id).toLowerCase());
+            if (isMatch) {
+              matched = true;
+              return updatedEntry;
+            }
+            return c;
+          });
+          const finalList = matched ? updated : [updatedEntry, ...updated];
+          setCachedClientPartners(finalList);
+          return finalList;
+        });
+
         await dbSaveClientPartner(updatedEntry);
-        setClientPartners(prev => prev.map(c => c.id === updatedEntry.id ? updatedEntry : c));
         
         // Add activity log
         const logId = generateUniqueLogId();
@@ -1853,7 +1884,7 @@ export default function App() {
           id: logId,
           time: getSaoPauloTime(),
           type: 'info',
-          message: `Cadastro de cliente editado: ${newClientName}`,
+          message: `Cadastro de cliente editado com sucesso: ${newClientName}`,
         });
 
         // Reset fields
@@ -1865,50 +1896,70 @@ export default function App() {
         setNewClientCep('');
         setNewClientCidade('São Paulo');
         setNewClientEstado('SP');
+        setNewClientRegion('Centro');
+        setNewClientStatus('Adimplente');
         setNewClientEnableNotifications(true);
         setIsNewClientModalOpen(false);
         setShowClientForm(false);
       } catch (err: any) {
-        console.error(err);
+        console.error('Erro ao editar cliente parceiro:', err);
         alert(`Erro ao salvar alteração de cliente: ${err.message || err}`);
       }
       return;
     }
 
-    let nextNum = 1;
-    const cl1Ids = clientPartners
-      .map(cp => cp.id)
-      .filter(id => id && id.startsWith('CL1-'));
-    if (cl1Ids.length > 0) {
-      const numbers = cl1Ids.map(id => {
-        const parts = id.split('-');
-        return parts.length > 1 ? parseInt(parts[1], 10) : 0;
-      });
-      nextNum = Math.max(...numbers) + 1;
-    } else {
-      nextNum = clientPartners.length + 1;
+    // Determine highest sequential ID without collisions
+    const existingIds = new Set(
+      (clientPartners || []).map(cp => String(cp.id || '').toUpperCase())
+        .concat((clientPartners || []).map(cp => String(cp.codigoCliente || '').toUpperCase()))
+    );
+
+    let maxNum = 0;
+    (clientPartners || []).forEach(cp => {
+      const raw = String(cp.id || '') + ' ' + String(cp.codigoCliente || '');
+      const matches = raw.match(/\d+/g);
+      if (matches) {
+        matches.forEach(m => {
+          const val = parseInt(m, 10);
+          if (!isNaN(val) && val > maxNum && val < 99999) {
+            maxNum = val;
+          }
+        });
+      }
+    });
+
+    let nextNum = maxNum + 1;
+    let candidateId = `CL1-${String(nextNum).padStart(3, '0')}`;
+    while (existingIds.has(candidateId.toUpperCase())) {
+      nextNum++;
+      candidateId = `CL1-${String(nextNum).padStart(3, '0')}`;
     }
-    const paddedNum = String(nextNum).padStart(3, '0');
-    const newId = `CL1-${paddedNum}`;
+    const newId = candidateId;
 
     const newEntry: ClientPartner = {
       id: newId,
       codigoCliente: newId,
-      name: newClientName,
+      name: newClientName.trim(),
       type: 'Parceiro',
-      region: newClientRegion,
-      tel: newClientTel,
-      addr: newClientAddr,
-      status: newClientStatus,
-      cnpj: newClientCNPJ || undefined,
-      cep: newClientCep || undefined,
-      cidade: newClientCidade || 'São Paulo',
-      estado: newClientEstado || 'SP',
+      region: newClientRegion || 'Centro',
+      tel: newClientTel.trim(),
+      addr: newClientAddr.trim(),
+      status: newClientStatus || 'Adimplente',
+      cnpj: newClientCNPJ ? newClientCNPJ.trim() : undefined,
+      cep: newClientCep ? newClientCep.trim() : undefined,
+      cidade: newClientCidade ? newClientCidade.trim() : 'São Paulo',
+      estado: newClientEstado ? newClientEstado.trim().toUpperCase() : 'SP',
       enableCompletionNotifications: newClientEnableNotifications,
     };
 
     try {
-      setClientPartners(prev => [...prev.filter(c => c.id !== newEntry.id), newEntry]);
+      // Optimistic state addition
+      setClientPartners(prev => {
+        const updated = [...prev.filter(c => c.id !== newEntry.id), newEntry];
+        setCachedClientPartners(updated);
+        return updated;
+      });
+
       await dbSaveClientPartner(newEntry);
       
       // Add activity log
@@ -1917,7 +1968,7 @@ export default function App() {
         id: logId,
         time: getSaoPauloTime(),
         type: 'info',
-        message: `Novo cliente parceiro cadastrado: ${newClientName}${newClientCNPJ ? ` (CNPJ: ${newClientCNPJ})` : ''}`,
+        message: `Novo cliente parceiro cadastrado com sucesso: ${newClientName}${newClientCNPJ ? ` (CNPJ: ${newClientCNPJ})` : ''}`,
       });
 
       // Reset fields
@@ -1928,10 +1979,13 @@ export default function App() {
       setNewClientCep('');
       setNewClientCidade('São Paulo');
       setNewClientEstado('SP');
+      setNewClientRegion('Centro');
+      setNewClientStatus('Adimplente');
+      setNewClientEnableNotifications(true);
       setIsNewClientModalOpen(false);
       setShowClientForm(false);
     } catch (err: any) {
-      console.error(err);
+      console.error('Erro ao cadastrar cliente parceiro:', err);
       alert(`Erro ao salvar cadastro de cliente: ${err.message || err}`);
     }
   };
@@ -1962,6 +2016,9 @@ export default function App() {
         deviceNumber: newRiderDeviceNumber || undefined,
         password: newRiderPassword || undefined,
         address: newRiderAddress || undefined,
+        cep: newRiderCep || undefined,
+        cidade: newRiderCidade || 'São Paulo',
+        estado: newRiderEstado || 'SP',
         cpfCnpj: newRiderCpfCnpj || undefined,
         vehiclePlate: newRiderVehiclePlate || undefined,
         cnh: newRiderCnh || undefined,
@@ -2034,6 +2091,9 @@ export default function App() {
       deviceNumber: newRiderDeviceNumber || undefined,
       password: newRiderPassword || undefined,
       address: newRiderAddress || undefined,
+      cep: newRiderCep || undefined,
+      cidade: newRiderCidade || 'São Paulo',
+      estado: newRiderEstado || 'SP',
       cpfCnpj: newRiderCpfCnpj || undefined,
       vehiclePlate: newRiderVehiclePlate || undefined,
       cnh: newRiderCnh || undefined,
@@ -2063,6 +2123,9 @@ export default function App() {
       setNewRiderDeviceNumber('');
       setNewRiderPassword('');
       setNewRiderAddress('');
+      setNewRiderCep('');
+      setNewRiderCidade('São Paulo');
+      setNewRiderEstado('SP');
       setNewRiderCpfCnpj('');
       setNewRiderVehiclePlate('');
       setNewRiderCnh('');
@@ -4807,7 +4870,11 @@ export default function App() {
                   cnpj.includes(q) ||
                   codigo.includes(q);
                 
-                const matchesType = !selectedClientType || selectedClientType === 'Todos' || cp.type === selectedClientType;
+                const clientTypeStr = String(cp.type || '');
+                const matchesType = !selectedClientType || selectedClientType === 'Todos' || 
+                  clientTypeStr === selectedClientType ||
+                  (selectedClientType === 'Parceiro' && (clientTypeStr === 'Parceiro' || clientTypeStr === 'Cliente Parceiro' || !clientTypeStr)) ||
+                  (selectedClientType === 'Cliente' && (clientTypeStr === 'Cliente' || clientTypeStr === 'Cliente Parceiro'));
                 return matchesSearch && matchesType;
               }).sort((a, b) => {
                 const anyA = a as any;
@@ -5785,15 +5852,32 @@ export default function App() {
                             </button>
 
                             <button
-                              onClick={() => setShowClientForm(!showClientForm)}
+                              onClick={() => {
+                                if (showClientForm && !editingClient) {
+                                  setShowClientForm(false);
+                                } else {
+                                  setEditingClient(null);
+                                  setNewClientName('');
+                                  setNewClientCNPJ('');
+                                  setNewClientTel('');
+                                  setNewClientAddr('');
+                                  setNewClientCep('');
+                                  setNewClientCidade('São Paulo');
+                                  setNewClientEstado('SP');
+                                  setNewClientRegion('Centro');
+                                  setNewClientStatus('Adimplente');
+                                  setNewClientEnableNotifications(true);
+                                  setShowClientForm(true);
+                                }
+                              }}
                               className={`px-3.5 py-1.5 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
-                                showClientForm 
+                                showClientForm && !editingClient
                                   ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' 
                                   : 'bg-blue-600 hover:bg-blue-700 text-white'
                               }`}
                             >
-                              <Plus size={14} className={`transition-transform duration-200 ${showClientForm ? 'rotate-45' : ''}`} />
-                              <span>{showClientForm ? 'Fechar Ficha' : 'Cadastrar Novo'}</span>
+                              <Plus size={14} className={`transition-transform duration-200 ${showClientForm && !editingClient ? 'rotate-45' : ''}`} />
+                              <span>{showClientForm && !editingClient ? 'Fechar Ficha' : 'Cadastrar Novo'}</span>
                             </button>
                           </div>
                         </div>
@@ -6005,9 +6089,22 @@ export default function App() {
                                       </button>
                                       <button
                                         onClick={async () => {
-                                          if (window.confirm(`Tem certeza que deseja excluir o cliente ${item.name}?`)) {
+                                          if (window.confirm(`Tem certeza que deseja excluir o cliente parceiro "${item.name}"?`)) {
                                             try {
+                                              // Optimistic state removal
+                                              setClientPartners(prev => {
+                                                const updated = prev.filter(c => c.id !== item.id);
+                                                setCachedClientPartners(updated);
+                                                return updated;
+                                              });
+
+                                              if (editingClient?.id === item.id) {
+                                                setEditingClient(null);
+                                                setShowClientForm(false);
+                                              }
+
                                               await dbDeleteClientPartner(item.id);
+                                              
                                               // add log
                                               const logId = generateUniqueLogId();
                                               await dbAddActivityLog({
@@ -6017,6 +6114,7 @@ export default function App() {
                                                 message: `Cliente parceiro removido do cadastro: ${item.name}`,
                                               });
                                             } catch (err: any) {
+                                              console.error('Erro ao excluir cliente parceiro:', err);
                                               alert(`Erro ao excluir: ${err.message || err}`);
                                             }
                                           }
@@ -6129,7 +6227,7 @@ export default function App() {
                                     onAddressFound={(data) => {
                                       const clean = (data.cep || '').replace(/\D/g, '');
                                       if (clean.length === 8) {
-                                        handleSearchCep(clean);
+                                        handleSearchCep(clean, !newClientAddr || newClientAddr.trim() === '');
                                       }
                                     }}
                                     customError={cepSearchError || undefined}
@@ -6575,6 +6673,9 @@ export default function App() {
                                           setNewRiderDeviceNumber(item.deviceNumber || '');
                                           setNewRiderPassword(item.password || '');
                                           setNewRiderAddress(item.address || '');
+                                          setNewRiderCep(item.cep || '');
+                                          setNewRiderCidade(item.cidade || 'São Paulo');
+                                          setNewRiderEstado(item.estado || 'SP');
                                           setNewRiderCpfCnpj(item.cpfCnpj || '');
                                           setNewRiderVehiclePlate(item.vehiclePlate || '');
                                           setNewRiderCnh(item.cnh || '');
@@ -6719,23 +6820,68 @@ export default function App() {
                               />
                             </div>
 
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="col-span-2">
+                                <CepInput
+                                  label="CEP do Condutor"
+                                  value={newRiderCep}
+                                  onChange={(formatted) => setNewRiderCep(formatted)}
+                                  onAddressFound={(data) => {
+                                    const clean = (data.cep || '').replace(/\D/g, '');
+                                    if (clean.length === 8) {
+                                      handleSearchRiderCep(clean, !newRiderAddress || newRiderAddress.trim() === '');
+                                    }
+                                  }}
+                                  customError={riderCepError || undefined}
+                                  showAddressPreview={true}
+                                  size="sm"
+                                  id="new-rider-cep"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">UF / Estado</label>
+                                <input
+                                  type="text"
+                                  maxLength={2}
+                                  value={newRiderEstado}
+                                  onChange={(e) => setNewRiderEstado(e.target.value.toUpperCase())}
+                                  placeholder="SP"
+                                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold uppercase"
+                                />
+                              </div>
+                            </div>
+
                             <AddressAutocompleteInput
-                              label="Endereço Completo"
-                              placeholder="Ex: Av. Paulista, 1000 - Bela Vista, São Paulo - SP"
+                              label="Endereço Completo do Condutor"
+                              placeholder="Ex: Av. Paulista, 1000 - Bela Vista ou Rua Cerro Corá..."
                               value={newRiderAddress}
                               onChange={(val) => setNewRiderAddress(val)}
                               onCepFound={(lookup) => {
-                                if (lookup.cep && !newRiderAddress.includes(lookup.cep)) {
-                                  // Auto-format full address if user chose a suggestion or auto-completed
-                                  if (!newRiderAddress.includes('CEP')) {
-                                    setNewRiderAddress(`${lookup.formattedAddress} (CEP: ${lookup.cep})`);
-                                  }
+                                if (lookup.cep) {
+                                  setNewRiderCep(lookup.cep);
+                                }
+                                if (lookup.localidade) {
+                                  setNewRiderCidade(lookup.localidade);
+                                }
+                                if (lookup.uf) {
+                                  setNewRiderEstado(lookup.uf);
                                 }
                               }}
                               showCepBadge={true}
                               showSuggestions={true}
                               id="new-rider-address"
                             />
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Cidade</label>
+                              <input
+                                type="text"
+                                value={newRiderCidade}
+                                onChange={(e) => setNewRiderCidade(e.target.value)}
+                                placeholder="São Paulo"
+                                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
 
                             <div>
                               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nº do Dispositivo (Login)</label>
@@ -6916,6 +7062,9 @@ export default function App() {
                                     setNewRiderDeviceNumber('');
                                     setNewRiderPassword('');
                                     setNewRiderAddress('');
+                                    setNewRiderCep('');
+                                    setNewRiderCidade('São Paulo');
+                                    setNewRiderEstado('SP');
                                     setNewRiderCpfCnpj('');
                                     setNewRiderVehiclePlate('');
                                     setNewRiderCnh('');

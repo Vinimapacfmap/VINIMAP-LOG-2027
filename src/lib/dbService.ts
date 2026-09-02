@@ -722,17 +722,28 @@ export async function dbQueryOrdersByPartner(partnerName: string, maxLimit = 100
 
 // Client CRUD operations
 export async function dbSaveClientPartner(client: ClientPartner) {
+  const docId = String(client.id || client.codigoCliente || '').trim();
+  if (!docId) {
+    console.error('dbSaveClientPartner: Missing id for client', client);
+    return;
+  }
+  const cleanClient: ClientPartner = {
+    ...client,
+    id: docId,
+    codigoCliente: client.codigoCliente || docId
+  };
+
   try {
-    await sbSaveClientPartner(client);
+    await sbSaveClientPartner(cleanClient);
   } catch (err) {
     console.warn('Supabase save client warning:', err);
   }
 
   if (!getIsFirestoreQuotaExceeded()) {
     try {
-      await setDoc(doc(db, 'clientPartners', client.id), removeUndefinedFields(client));
+      await setDoc(doc(db, 'clientPartners', docId), removeUndefinedFields(cleanClient));
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `clientPartners/${client.id}`);
+      handleFirestoreError(err, OperationType.WRITE, `clientPartners/${docId}`);
     }
   }
 }

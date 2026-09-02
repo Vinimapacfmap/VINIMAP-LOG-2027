@@ -13,6 +13,7 @@ import { matchesAddressQuery } from '../utils/addressUtils';
 import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from '../utils/searchUtils';
 import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult } from '../utils/locationUtils';
 import CepInput, { ViaCepData } from './CepInput';
+import AddressAutocompleteInput from './AddressAutocompleteInput';
 import HistoricOrdersConsultModal from './HistoricOrdersConsultModal';
 import { 
   ChevronLeft, 
@@ -3570,33 +3571,77 @@ function OrdersTable({
                                 </button>
                               </div>
 
-                              <div className="grid grid-cols-3 gap-3">
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase">CEP *</label>
-                                  <input
-                                    type="text"
-                                    placeholder="Ex: 01310-100"
-                                    value={editStandardFields.cep}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setEditStandardFields({ ...editStandardFields, cep: val });
-                                      setEditForm({ ...editForm, 'CEP': val });
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                  <CepInput
+                                    label="CEP de Entrega"
+                                    required
+                                    value={editStandardFields.cep || editForm['CEP'] || ''}
+                                    onChange={(formatted) => {
+                                      setEditStandardFields({ ...editStandardFields, cep: formatted });
+                                      setEditForm({ ...editForm, 'CEP': formatted });
                                     }}
-                                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800"
+                                    onAddressFound={(data) => {
+                                      const clean = (data.cep || '').replace(/\D/g, '');
+                                      if (clean.length === 8) {
+                                        fetchAddressAndGeocodeByCep(clean).then(res => {
+                                          setEditStandardFields(prev => ({
+                                            ...prev,
+                                            cep: res.formattedCep,
+                                            address: res.address,
+                                            region: res.region
+                                          }));
+                                          setEditForm(prev => ({
+                                            ...prev,
+                                            'CEP': res.formattedCep,
+                                            'Endereco': res.address,
+                                            'CidadeMunicipio': res.localidade,
+                                            'Estado': res.uf,
+                                            'Latitude': String(res.lat),
+                                            'Longitude': String(res.lng)
+                                          }));
+                                        }).catch(() => {
+                                          const fullAddr = [data.logradouro, data.bairro, data.localidade, data.uf].filter(Boolean).join(', ');
+                                          if (fullAddr) {
+                                            setEditStandardFields(prev => ({ ...prev, address: fullAddr }));
+                                            setEditForm(prev => ({ ...prev, 'Endereco': fullAddr, 'CidadeMunicipio': data.localidade || 'São Paulo', 'Estado': data.uf || 'SP' }));
+                                          }
+                                        });
+                                      }
+                                    }}
+                                    showAddressPreview={true}
+                                    size="sm"
                                   />
                                 </div>
-                                <div className="col-span-2 space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Endereço de Entrega</label>
-                                  <input
-                                    type="text"
-                                    placeholder="Endereço obtido via API..."
-                                    value={editStandardFields.address}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setEditStandardFields({ ...editStandardFields, address: val });
-                                      setEditForm({ ...editForm, 'Endereco': val });
+                                <div className="md:col-span-2">
+                                  <AddressAutocompleteInput
+                                    label="Endereço de Entrega (Rua, Nº, Bairro)"
+                                    placeholder="Ex: Av. Paulista, 1000 - Bela Vista..."
+                                    value={editStandardFields.address || editForm['Endereco'] || ''}
+                                    onChange={(val) => {
+                                      setEditStandardFields(prev => ({ ...prev, address: val }));
+                                      setEditForm(prev => ({ ...prev, 'Endereco': val }));
                                     }}
-                                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+                                    onCepFound={(lookup) => {
+                                      if (lookup.cep) {
+                                        setEditStandardFields(prev => ({
+                                          ...prev,
+                                          cep: lookup.cep,
+                                          ...(lookup.region ? { region: lookup.region } : {})
+                                        }));
+                                        setEditForm(prev => ({
+                                          ...prev,
+                                          'CEP': lookup.cep,
+                                          ...(lookup.localidade ? { 'CidadeMunicipio': lookup.localidade } : {}),
+                                          ...(lookup.uf ? { 'Estado': lookup.uf } : {}),
+                                          ...(lookup.lat ? { 'Latitude': String(lookup.lat) } : {}),
+                                          ...(lookup.lng ? { 'Longitude': String(lookup.lng) } : {})
+                                        }));
+                                      }
+                                    }}
+                                    showCepBadge={true}
+                                    showSuggestions={true}
+                                    id="hub-edit-address-input"
                                   />
                                 </div>
                               </div>

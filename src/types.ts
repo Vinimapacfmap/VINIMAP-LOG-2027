@@ -180,6 +180,9 @@ export interface DeliveryRider {
   lastLoginAt?: string;
   password?: string; // numeric, up to 6 digits
   address?: string;
+  cep?: string;
+  cidade?: string;
+  estado?: string;
   cpfCnpj?: string;
   vehiclePlate?: string;
   cnh?: string;
