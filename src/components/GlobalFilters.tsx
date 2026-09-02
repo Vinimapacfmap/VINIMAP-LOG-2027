@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo } from 'react';
-import { formatToBrazilianDate, isOrderInDatePeriod } from '../utils/dateUtils';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { formatToBrazilianDate, isOrderInDatePeriod, getSaoPauloISODate } from '../utils/dateUtils';
 import { isOrderMatchingPartner, isOrderMatchingRider } from '../utils/partnerUtils';
 import { isOrderMatchingGlobalSearch } from '../utils/searchUtils';
 import { isMockClientPartner, isMockRider, isMockOrder } from '../utils/orderConsistency';
@@ -20,7 +20,14 @@ import {
   Activity, 
   RotateCcw,
   Sparkles,
-  Filter
+  Filter,
+  CheckCircle2,
+  Clock,
+  Truck,
+  AlertCircle,
+  XCircle,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
 
 interface GlobalFiltersProps {
@@ -71,6 +78,18 @@ export default function GlobalFilters({
   onNavigateToOrders
 }: GlobalFiltersProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setIsStatusDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const isAllDates = !filterDateFrom && !filterDateTo;
 
@@ -87,11 +106,9 @@ export default function GlobalFilters({
   // Sincronização 1: Base de pedidos filtrados pelo período e busca para alimentar as opções dos seletores
   const ordersMatchingPeriodAndSearch = useMemo(() => {
     return orders.filter(order => {
-      // 1. Data
       if (!isOrderInDatePeriod(order, filterDateFrom, filterDateTo)) {
         return false;
       }
-      // 2. Busca por texto (se houver)
       if (searchQuery.trim() && !isOrderMatchingGlobalSearch(order, searchQuery, riders, clientPartners)) {
         return false;
       }
@@ -101,7 +118,6 @@ export default function GlobalFilters({
 
   // Sincronização 2: Opções de Parceiros com contagem dinâmica respeitando período, condutor, status e busca
   const partnerOptions = useMemo(() => {
-    // Pedidos que atendem os outros filtros ativos (período, condutor, status, busca)
     const relevantOrders = orders.filter(order => {
       if (isMockOrder(order)) return false;
       if (!isOrderInDatePeriod(order, filterDateFrom, filterDateTo)) return false;
@@ -111,17 +127,14 @@ export default function GlobalFilters({
       return true;
     });
 
-    // Mapear contagens por parceiro
     const countsMap = new Map<string, { id: string; name: string; count: number }>();
 
-    // Inicializar com parceiros cadastrados (excluindo mock)
     clientPartners
       .filter(cp => !isMockClientPartner(cp))
       .forEach(cp => {
         countsMap.set(cp.id, { id: cp.id, name: cp.name, count: 0 });
       });
 
-    // Contabilizar pedidos
     relevantOrders.forEach(o => {
       const pName = o.partnerName || o.clientName || '';
       if (!pName) return;
@@ -226,69 +239,67 @@ export default function GlobalFilters({
     return counts;
   }, [orders, filterDateFrom, filterDateTo, searchQuery, filterPartner, filterRiderId, riders, clientPartners]);
 
-  // Obter nome legível do parceiro selecionado
-  const selectedPartnerName = useMemo(() => {
-    if (!filterPartner) return '';
-    const cp = clientPartners.find(c => c.id === filterPartner || c.name === filterPartner);
-    return cp ? cp.name : filterPartner;
-  }, [filterPartner, clientPartners]);
+  // Status definitions with colors & icons
+  const statusList = [
+    { key: '', label: 'Todos os Status', shortLabel: 'Todos', count: statusCounts['Todos'], color: 'blue', dot: 'bg-blue-500', icon: Layers },
+    { key: 'Não iniciado', label: 'Não Iniciados (Pendentes)', shortLabel: 'Não Iniciados', count: statusCounts['Não iniciado'], color: 'amber', dot: 'bg-amber-500', icon: Clock },
+    { key: 'Em rota', label: 'Em Rota (Em Trânsito)', shortLabel: 'Em Rota', count: statusCounts['Em rota'], color: 'sky', dot: 'bg-sky-500', icon: Truck },
+    { key: 'Concluído', label: 'Concluídos (Entregues)', shortLabel: 'Concluídos', count: statusCounts['Concluído'], color: 'emerald', dot: 'bg-emerald-500', icon: CheckCircle2 },
+    { key: 'Ocorrência', label: 'Ocorrências (Pendências)', shortLabel: 'Ocorrências', count: statusCounts['Ocorrência'], color: 'rose', dot: 'bg-rose-500', icon: AlertCircle },
+    { key: 'Cancelado', label: 'Cancelados', shortLabel: 'Cancelados', count: statusCounts['Cancelado'], color: 'slate', dot: 'bg-slate-400', icon: XCircle },
+  ];
 
-  // Obter nome legível do condutor selecionado
-  const selectedRiderName = useMemo(() => {
-    if (!filterRiderId) return '';
-    if (filterRiderId === 'unassigned') return 'Sem Condutor (Não Alocado)';
-    const r = riders.find(item => item.id === filterRiderId || item.name === filterRiderId);
-    return r ? r.name : filterRiderId;
-  }, [filterRiderId, riders]);
+  const currentStatusObj = statusList.find(s => s.key === filterStatus) || statusList[0];
 
-  // Obter rótulo do status selecionado
-  const getStatusLabel = (key: string) => {
-    switch (key) {
-      case 'Não iniciado': return 'Não Iniciados';
-      case 'Em rota': return 'Em Rota';
-      case 'Concluído': return 'Concluídos';
-      case 'Ocorrência': return 'Ocorrências';
-      case 'Cancelado': return 'Cancelados';
-      default: return key;
-    }
+  // Helper date presets
+  const handleSetToday = () => {
+    const today = getSaoPauloISODate();
+    setFilterDateFrom(today);
+    setFilterDateTo(today);
+    if (onNavigateToOrders) onNavigateToOrders();
+  };
+
+  const handleSetAllDates = () => {
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    if (onNavigateToOrders) onNavigateToOrders();
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-xs transition-all overflow-hidden" id="global-filters-panel">
+    <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs transition-all overflow-hidden" id="global-filters-panel">
       {/* Header Bar */}
       <div 
-        className="px-4 py-2.5 flex items-center justify-between cursor-pointer select-none hover:bg-slate-50 transition-colors bg-slate-50/90 border-b border-slate-200/80"
+        className="px-4 py-2.5 flex items-center justify-between cursor-pointer select-none hover:bg-slate-50 transition-colors bg-gradient-to-r from-slate-50 via-slate-50 to-blue-50/30 border-b border-slate-200/80"
         onClick={() => setIsOpen(!isOpen)}
         id="filters-header-trigger"
       >
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="p-1.5 rounded-lg bg-blue-600 text-white shrink-0 shadow-xs">
+          <div className="p-1.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-xs">
             <Filter size={14} className="font-bold" />
           </div>
           <div>
-            <h3 className="font-black text-slate-900 text-xs flex items-center gap-1.5">
-              <span>Filtros Sincronizados de Pesquisa & Período</span>
+            <h3 className="font-extrabold text-slate-900 text-xs flex items-center gap-2">
+              <span>Painel de Filtros Sincronizados</span>
+              {activeFiltersCount > 0 ? (
+                <span className="px-2 py-0.5 rounded-full bg-blue-600 text-[10px] font-black text-white shadow-2xs">
+                  {activeFiltersCount} {activeFiltersCount === 1 ? 'filtro ativo' : 'filtros ativos'}
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-slate-200 text-[10px] font-bold text-slate-700">
+                  Exibindo todos
+                </span>
+              )}
             </h3>
-            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">
+            <p className="text-[10px] text-slate-500 font-semibold truncate max-w-xl">
               {isAllDates 
-                ? 'Todos os Períodos (Sem Bloqueio de Data)' 
+                ? 'Todos os Períodos' 
                 : `Período: ${formatToBrazilianDate(filterDateFrom)} até ${formatToBrazilianDate(filterDateTo)}`}
-              {selectedPartnerName ? ` • Parceiro: ${selectedPartnerName}` : ''}
-              {selectedRiderName ? ` • Condutor: ${selectedRiderName}` : ''}
-              {filterStatus ? ` • Status: ${getStatusLabel(filterStatus)}` : ''}
-              {searchQuery ? ` • Termo: "${searchQuery}"` : ''}
+              {filterPartner ? ` • Parceiro selecionado` : ''}
+              {filterRiderId ? ` • Condutor selecionado` : ''}
+              {filterStatus ? ` • Status: ${currentStatusObj.shortLabel}` : ''}
+              {searchQuery ? ` • Busca: "${searchQuery}"` : ''}
             </p>
           </div>
-          {activeFiltersCount > 0 && (
-            <span className="ml-1.5 px-2 py-0.5 rounded-full bg-blue-700 text-[10px] font-black text-white shadow-xs">
-              {activeFiltersCount} {activeFiltersCount === 1 ? 'filtro ativo' : 'filtros ativos'}
-            </span>
-          )}
-          {typeof totalFilteredOrdersCount === 'number' && (
-            <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black border border-emerald-300">
-              {totalFilteredOrdersCount} {totalFilteredOrdersCount === 1 ? 'pedido sincronizado' : 'pedidos sincronizados'}
-            </span>
-          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -303,14 +314,14 @@ export default function GlobalFilters({
                 if (setFilterCep) setFilterCep('');
                 onClearFilters();
               }}
-              className="px-2.5 py-1 text-[11px] font-extrabold bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 text-[11px] font-extrabold bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
               id="clear-filters-btn"
             >
               <RotateCcw size={12} />
-              <span>Limpar Todos</span>
+              <span>Limpar Filtros</span>
             </button>
           )}
-          <span className="text-slate-600 p-1 hover:bg-slate-200/60 rounded-lg transition-colors">
+          <span className="text-slate-500 p-1 hover:bg-slate-200/60 rounded-xl transition-colors">
             {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </span>
         </div>
@@ -318,18 +329,18 @@ export default function GlobalFilters({
 
       {/* Form Controls Section */}
       {isOpen && (
-        <div className="p-3 sm:p-4 border-t border-slate-100 space-y-3" id="filters-form-container">
+        <div className="p-3 sm:p-4 space-y-3.5" id="filters-form-container">
           
-          {/* Main Grid: Pesquisa, Datas (Inicial e Final), Parceiro, Condutor, Status */}
+          {/* Main Cards Row: Search, Period, Partner, Rider, Status Dropdown Card */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3" id="filters-form-grid">
             
-            {/* 1. BUSCA GLOBAL INTELIGENTE (Condutor, Destinatário, Nº Pedido, Endereço, CEP, DANFE) */}
-            <div className="space-y-1 sm:col-span-2 lg:col-span-4">
-              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider flex items-center justify-between select-none">
-                <span className="flex items-center gap-1 text-blue-700 font-extrabold">
-                  <Search size={11} className="text-blue-600" />
-                  Pesquisa (Condutor, Nome, Nº Pedido, CEP)
-                </span>
+            {/* 1. CARD: BUSCA INTELIGENTE */}
+            <div className="sm:col-span-2 lg:col-span-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between shadow-3xs hover:border-blue-300 transition-all">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                  <Search size={12} className="text-blue-600" />
+                  <span>Pesquisa Geral</span>
+                </label>
                 {searchQuery && (
                   <button
                     type="button"
@@ -339,19 +350,15 @@ export default function GlobalFilters({
                     limpar
                   </button>
                 )}
-              </label>
+              </div>
               <div className="relative flex items-center">
-                <Search size={13} className="absolute left-2.5 text-slate-500 pointer-events-none" />
+                <Search size={13} className="absolute left-2.5 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
                   id="vinimap_global_order_search_filter"
                   name="vinimap_global_order_search_filter"
                   autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  data-lpignore="true"
-                  placeholder="Ex: Carlos, 1045, Av. Paulista, 01310-100..."
+                  placeholder="Nome, Nº Pedido, CEP, Endereço..."
                   value={searchQuery}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -365,13 +372,13 @@ export default function GlobalFilters({
                       onNavigateToOrders();
                     }
                   }}
-                  className="w-full pl-8 pr-7 py-2 bg-blue-50/30 border border-blue-200 rounded-xl text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
+                  className="w-full pl-8 pr-7 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery && setSearchQuery('')}
-                    className="absolute right-2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5 rounded-full hover:bg-slate-200/50"
+                    className="absolute right-2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5 rounded-full hover:bg-slate-100"
                   >
                     <X size={12} />
                   </button>
@@ -379,85 +386,64 @@ export default function GlobalFilters({
               </div>
             </div>
 
-            {/* 2. DATA INICIAL (Sem bloqueio) */}
-            <div className="space-y-1 sm:col-span-1 lg:col-span-2">
-              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider flex items-center justify-between select-none">
-                <span className="flex items-center gap-1 text-slate-700">
-                  <Calendar size={11} className="text-slate-600" />
-                  Data Inicial
-                </span>
-                {filterDateFrom && (
-                  <span className="text-[10px] text-blue-700 font-black">
-                    {formatToBrazilianDate(filterDateFrom)}
-                  </span>
-                )}
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type="date"
-                  id="filter_date_from_input"
-                  name="filter_date_from_input"
-                  autoComplete="off"
-                  value={filterDateFrom}
-                  onChange={(e) => setFilterDateFrom(e.target.value)}
-                  className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-                />
-                {filterDateFrom && (
+            {/* 2. CARD: PERÍODO OPERACIONAL (Data Inicial & Final) */}
+            <div className="sm:col-span-2 lg:col-span-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between shadow-3xs hover:border-blue-300 transition-all">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                  <Calendar size={12} className="text-blue-600" />
+                  <span>Período</span>
+                </label>
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setFilterDateFrom('')}
-                    className="absolute right-6 text-slate-400 hover:text-rose-600 p-0.5"
-                    title="Limpar Data Inicial"
+                    onClick={handleSetToday}
+                    className="text-[9.5px] font-black text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded-md cursor-pointer transition-colors"
                   >
-                    <X size={11} />
+                    Hoje
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={handleSetAllDates}
+                    className="text-[9.5px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200/70 hover:bg-slate-200 px-1.5 py-0.5 rounded-md cursor-pointer transition-colors"
+                  >
+                    Todos
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="relative">
+                  <input
+                    type="date"
+                    id="filter_date_from_input"
+                    name="filter_date_from_input"
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer"
+                    title="Data Inicial"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="date"
+                    id="filter_date_to_input"
+                    name="filter_date_to_input"
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer"
+                    title="Data Final"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* 3. DATA FINAL (Sem bloqueio) */}
-            <div className="space-y-1 sm:col-span-1 lg:col-span-2">
-              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider flex items-center justify-between select-none">
-                <span className="flex items-center gap-1 text-slate-700">
-                  <Calendar size={11} className="text-slate-600" />
-                  Data Final
-                </span>
-                {filterDateTo && (
-                  <span className="text-[10px] text-blue-700 font-black">
-                    {formatToBrazilianDate(filterDateTo)}
-                  </span>
-                )}
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type="date"
-                  id="filter_date_to_input"
-                  name="filter_date_to_input"
-                  autoComplete="off"
-                  value={filterDateTo}
-                  onChange={(e) => setFilterDateTo(e.target.value)}
-                  className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-                />
-                {filterDateTo && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterDateTo('')}
-                    className="absolute right-6 text-slate-400 hover:text-rose-600 p-0.5"
-                    title="Limpar Data Final"
-                  >
-                    <X size={11} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* 4. SELETOR POR PARCEIRO (Sincronizado) */}
-            <div className="space-y-1 sm:col-span-1 lg:col-span-2">
-              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider flex items-center justify-between select-none">
-                <span className="flex items-center gap-1 text-slate-700">
-                  <Building2 size={11} className="text-slate-600" />
-                  Parceiro / Cliente
-                </span>
+            {/* 3. CARD: PARCEIRO / CLIENTE */}
+            <div className="sm:col-span-1 lg:col-span-2 bg-slate-50/70 border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between shadow-3xs hover:border-blue-300 transition-all">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                  <Building2 size={12} className="text-blue-600" />
+                  <span>Parceiro</span>
+                </label>
                 {filterPartner && (
                   <button
                     type="button"
@@ -467,8 +453,8 @@ export default function GlobalFilters({
                     todos
                   </button>
                 )}
-              </label>
-              <div className="relative flex items-center">
+              </div>
+              <div className="relative">
                 <select
                   id="filter_partner_selector"
                   name="filter_partner_selector"
@@ -478,11 +464,11 @@ export default function GlobalFilters({
                     if (setFilterPartner) setFilterPartner(val);
                     if (onNavigateToOrders) onNavigateToOrders();
                   }}
-                  className={`w-full px-2.5 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer truncate ${
-                    filterPartner ? 'border-blue-500 bg-blue-50/20 text-blue-950' : 'border-slate-300'
+                  className={`w-full px-2.5 py-2 bg-white border rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer truncate ${
+                    filterPartner ? 'border-blue-500 bg-blue-50/30 text-blue-950 font-extrabold' : 'border-slate-200'
                   }`}
                 >
-                  <option value="">Todos os Parceiros ({ordersMatchingPeriodAndSearch.length})</option>
+                  <option value="">Todos Parceiros ({ordersMatchingPeriodAndSearch.length})</option>
                   {partnerOptions.map(p => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.count})
@@ -492,13 +478,13 @@ export default function GlobalFilters({
               </div>
             </div>
 
-            {/* 5. SELETOR POR CONDUTOR (Sincronizado) */}
-            <div className="space-y-1 sm:col-span-1 lg:col-span-2">
-              <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider flex items-center justify-between select-none">
-                <span className="flex items-center gap-1 text-slate-700">
-                  <UserCheck size={11} className="text-slate-600" />
-                  Condutor / Motorista
-                </span>
+            {/* 4. CARD: CONDUTOR / MOTORISTA */}
+            <div className="sm:col-span-1 lg:col-span-2 bg-slate-50/70 border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between shadow-3xs hover:border-blue-300 transition-all">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                  <UserCheck size={12} className="text-blue-600" />
+                  <span>Condutor</span>
+                </label>
                 {filterRiderId && (
                   <button
                     type="button"
@@ -508,8 +494,8 @@ export default function GlobalFilters({
                     todos
                   </button>
                 )}
-              </label>
-              <div className="relative flex items-center">
+              </div>
+              <div className="relative">
                 <select
                   id="filter_rider_selector"
                   name="filter_rider_selector"
@@ -519,14 +505,14 @@ export default function GlobalFilters({
                     if (setFilterRiderId) setFilterRiderId(val);
                     if (onNavigateToOrders) onNavigateToOrders();
                   }}
-                  className={`w-full px-2.5 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all cursor-pointer truncate ${
-                    filterRiderId ? 'border-blue-500 bg-blue-50/20 text-blue-950' : 'border-slate-300'
+                  className={`w-full px-2.5 py-2 bg-white border rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer truncate ${
+                    filterRiderId ? 'border-blue-500 bg-blue-50/30 text-blue-950 font-extrabold' : 'border-slate-200'
                   }`}
                 >
-                  <option value="">Todos os Condutores</option>
+                  <option value="">Todos Condutores</option>
                   {riderOptions.unassignedCount > 0 && (
                     <option value="unassigned" className="text-amber-700 font-bold">
-                      ⚠️ Sem Condutor / Pendente ({riderOptions.unassignedCount})
+                      ⚠️ Sem Condutor ({riderOptions.unassignedCount})
                     </option>
                   )}
                   {riderOptions.riders.map(r => (
@@ -538,27 +524,115 @@ export default function GlobalFilters({
               </div>
             </div>
 
+            {/* 5. CARD: STATUS DO PEDIDO (DROP DOWN CARD ELEGANTE) */}
+            <div 
+              ref={statusDropdownRef}
+              className="sm:col-span-2 lg:col-span-2 bg-slate-50/70 border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between shadow-3xs relative hover:border-blue-300 transition-all"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                  <Activity size={12} className="text-blue-600" />
+                  <span>Filtrar por Status</span>
+                </label>
+                {filterStatus && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (setFilterStatus) setFilterStatus('');
+                      if (onNavigateToOrders) onNavigateToOrders();
+                    }}
+                    className="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
+                  >
+                    todos
+                  </button>
+                )}
+              </div>
+
+              {/* Status Selector Dropdown Trigger Button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  id="status-dropdown-trigger"
+                  onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                  className={`w-full px-2.5 py-2 rounded-xl text-xs font-extrabold flex items-center justify-between gap-2 border transition-all cursor-pointer ${
+                    filterStatus 
+                      ? 'bg-blue-50/80 text-blue-950 border-blue-400 shadow-2xs' 
+                      : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${currentStatusObj.dot}`} />
+                    <span className="truncate">{currentStatusObj.shortLabel}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md font-black bg-slate-100 text-slate-700">
+                      {currentStatusObj.count}
+                    </span>
+                    <ChevronDown size={13} className={`text-slate-400 transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </button>
+
+                {/* Dropdown Menu */}
+                {isStatusDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-64 sm:w-72 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="px-3.5 py-1.5 text-[9.5px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1 flex items-center justify-between">
+                      <span>Selecionar Status</span>
+                      <span>{statusCounts['Todos']} pedidos total</span>
+                    </div>
+
+                    <div className="space-y-0.5 px-1.5 max-h-64 overflow-y-auto">
+                      {statusList.map(st => {
+                        const isSelected = filterStatus === st.key;
+                        const Icon = st.icon;
+                        return (
+                          <button
+                            key={st.key || 'all'}
+                            type="button"
+                            onClick={() => {
+                              if (setFilterStatus) setFilterStatus(st.key);
+                              setIsStatusDropdownOpen(false);
+                              if (onNavigateToOrders) onNavigateToOrders();
+                            }}
+                            className={`w-full px-3 py-2 rounded-xl text-xs font-extrabold flex items-center justify-between transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-slate-900 text-white shadow-2xs'
+                                : 'hover:bg-slate-50 text-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${st.dot}`} />
+                              <Icon size={14} className={isSelected ? 'text-white' : 'text-slate-400'} />
+                              <span>{st.label}</span>
+                            </div>
+                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${
+                              isSelected 
+                                ? 'bg-white/20 text-white' 
+                                : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {st.count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
 
-          {/* Secondary Row: Status Selector Buttons + Clear All */}
-          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+          {/* Secondary Row: Quick Status Filter Pills (Horizontal Soft Ribbon) */}
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
             
-            {/* Status Filter Buttons */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1">
+              <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1">
                 <Activity size={11} className="text-blue-600" />
-                Filtrar Status:
+                Atalho Rápido de Status:
               </span>
 
               <div className="flex items-center gap-1.5 flex-wrap">
-                {[
-                  { key: '', label: 'Todos', count: statusCounts['Todos'] },
-                  { key: 'Não iniciado', label: 'Não Iniciados', count: statusCounts['Não iniciado'] },
-                  { key: 'Em rota', label: 'Em Rota', count: statusCounts['Em rota'] },
-                  { key: 'Concluído', label: 'Concluídos', count: statusCounts['Concluído'] },
-                  { key: 'Ocorrência', label: 'Ocorrências', count: statusCounts['Ocorrência'] },
-                  { key: 'Cancelado', label: 'Cancelados', count: statusCounts['Cancelado'] }
-                ].map(st => {
+                {statusList.map(st => {
                   const isSelected = filterStatus === st.key;
                   return (
                     <button
@@ -568,17 +642,18 @@ export default function GlobalFilters({
                         if (setFilterStatus) setFilterStatus(st.key);
                         if (onNavigateToOrders) onNavigateToOrders();
                       }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition-all cursor-pointer border flex items-center gap-1.5 shadow-3xs ${
                         isSelected
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs scale-[1.02]'
+                          : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      <span>{st.label}</span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      <span className={`w-2 h-2 rounded-full ${st.dot}`} />
+                      <span>{st.shortLabel}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-black ${
                         isSelected 
                           ? 'bg-white/20 text-white' 
-                          : 'bg-slate-200 text-slate-700'
+                          : 'bg-slate-100 text-slate-700'
                       }`}>
                         {st.count}
                       </span>
@@ -588,7 +663,7 @@ export default function GlobalFilters({
               </div>
             </div>
 
-            {/* Clear All action */}
+            {/* Clear Filters Action */}
             {activeFiltersCount > 0 && (
               <button
                 type="button"
@@ -608,98 +683,6 @@ export default function GlobalFilters({
             )}
 
           </div>
-
-          {/* Active Badges Strip */}
-          {activeFiltersCount > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 text-xs">
-              <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mr-1">
-                <Sparkles size={11} className="text-blue-500" />
-                Filtros ativos sincronizados:
-              </span>
-
-              {/* Search Query Pill */}
-              {searchQuery && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 border border-blue-300 text-blue-900 font-extrabold rounded-lg text-xs">
-                  <Search size={10} className="text-blue-700" />
-                  <span>Busca: <strong>"{searchQuery}"</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery && setSearchQuery('')}
-                    className="ml-1 p-0.5 hover:bg-blue-200 rounded text-blue-700 hover:text-blue-950 cursor-pointer"
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              )}
-
-              {/* Period Pill */}
-              {!isAllDates && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 border border-slate-300 text-slate-800 font-bold rounded-lg text-xs">
-                  <Calendar size={10} className="text-slate-600" />
-                  <span>
-                    Período: <strong>
-                      {filterDateFrom ? formatToBrazilianDate(filterDateFrom) : 'Início'} até {filterDateTo ? formatToBrazilianDate(filterDateTo) : 'Fim'}
-                    </strong>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFilterDateFrom('');
-                      setFilterDateTo('');
-                    }}
-                    className="ml-1 text-slate-500 hover:text-rose-600 cursor-pointer"
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              )}
-
-              {/* Partner Pill */}
-              {filterPartner && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 border border-purple-300 text-purple-900 font-extrabold rounded-lg text-xs">
-                  <Building2 size={10} className="text-purple-700" />
-                  <span>Parceiro: <strong>{selectedPartnerName}</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => setFilterPartner && setFilterPartner('')}
-                    className="ml-1 text-purple-700 hover:text-purple-950 cursor-pointer"
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              )}
-
-              {/* Rider Pill */}
-              {filterRiderId && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-900 font-extrabold rounded-lg text-xs">
-                  <UserCheck size={10} className="text-amber-700" />
-                  <span>Condutor: <strong>{selectedRiderName}</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => setFilterRiderId && setFilterRiderId('')}
-                    className="ml-1 text-amber-700 hover:text-amber-950 cursor-pointer"
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              )}
-
-              {/* Status Pill */}
-              {filterStatus && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-xs">
-                  <Activity size={10} className="text-emerald-700" />
-                  <span>Status: <strong>{getStatusLabel(filterStatus)}</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => setFilterStatus && setFilterStatus('')}
-                    className="ml-1 text-emerald-700 hover:text-emerald-950 cursor-pointer"
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              )}
-            </div>
-          )}
 
         </div>
       )}

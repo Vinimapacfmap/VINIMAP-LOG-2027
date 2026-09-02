@@ -2306,20 +2306,16 @@ function OrdersTable({
 
   return (
     <div 
-      className={`bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col justify-between transition-all duration-200 ${
-        isFullscreen 
-          ? 'fixed inset-0 z-50 p-3 sm:p-5 bg-slate-900/60 backdrop-blur-md flex flex-col overflow-hidden' 
-          : ''
-      }`} 
+      className="bg-white border border-slate-200/90 rounded-2xl shadow-xs flex flex-col justify-between w-full h-full overflow-hidden transition-all duration-200" 
       id="orders-list-card"
     >
-      <div className={`bg-white rounded-2xl flex flex-col h-full overflow-hidden ${isFullscreen ? 'shadow-2xl border border-slate-200' : ''}`}>
+      <div className="bg-white rounded-2xl flex flex-col h-full overflow-hidden">
       
       {/* 1. ACTIONS & LAYOUT TOOLS CONTROL PANEL */}
-      <div className="p-2 sm:p-3 border-b border-slate-100 bg-slate-50/60 rounded-t-2xl">
+      <div className="p-2.5 sm:p-3 border-b border-slate-100 bg-slate-50/70 rounded-t-2xl">
         
         {/* Row 1: Action Buttons & Layout Tools */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
           
           {/* Left Action Buttons Group */}
           <div className="flex flex-wrap items-center gap-2">
@@ -2327,7 +2323,7 @@ function OrdersTable({
             {/* Criar em Massa */}
             <button
               onClick={() => setIsBulkCreateOpen(true)}
-              className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white border border-emerald-500 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-xs hover:shadow-md hover:scale-[1.01] active:scale-[0.99]"
+              className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white border border-emerald-500 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-2xs hover:shadow-md hover:scale-[1.01] active:scale-[0.99]"
               title="Criar múltiplos pedidos simultaneamente"
             >
               <Plus size={15} className="font-extrabold" />
@@ -2338,26 +2334,11 @@ function OrdersTable({
             <button
               type="button"
               onClick={() => setIsHistoricConsultOpen(true)}
-              className="h-9 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-2xs hover:scale-[1.01] active:scale-[0.99]"
+              className="h-9 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-3xs hover:scale-[1.01] active:scale-[0.99]"
               title="Consultar histórico de pedidos anteriores diretamente no banco Supabase sem consumir cotas do Firestore"
             >
               <Database size={14} className="text-emerald-700" />
               <span>Consultar Supabase (Histórico)</span>
-            </button>
-
-            {/* Buscar & Geocodificar CEP */}
-            <button
-              type="button"
-              onClick={() => setShowCepGeocodeTool(!showCepGeocodeTool)}
-              className={`h-9 px-4 rounded-xl border text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-2xs hover:scale-[1.01] active:scale-[0.99] ${
-                showCepGeocodeTool || cepGeocodeResult
-                  ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-100'
-                  : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50/80'
-              }`}
-              title="Buscar CEP e obter Latitude/Longitude para otimização de rotas"
-            >
-              <MapPin size={14} className={showCepGeocodeTool ? 'animate-bounce text-white' : 'text-blue-600'} />
-              <span>{showCepGeocodeTool ? 'Ocultar Geocodificação' : 'Buscar & Geocodificar CEP'}</span>
             </button>
 
             {/* Quick Batch Selection Button for Current List */}
@@ -2374,7 +2355,7 @@ function OrdersTable({
                     setSelectedIds(new Set([...selectedIds, ...allIds]));
                   }
                 }}
-                className="h-9 px-3.5 bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                className="h-9 px-3.5 bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-3xs cursor-pointer"
                 title="Selecionar ou desmarcar todos os pedidos listados"
               >
                 <CheckSquare size={13} className="text-blue-600" />
@@ -2391,7 +2372,7 @@ function OrdersTable({
               <button
                 onClick={() => setShowExportDropdown(!showExportDropdown)}
                 disabled={filteredOrders.length === 0}
-                className={`h-9 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white border border-slate-800 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-2xs ${
+                className={`h-9 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white border border-slate-800 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-3xs ${
                   filteredOrders.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 title="Exportar dados de pedidos em Excel ou PDF"
@@ -2463,166 +2444,13 @@ function OrdersTable({
 
           </div>
 
-          {/* Right Layout Mode & Fullscreen Controls Group */}
+          {/* Right Layout Mode & Controls Group */}
           <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             
-            {/* Column Filter Toggle Button & Popover Modal */}
-            <div className="relative" id="column-filter-container">
-              <button
-                type="button"
-                onClick={() => setShowColumnFilterMenu(!showColumnFilterMenu)}
-                className={`h-10 px-3.5 rounded-2xl border text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-2xs ${
-                  visibleColumns.size < ALL_TOGGLEABLE_COLUMNS.length
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100 ring-2 ring-indigo-500/20'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-                title="Selecionar e ocultar colunas da tabela para melhorar a legibilidade"
-                id="btn-column-filter"
-              >
-                <Eye size={14} className={visibleColumns.size < ALL_TOGGLEABLE_COLUMNS.length ? 'text-indigo-200' : 'text-indigo-600'} />
-                <span>Colunas ({visibleColumns.size}/{ALL_TOGGLEABLE_COLUMNS.length})</span>
-                <ChevronDown size={12} className={`transition-transform duration-200 ${showColumnFilterMenu ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Column Selector Popover */}
-              {showColumnFilterMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowColumnFilterMenu(false)} />
-                  <div 
-                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl py-3 px-3.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
-                    id="column-filter-popover"
-                  >
-                    {/* Header */}
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-                          <Eye size={15} />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Filtro de Colunas Visíveis</h4>
-                          <p className="text-[10px] text-slate-400 font-semibold">{visibleColumns.size} de {ALL_TOGGLEABLE_COLUMNS.length} campos exibidos</p>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => setShowColumnFilterMenu(false)}
-                        className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-
-                    {/* Quick Search */}
-                    <div className="relative mb-2">
-                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Buscar campo (ex: Endereço, Data, Status)..."
-                        value={columnSearchTerm}
-                        onChange={(e) => setColumnSearchTerm(e.target.value)}
-                        className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder:font-normal"
-                      />
-                      {columnSearchTerm && (
-                        <button 
-                          onClick={() => setColumnSearchTerm('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Preset View Buttons */}
-                    <div className="mb-2.5">
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">Visões Rápidas (Presets):</span>
-                      <div className="flex flex-wrap gap-1">
-                        <button
-                          onClick={() => setVisibleColumns(new Set(FIRST_10_COLUMNS))}
-                          className="text-[10px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-blue-200"
-                        >
-                          Primeiras 10 Colunas (10)
-                        </button>
-                        <button
-                          onClick={() => setVisibleColumns(new Set(ALL_TOGGLEABLE_COLUMNS))}
-                          className="text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-indigo-100/50"
-                        >
-                          Exibir Todas ({ALL_TOGGLEABLE_COLUMNS.length})
-                        </button>
-                        <button
-                          onClick={() => setVisibleColumns(new Set(['Status', 'Pedido', 'Endereco', 'CEP', 'DispositivoCondutor', 'HorarioInicio', 'HorarioFinal', 'DataLimite', 'Prioridade']))}
-                          className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-amber-100/50"
-                        >
-                          Logística (9)
-                        </button>
-                        <button
-                          onClick={() => setVisibleColumns(new Set(['Status', 'Pedido', 'CodigoCliente', 'ValorNotaFiscal', 'ValorReceber', 'ValorEntrega', 'ValorCondutor']))}
-                          className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-emerald-100/50"
-                        >
-                          Financeiro (7)
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Column Checkboxes List */}
-                    <div className="max-h-60 overflow-y-auto space-y-0.5 pr-1 border-t border-slate-100 pt-2 custom-scrollbar">
-                      {ALL_TOGGLEABLE_COLUMNS.filter(col => {
-                        const label = COLUMN_LABELS_MAP[col] || col;
-                        return label.toLowerCase().includes(columnSearchTerm.toLowerCase()) || col.toLowerCase().includes(columnSearchTerm.toLowerCase());
-                      }).map(col => {
-                        const isChecked = visibleColumns.has(col);
-                        const label = COLUMN_LABELS_MAP[col] || col;
-                        return (
-                          <label
-                            key={col}
-                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer select-none ${
-                              isChecked ? 'bg-indigo-50/60 text-indigo-950 font-bold' : 'hover:bg-slate-50 text-slate-500'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => {
-                                  const updated = new Set(visibleColumns);
-                                  if (isChecked) {
-                                    if (updated.size > 1) {
-                                      updated.delete(col);
-                                    }
-                                  } else {
-                                    updated.add(col);
-                                  }
-                                  setVisibleColumns(updated);
-                                }}
-                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
-                              />
-                              <span className="truncate">{label}</span>
-                            </div>
-                            <span className="text-[9px] font-mono font-bold text-slate-400 ml-2 shrink-0">{col}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-
-                    {/* Footer / Reset */}
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold text-slate-400">
-                      <span>{visibleColumns.size} colunas ativas</span>
-                      {visibleColumns.size !== FIRST_10_COLUMNS.length && (
-                        <button
-                          onClick={() => setVisibleColumns(new Set(FIRST_10_COLUMNS))}
-                          className="text-blue-600 hover:underline cursor-pointer"
-                        >
-                          Restaurar 10 Padrão
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
             {/* Sort Order Selector Filter */}
-            <div className="bg-white px-2.5 py-1 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center gap-1.5 h-10">
+            <div className="bg-white px-2.5 py-1 rounded-xl border border-slate-200 shadow-3xs flex items-center gap-1.5 h-9">
               <ArrowUpDown size={13} className="text-slate-400 shrink-0" />
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider hidden md:inline">Ordem:</span>
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider hidden md:inline">Ordem:</span>
               <select
                 value={sortConfig?.key || ''}
                 onChange={(e) => {
@@ -2675,13 +2503,13 @@ function OrdersTable({
             </div>
 
             {/* View Mode Switcher Pill */}
-            <div className="bg-white p-1 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center gap-1">
+            <div className="bg-white p-0.5 rounded-xl border border-slate-200 shadow-3xs flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setViewMode('spreadsheet')}
-                className={`h-8 px-3 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`h-8 px-3 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === 'spreadsheet'
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-blue-600 text-white shadow-3xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
                 title="Visualização em formato Tabela / Planilha detalhada"
@@ -2692,9 +2520,9 @@ function OrdersTable({
               <button
                 type="button"
                 onClick={() => setViewMode('simplified')}
-                className={`h-8 px-3 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`h-8 px-3 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === 'simplified'
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-blue-600 text-white shadow-3xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
                 title="Visualização em formato Lista Simplificada"
@@ -2704,218 +2532,10 @@ function OrdersTable({
               </button>
             </div>
 
-            {/* Tela Cheia Button */}
-            <button
-              onClick={() => setIsFullscreen(!isFullscreen)}
-              className={`h-10 px-3.5 rounded-2xl border text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-2xs ${
-                isFullscreen
-                  ? 'bg-rose-600 border-rose-600 text-white hover:bg-rose-700'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-              title={isFullscreen ? "Sair do modo Tela Cheia (Pressione ESC)" : "Expandir tabela de pedidos para Tela Cheia"}
-            >
-              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-              <span className="hidden sm:inline">{isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}</span>
-              <kbd className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md border font-extrabold shadow-2xs ${
-                isFullscreen ? 'bg-rose-700 text-white border-rose-500' : 'bg-slate-100 text-slate-600 border-slate-200'
-              }`}>
-                ESC
-              </kbd>
-            </button>
-
           </div>
 
         </div>
       </div>
-
-      {/* 3. CEP SEARCH & AUTO-GEOCODING TOOL PANEL */}
-      {showCepGeocodeTool && (
-        <div className="p-4 bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-slate-50 border-b border-blue-100 animate-in fade-in slide-in-from-top-2 duration-200" id="cep-geocoding-tool-panel">
-          <div className="max-w-5xl mx-auto space-y-4">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs">
-                  <MapPin size={16} />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                    Busca Inteligente por CEP & Geocodificação de Coordenadas
-                  </h4>
-                  <p className="text-[10px] text-slate-500 font-semibold">
-                    Consulte a API de Endereços (ViaCEP) e Geocodificação (OpenStreetMap) para autopreencher coordenadas exatas (Lat/Lng) e endereço.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowCepGeocodeTool(false)}
-                className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-600 cursor-pointer shadow-3xs"
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            {/* Input Form Controls */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="flex-1">
-                <CepInput
-                  label=""
-                  placeholder="Digite o CEP (ex: 01310-100)..."
-                  value={cepSearchInput}
-                  onChange={(formatted, raw) => {
-                    setCepSearchInput(formatted);
-                    if (raw.length === 8) {
-                      handleExecuteCepGeocode(raw);
-                    }
-                  }}
-                  showAddressPreview={false}
-                  size="sm"
-                />
-              </div>
-
-              <div className="w-full sm:w-44">
-                <input
-                  type="text"
-                  placeholder="Número/Comp. (opcional)"
-                  value={cepSearchNumber}
-                  onChange={(e) => setCepSearchNumber(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-3xs"
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleExecuteCepGeocode()}
-                disabled={isCepGeocoding || !cepSearchInput}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
-              >
-                {isCepGeocoding ? (
-                  <>
-                    <RefreshCw size={14} className="animate-spin" />
-                    <span>Geocodificando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Search size={14} />
-                    <span>Consultar & Obter Coordenadas</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Error Message */}
-            {cepGeocodeError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-center gap-2">
-                <AlertCircle size={15} className="shrink-0 text-rose-600" />
-                <span>{cepGeocodeError}</span>
-              </div>
-            )}
-
-            {/* Success Notification message */}
-            {cepAssignSuccessMsg && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-black text-emerald-800 flex items-center gap-2 shadow-xs">
-                <CheckCircle2 size={16} className="shrink-0 text-emerald-600 animate-bounce" />
-                <span>{cepAssignSuccessMsg}</span>
-              </div>
-            )}
-
-            {/* Geocode Result Box */}
-            {cepGeocodeResult && (
-              <div className="bg-white border border-blue-200 rounded-2xl p-4 shadow-sm space-y-3">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-mono font-black rounded-lg uppercase">
-                        CEP {cepGeocodeResult.formattedCep}
-                      </span>
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9.5px] font-extrabold rounded-lg flex items-center gap-1">
-                        <Check size={11} />
-                        {cepGeocodeResult.isExactGeocode ? 'Geocodificação Direta (Nominatim OSM)' : 'Base Setorial SP Calculada'}
-                      </span>
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[9.5px] font-bold rounded-lg uppercase">
-                        {cepGeocodeResult.region}
-                      </span>
-                    </div>
-                    <h5 className="text-xs font-extrabold text-slate-800 leading-snug">
-                      {cepGeocodeResult.address}
-                    </h5>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <a
-                      href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(cepGeocodeResult.address)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center gap-1"
-                    >
-                      <ExternalLink size={12} />
-                      <span>Ver no Mapa</span>
-                    </a>
-                  </div>
-                </div>
-
-                {/* Coordenadas Latitude / Longitude & Auto-Fill Assignment Box */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                  
-                  {/* Coordenadas Lat/Lng pill */}
-                  <div className="md:col-span-5 bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between font-mono text-xs">
-                    <div>
-                      <span className="text-[9px] text-slate-400 block font-sans font-bold uppercase tracking-wider">
-                        Coordenadas Geocodificadas
-                      </span>
-                      <div className="flex items-center gap-3 mt-0.5 font-bold">
-                        <span className="text-emerald-400">Lat: {cepGeocodeResult.lat.toFixed(6)}</span>
-                        <span className="text-sky-400">Lng: {cepGeocodeResult.lng.toFixed(6)}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${cepGeocodeResult.lat}, ${cepGeocodeResult.lng}`);
-                        alert('Coordenadas copiadas para a área de transferência!');
-                      }}
-                      className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors cursor-pointer"
-                      title="Copiar Lat, Lng"
-                    >
-                      <Copy size={13} />
-                    </button>
-                  </div>
-
-                  {/* Quick Order Assign Select Box */}
-                  <div className="md:col-span-7 flex items-center gap-2">
-                    <select
-                      value={selectedAssignOrderForCep}
-                      onChange={(e) => setSelectedAssignOrderForCep(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Selecione um pedido existente para aplicar coordenadas...</option>
-                      {orders.map(o => (
-                        <option key={o.id} value={o.id}>
-                          #{o.id} - {o.clientName} ({o.address || 'Sem endereço'})
-                        </option>
-                      ))}
-                    </select>
-
-                    <button
-                      type="button"
-                      disabled={!selectedAssignOrderForCep}
-                      onClick={() => handleAssignGeocodedCoordsToOrder(selectedAssignOrderForCep)}
-                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all cursor-pointer whitespace-nowrap"
-                    >
-                      Aplicar ao Pedido
-                    </button>
-                  </div>
-
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
 
       {/* Floating/Sticky Bulk Actions Panel */}
       {selectedIds.size > 0 && (
@@ -3261,21 +2881,21 @@ function OrdersTable({
 
                       {viewMode === 'simplified' ? (
                         <>
-                          {/* Order Code / ID */}
+                          {/* Order Code / ID (Hover Quick View Tooltip enabled on order number) */}
                           {(visibleColumns.has('Pedido') || visibleColumns.has('Código')) && (
                             <td className="px-2.5 py-1.5 font-mono font-black text-slate-900 text-xs">
-                              <span className="inline-flex items-center gap-1">
-                                {order.id}
-                              </span>
+                              <OrderQuickViewTooltip order={order} rider={rider}>
+                                <span className="inline-flex items-center gap-1 hover:text-blue-600 cursor-pointer underline decoration-dotted underline-offset-2 decoration-slate-300 hover:decoration-blue-500" title="Passe o mouse para ver detalhes do pedido">
+                                  {order.id}
+                                </span>
+                              </OrderQuickViewTooltip>
                             </td>
                           )}
 
-                          {/* Client information (Hover Quick View Tooltip enabled here only) */}
+                          {/* Client information */}
                           {(visibleColumns.has('ProcurarPor') || visibleColumns.has('CodigoCliente')) && (
                             <td className="px-2.5 py-1.5">
-                              <OrderQuickViewTooltip order={order} rider={rider}>
-                                <span className="block font-black text-slate-900 leading-tight text-xs hover:text-blue-600 cursor-pointer">{order.clientName}</span>
-                              </OrderQuickViewTooltip>
+                              <span className="block font-black text-slate-900 leading-tight text-xs">{order.clientName}</span>
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded font-extrabold uppercase inline-block leading-none">
                                   {order.region}
@@ -3465,12 +3085,14 @@ function OrdersTable({
                             );
                           }
 
-                          if (col === 'Pedido') {
+                          if (col === 'Pedido' || col === 'Código') {
                             return (
                               <td key={col} className="px-1.5 py-1 border-r border-slate-100 font-mono font-black text-slate-900 text-[10px]">
-                                <span>
-                                  {cellVal}
-                                </span>
+                                <OrderQuickViewTooltip order={order} rider={rider}>
+                                  <span className="hover:text-blue-600 cursor-pointer underline decoration-dotted underline-offset-2 decoration-slate-300 hover:decoration-blue-500" title="Passe o mouse para ver detalhes do pedido">
+                                    {cellVal}
+                                  </span>
+                                </OrderQuickViewTooltip>
                               </td>
                             );
                           }
@@ -3478,11 +3100,9 @@ function OrdersTable({
                           if (col === 'ProcurarPor' || col === 'CodigoCliente') {
                             return (
                               <td key={col} className="px-1.5 py-1 border-r border-slate-100 font-black text-slate-900 text-[10px] truncate max-w-[130px]" title={cellVal}>
-                                <OrderQuickViewTooltip order={order} rider={rider}>
-                                  <span className="hover:text-blue-600 cursor-pointer">
-                                    {cellVal}
-                                  </span>
-                                </OrderQuickViewTooltip>
+                                <span>
+                                  {cellVal}
+                                </span>
                               </td>
                             );
                           }

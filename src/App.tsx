@@ -4627,9 +4627,11 @@ export default function App() {
                   orders={kpiOrders} 
                   filterDateFrom={filterDateFrom}
                   filterDateTo={filterDateTo}
-                  activeTab={activeOrderTab}
+                  activeTab={filterStatus ? (filterStatus as OrderStatus) : 'Todos'}
                   onCardClick={(status) => {
-                    setActiveOrderTab(status);
+                    const newStatus = (status === 'Todos' || filterStatus === status) ? '' : status;
+                    setFilterStatus(newStatus);
+                    setActiveOrderTab(newStatus ? (newStatus as OrderStatus) : 'Todos');
                     setActiveSection('pedidos');
                   }}
                 />
@@ -4681,33 +4683,7 @@ export default function App() {
                 className="w-full space-y-4"
                 id="view-pedidos"
               >
-                {/* Global FiltersBar for Pedidos screen */}
-                <GlobalFilters
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  filterDateFrom={filterDateFrom}
-                  setFilterDateFrom={setFilterDateFrom}
-                  filterDateTo={filterDateTo}
-                  setFilterDateTo={setFilterDateTo}
-                  filterPartner={filterPartner}
-                  setFilterPartner={setFilterPartner}
-                  filterRiderId={filterRiderId}
-                  setFilterRiderId={setFilterRiderId}
-                  filterStatus={filterStatus}
-                  setFilterStatus={setFilterStatus}
-                  filterCep={filterCep}
-                  setFilterCep={setFilterCep}
-                  riders={riders}
-                  clientPartners={clientPartners}
-                  orders={orders}
-                  totalFilteredOrdersCount={filteredOrders.length}
-                  onClearFilters={handleClearFilters}
-                  onSelectPartner={handleSelectPartner}
-                  onSelectRider={handleSelectRider}
-                  onNavigateToOrders={() => setActiveSection('pedidos')}
-                />
-
-                {/* Delayed Orders / Previous Days Alert Card */}
+                {/* Delayed Orders / Previous Days Alert Card (Acima do Painel de Filtros) */}
                 {orders.filter(o => o.date < todayStr && o.status !== 'Concluído' && o.status !== 'Cancelado').length > 0 && (
                   <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all ${
                     filterShowDelayed 
@@ -4746,6 +4722,32 @@ export default function App() {
                     </button>
                   </div>
                 )}
+
+                {/* Global FiltersBar for Pedidos screen */}
+                <GlobalFilters
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  filterDateFrom={filterDateFrom}
+                  setFilterDateFrom={setFilterDateFrom}
+                  filterDateTo={filterDateTo}
+                  setFilterDateTo={setFilterDateTo}
+                  filterPartner={filterPartner}
+                  setFilterPartner={setFilterPartner}
+                  filterRiderId={filterRiderId}
+                  setFilterRiderId={setFilterRiderId}
+                  filterStatus={filterStatus}
+                  setFilterStatus={setFilterStatus}
+                  filterCep={filterCep}
+                  setFilterCep={setFilterCep}
+                  riders={riders}
+                  clientPartners={clientPartners}
+                  orders={orders}
+                  totalFilteredOrdersCount={filteredOrders.length}
+                  onClearFilters={handleClearFilters}
+                  onSelectPartner={handleSelectPartner}
+                  onSelectRider={handleSelectRider}
+                  onNavigateToOrders={() => setActiveSection('pedidos')}
+                />
 
                 <OrdersTable 
                   orders={filteredOrders} 

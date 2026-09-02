@@ -317,7 +317,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
   const [hasSearchedPeriod, setHasSearchedPeriod] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('');
-  const [statusTab, setStatusTab] = useState<'Todos' | 'Não Iniciadas' | 'Ocorrências' | 'Sem Condutor' | 'Com Condutor' | 'Concluídas'>('Todos');
+  const [statusTab, setStatusTab] = useState<'Todos' | 'Não Iniciadas' | 'Em rota' | 'Ocorrências' | 'Concluídas' | 'Canceladas' | 'Sem Condutor' | 'Com Condutor'>('Todos');
 
   // Selected orders & selected rider
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
@@ -1117,26 +1117,24 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
       }
     }
 
-    // Tab filter
+    // Status dropdown filter
     if (statusTab === 'Sem Condutor' && (order.riderId || order.status === 'Cancelado')) return false;
     if (statusTab === 'Com Condutor' && !order.riderId) return false;
     if (statusTab === 'Não Iniciadas' && order.status !== 'Não iniciado') return false;
+    if (statusTab === 'Em rota' && order.status !== 'Em rota' && (order.status as string) !== 'Entregando') return false;
     if (statusTab === 'Ocorrências' && order.status !== 'Ocorrência') return false;
     if (statusTab === 'Concluídas' && order.status !== 'Concluído') return false;
+    if (statusTab === 'Canceladas' && order.status !== 'Cancelado') return false;
 
-    // By default (when not searching period and not selecting Concluídas tab), hide completed/canceled orders from route allocation view
-    if (statusTab !== 'Concluídas' && !hasSearchedPeriod) {
-      if (order.status === 'Concluído' || order.status === 'Cancelado') return false;
-    }
-
+    // Period filter: display all orders matching selected period
     if (hasSearchedPeriod) {
-      // APOS SELECIONAR O PERIODO: exibir entregas do período selecionado
       const orderOperationalDate = (order.status === 'Concluído' ? (order.deliveryDate || order.dataConclusao || order.date) : order.date);
       const inPeriod = orderOperationalDate >= dateFrom && orderOperationalDate <= dateTo;
       return inPeriod;
     } else {
-      // Por padrão (hoje): exibe pedidos do dia atual e também todos os pedidos abertos/pendentes acumulados de qualquer data
-      return order.date === todayStr || (order.status !== 'Concluído' && order.status !== 'Cancelado');
+      // Default: today or period defined
+      const orderOperationalDate = (order.status === 'Concluído' ? (order.deliveryDate || order.dataConclusao || order.date) : order.date);
+      return orderOperationalDate >= dateFrom && orderOperationalDate <= dateTo;
     }
   });
 
@@ -2834,6 +2832,24 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         )}
                       </div>
 
+                      {/* Status Dropdown Filter */}
+                      <div className="relative flex-1 sm:flex-initial sm:w-[170px]">
+                        <select
+                          value={statusTab}
+                          onChange={(e) => setStatusTab(e.target.value as any)}
+                          className="w-full px-2.5 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700 font-semibold cursor-pointer"
+                        >
+                          <option value="Todos">Todos os Status</option>
+                          <option value="Não Iniciadas">Não Iniciados</option>
+                          <option value="Em rota">Em Rota</option>
+                          <option value="Ocorrências">Ocorrências</option>
+                          <option value="Concluídas">Concluídos</option>
+                          <option value="Canceladas">Cancelados</option>
+                          <option value="Sem Condutor">Sem Condutor</option>
+                          <option value="Com Condutor">Com Condutor</option>
+                        </select>
+                      </div>
+
                       <div className="relative flex-1 sm:flex-initial sm:w-[180px]">
                         <select
                           value={selectedPartnerId}
@@ -2910,42 +2926,12 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                     </div>
                   </div>
 
-                  {/* Quick Filters Navigation Tabs & Status Flag Legend */}
-                  <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center border-b border-slate-100 bg-white px-3 text-[11px] font-bold text-slate-500 gap-2 py-1 md:py-0">
-                    <div className="flex gap-1 overflow-x-auto">
-                      {(['Todos', 'Não Iniciadas', 'Ocorrências', 'Sem Condutor', 'Com Condutor', 'Concluídas'] as const).map(tab => {
-                        const isActive = statusTab === tab;
-                        let countBadge = null;
-                        if (tab === 'Não Iniciadas') {
-                          const cnt = sortedFilteredOrders.filter(o => o.status === 'Não iniciado').length;
-                          countBadge = <span className="ml-1 text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-extrabold">{cnt}</span>;
-                        } else if (tab === 'Ocorrências') {
-                          const cnt = sortedFilteredOrders.filter(o => o.status === 'Ocorrência').length;
-                          countBadge = <span className="ml-1 text-[9px] bg-rose-600 text-white px-1.5 py-0.2 rounded-full font-black animate-pulse">{cnt}</span>;
-                        } else if (tab === 'Concluídas') {
-                          const cnt = sortedFilteredOrders.filter(o => o.status === 'Concluído').length;
-                          countBadge = <span className="ml-1 text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-extrabold">{cnt}</span>;
-                        }
-
-                        return (
-                          <button
-                            key={tab}
-                            onClick={() => setStatusTab(tab)}
-                            className={`py-2 px-2.5 border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center ${
-                              isActive 
-                                ? 'border-blue-600 text-blue-600 font-extrabold' 
-                                : 'border-transparent hover:text-slate-700'
-                            }`}
-                          >
-                            <span>{tab}</span>
-                            {countBadge}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Status Flag Legend */}
-                    <div className="flex flex-wrap items-center gap-3 py-1.5 md:py-0 text-[10px] text-slate-400">
+                  {/* Status Flag Legend */}
+                  <div className="flex flex-wrap items-center justify-between border-b border-slate-100 bg-white px-3 py-1.5 text-[10px] text-slate-400 gap-2">
+                    <span className="text-[11px] font-bold text-slate-600">
+                      Total: <strong className="text-blue-600">{sortedFilteredOrders.length}</strong> pedidos exibidos
+                    </span>
+                    <div className="flex flex-wrap items-center gap-3">
                       <span className="font-extrabold uppercase tracking-wider text-[9px] text-slate-500">Legenda:</span>
                       <div className="flex items-center gap-1">
                         <Flag size={10} className="text-amber-500 fill-amber-500 animate-pulse" />
