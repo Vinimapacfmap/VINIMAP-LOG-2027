@@ -11,7 +11,7 @@ import autoTable from 'jspdf-autotable';
 import { Order, DeliveryRider, OrderStatus, ClientPartner, BillingModelType } from '../types';
 import { formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { calculateRiderCommissionForOrder, extractOrderCep, formatCepDisplay } from '../utils/billingUtils';
-import { getPartnerDisplayName } from '../utils/partnerUtils';
+import { getPartnerDisplayName, resolveOrderDisplayName } from '../utils/partnerUtils';
 import { matchesAddressQuery, compareOrdersByCep } from '../utils/addressUtils';
 import { 
   X, 
@@ -288,7 +288,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
           'Nº do Pedido': order.id.replace('ped-', '') || order.id,
           'Data': formatToBrazilianDate(order.date),
           'Estabelecimento': getPartnerDisplayName(order.partnerName, clientPartners),
-          'Cliente': order.clientName,
+          'Cliente': resolveOrderDisplayName(order.clientName, clientPartners, order.clientName),
           'Endereço': order.address,
           'CEP': order.cep || (order.rawData && (order.rawData.CEP || order.rawData.cep)) || 'N/D',
           'Status': order.status,
@@ -359,7 +359,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
           order.id.replace('ped-', '') || order.id,
           formatToBrazilianDate(order.date),
           getPartnerDisplayName(order.partnerName, clientPartners),
-          order.clientName,
+          resolveOrderDisplayName(order.clientName, clientPartners, order.clientName),
           order.address,
           order.cep || (order.rawData && (order.rawData.CEP || order.rawData.cep)) || '-',
           order.status,
@@ -1061,7 +1061,7 @@ export const DriverBillingModal: React.FC<DriverBillingModalProps> = ({
                               {getPartnerDisplayName(order.partnerName, clientPartners)}
                             </td>
                             <td className="px-4 py-3 text-slate-600 font-semibold truncate max-w-[120px]">
-                              {order.clientName}
+                              {resolveOrderDisplayName(order.clientName, clientPartners, order.clientName)}
                             </td>
                             <td className="px-4 py-3 text-slate-600 font-medium truncate max-w-[170px]" title={order.address}>
                               {order.address}

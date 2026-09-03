@@ -11,7 +11,7 @@ import { DeliveryRider, Order, RiderStatus, OrderStatus, CompanyHub } from '../t
 import { getDriverAppInstallUrl } from '../utils/pwaUtils';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 import { getSaoPauloDateTimeShort, getSaoPauloISODate, isOrderInDatePeriod } from '../utils/dateUtils';
-import { isOrderMatchingRider } from '../utils/partnerUtils';
+import { isOrderMatchingRider, resolveOrderDisplayName, getPartnerDisplayName } from '../utils/partnerUtils';
 import { getCoordinatesFromCep } from '../utils/locationUtils';
 import SafeMapWrapper from './SafeMapWrapper';
 import { fetchOsrmMultiStopRoute, getCachedOsrmRoute } from '../utils/osrmService';
@@ -774,7 +774,7 @@ export default function RiderTrackingView({
         orderMarker.bindTooltip(`
           <div class="px-2 py-1 font-sans text-xs font-bold text-slate-900 leading-tight">
             <div class="flex items-center gap-1 font-extrabold text-sky-700">📍 Parada #${orderIndex + 1}</div>
-            <div class="text-slate-800 text-[11px] mt-0.5">${order.clientName || 'Cliente'}</div>
+            <div class="text-slate-800 text-[11px] mt-0.5">${resolveOrderDisplayName(order.clientName || 'Cliente')}</div>
             <div class="text-[10px] text-slate-500 font-normal truncate max-w-[180px]">${order.address}</div>
           </div>
         `, {
@@ -1225,7 +1225,7 @@ export default function RiderTrackingView({
 
                             <div className="min-w-0">
                               <span className="font-black text-[11px] text-white block truncate leading-tight">
-                                {order.clientName}
+                                {resolveOrderDisplayName(order.clientName)}
                               </span>
                               <span className="text-[9.5px] text-slate-400 block truncate leading-tight mt-0.5">
                                 {order.address}

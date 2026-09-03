@@ -57,11 +57,30 @@ export function getPartnerDisplayName(
     return 'Parceiro Geral';
   }
 
-  // Combine provided clientPartners with cached partners if needed
-  const rawList = (clientPartners && clientPartners.length > 0)
-    ? clientPartners
-    : getCachedClientPartners();
-  const partnersList = rawList.filter(cp => !isMockClientPartner(cp));
+  // Combine provided clientPartners with cached partners seamlessly
+  const listA = clientPartners || [];
+  const listB = getCachedClientPartners() || [];
+  const mergedMap = new Map<string, ClientPartner>();
+  
+  // Seed with cached entries
+  listB.forEach(cp => {
+    if (!cp) return;
+    const primaryKey = String(cp.id || cp.codigoCliente || cp.name || '').trim().toLowerCase();
+    if (primaryKey) mergedMap.set(primaryKey, cp);
+    if (cp.id) mergedMap.set(String(cp.id).trim().toLowerCase(), cp);
+    if (cp.codigoCliente) mergedMap.set(String(cp.codigoCliente).trim().toLowerCase(), cp);
+  });
+
+  // Fresh list overrides cached entries
+  listA.forEach(cp => {
+    if (!cp) return;
+    const primaryKey = String(cp.id || cp.codigoCliente || cp.name || '').trim().toLowerCase();
+    if (primaryKey) mergedMap.set(primaryKey, cp);
+    if (cp.id) mergedMap.set(String(cp.id).trim().toLowerCase(), cp);
+    if (cp.codigoCliente) mergedMap.set(String(cp.codigoCliente).trim().toLowerCase(), cp);
+  });
+
+  const partnersList = Array.from(mergedMap.values()).filter(cp => !isMockClientPartner(cp));
 
   // 1. Direct match in clientPartners list
   if (partnersList && partnersList.length > 0) {
@@ -75,12 +94,37 @@ export function getPartnerDisplayName(
       (cp.codigoCliente && trimmed.toLowerCase().includes(String(cp.codigoCliente).toLowerCase())) ||
       (cp.id && trimmed.toLowerCase().includes(String(cp.id).toLowerCase()))
     );
-    if (matched && matched.name) {
-      return matched.name;
+    if (matched) {
+      const bestName = matched.name || matched.fantasia || matched.razaoSocial;
+      if (bestName) {
+        return bestName;
+      }
     }
   }
 
   return trimmed;
+}
+
+/**
+ * Resolves an order display name for any screen:
+ * If the raw string or code corresponds to a client partner, return the registered partner name.
+ */
+export function resolveOrderDisplayName(
+  rawNameOrCode: any,
+  clientPartners?: ClientPartner[],
+  fallbackText?: string
+): string {
+  if (rawNameOrCode === undefined || rawNameOrCode === null) {
+    return fallbackText || '';
+  }
+  const str = String(rawNameOrCode).trim();
+  if (!str) return fallbackText || '';
+
+  const resolved = getPartnerDisplayName(str, clientPartners);
+  if (resolved && resolved !== 'Parceiro Geral') {
+    return resolved;
+  }
+  return fallbackText || str;
 }
 
 /**

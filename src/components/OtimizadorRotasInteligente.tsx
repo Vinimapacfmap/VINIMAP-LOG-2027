@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Order, DeliveryRider, ActivityLog, OrderStatus, CompanyHub } from '../types';
+import { resolveOrderDisplayName } from '../utils/partnerUtils';
 import vinimapLogo from '../assets/images/vinimap_app_logo_1785236008840.jpg';
 import { 
   Zap, 
@@ -428,7 +429,7 @@ export default function OtimizadorRotasInteligente({
       L.marker(orderCoords, { icon: orderIcon }).addTo(markersGroupRef.current)
         .bindPopup(`
           <div class="text-xs p-1">
-            <div class="font-bold text-slate-800 text-[11px] mb-0.5">Parada #${index + 1} • ${order.clientName}</div>
+            <div class="font-bold text-slate-800 text-[11px] mb-0.5">Parada #${index + 1} • ${resolveOrderDisplayName(order.clientName)}</div>
             <div class="text-[10px] text-slate-500 mb-1">${order.address}</div>
             <div class="flex items-center gap-1">
               <span class="px-1.5 py-0.5 text-[9px] bg-slate-150 rounded text-slate-700">${order.region}</span>
@@ -798,7 +799,7 @@ export default function OtimizadorRotasInteligente({
 
                           <div className="flex-1 min-w-0 space-y-1">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-bold text-slate-800 text-[11px] truncate">{order.clientName}</span>
+                              <span className="font-bold text-slate-800 text-[11px] truncate">{resolveOrderDisplayName(order.clientName)}</span>
                               <span className="font-mono text-[10px] text-slate-400">{order.id}</span>
                             </div>
                             <p className="text-[10px] text-slate-500 truncate">{order.address}</p>

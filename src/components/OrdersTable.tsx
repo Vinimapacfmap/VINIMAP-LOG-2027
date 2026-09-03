@@ -8,7 +8,7 @@ import { compressImage } from '../utils/imageCompressor';
 import { Order, OrderStatus, DeliveryRider, OrderHistoryEntry, ClientPartner, isMatchingClientCode } from '../types';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate, formatOrderTime, extractISODateFromTimestamp } from '../utils/dateUtils';
 import { getOrderFreightValue, calculateRiderCommissionForOrder } from '../utils/billingUtils';
-import { getPartnerDisplayName as getPartnerDisplayNameUtil, isOrderMatchingPartner, isOrderMatchingRider } from '../utils/partnerUtils';
+import { getPartnerDisplayName as getPartnerDisplayNameUtil, resolveOrderDisplayName, isOrderMatchingPartner, isOrderMatchingRider } from '../utils/partnerUtils';
 import { matchesAddressQuery } from '../utils/addressUtils';
 import { isOrderMatchingGlobalSearch, sortOrdersByLexicographicSearch } from '../utils/searchUtils';
 import { generateStaticSvgMap, fetchAddressAndGeocodeByCep, CepGeocodeFullResult } from '../utils/locationUtils';
@@ -768,15 +768,42 @@ function OrdersTable({
       const globalIdx = orders.findIndex(o => o.id === order.id);
       return String(globalIdx !== -1 ? globalIdx + 1 : 1);
     }
-    if (lowerCol === 'codigocliente' || lowerCol === 'nomefantasia') {
+    if (
+      lowerCol === 'codigocliente' ||
+      lowerCol === 'código do cliente' ||
+      lowerCol === 'codigo cliente' ||
+      lowerCol === 'cliente' ||
+      lowerCol === 'nomefantasia' ||
+      lowerCol === 'nome fantasia' ||
+      lowerCol === 'parceiro' ||
+      lowerCol === 'estabelecimento' ||
+      lowerCol === 'loja'
+    ) {
       if (order.rawData) {
         const keys = Object.keys(order.rawData);
-        const nameKey = keys.find(k => k.toLowerCase() === 'nomefantasia');
+        const nameKey = keys.find(k => k.toLowerCase() === 'nomefantasia' || k.toLowerCase() === 'nome fantasia');
         if (nameKey && order.rawData[nameKey] && (order.rawData[nameKey] || '').toString().trim() !== order.partnerName) {
+          const resolved = getPartnerDisplayNameUtil(order.rawData[nameKey], clientPartners);
+          if (resolved && resolved !== 'Parceiro Geral') {
+            return resolved;
+          }
           return String(order.rawData[nameKey]);
         }
       }
-      return getPartnerDisplayNameUtil(order.partnerName, clientPartners);
+      const rawCode = order.partnerName || order.clientName;
+      return getPartnerDisplayNameUtil(rawCode, clientPartners);
+    }
+
+    if (
+      lowerCol === 'procurarpor' ||
+      lowerCol === 'procurar por' ||
+      lowerCol === 'destinatario' ||
+      lowerCol === 'destinatário' ||
+      lowerCol === 'nomedestinatario' ||
+      lowerCol === 'nome do cliente'
+    ) {
+      const candidate = order.clientName || order.recipientName || order.rawData?.ProcurarPor || order.rawData?.Destinatario || '';
+      return resolveOrderDisplayName(candidate, clientPartners, candidate || 'Consumidor Final');
     }
 
     if (lowerCol === 'valorentrega') {
@@ -821,6 +848,13 @@ function OrdersTable({
       }
     }
     
+    if (foundRawValue && value) {
+      const resolved = getPartnerDisplayNameUtil(value, clientPartners);
+      if (resolved && resolved !== value && resolved !== 'Parceiro Geral') {
+        value = resolved;
+      }
+    }
+    
     if (!foundRawValue) {
       // Fallback translation mappings for initial mock orders
       switch (lowerCol) {
@@ -830,16 +864,22 @@ function OrdersTable({
         case 'pedido': 
           value = order.id.replace('ped-', '') || order.id;
           break;
-        case 'codigocliente': {
-          const cp = clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente));
-          value = cp ? cp.name : (order.partnerName || 'Parceiro');
+        case 'codigocliente': 
+        case 'código do cliente':
+        case 'codigo cliente':
+        case 'cliente':
+        case 'parceiro':
+        case 'estabelecimento': {
+          value = getPartnerDisplayNameUtil(order.partnerName || order.clientName, clientPartners);
           break;
         }
         case 'datasolicitacao': 
           value = order.date || '2026-07-02';
           break;
         case 'procurarpor': 
-          value = order.clientName;
+        case 'destinatario':
+        case 'destinatário':
+          value = resolveOrderDisplayName(order.clientName, clientPartners, order.clientName);
           break;
         case 'endereco': 
           value = order.address;
@@ -890,7 +930,7 @@ function OrdersTable({
           value = order.date || '2026-07-02';
           break;
         case 'nomefantasia': 
-          value = order.partnerName || 'Parceiro';
+          value = getPartnerDisplayNameUtil(order.partnerName || order.clientName, clientPartners);
           break;
         case 'dataagendamento': 
           value = '';
@@ -1636,7 +1676,7 @@ function OrdersTable({
     // Track specific field alterations for audit history
     const changes: string[] = [];
     if (editStandardFields.clientName !== hubOrder.clientName) {
-      changes.push(`Cliente: "${hubOrder.clientName}" ➔ "${editStandardFields.clientName}"`);
+      changes.push(`Cliente: "${resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}" ➔ "${editStandardFields.clientName}"`);
     }
     if ((editStandardFields.phone || '') !== (hubOrder.phone || '')) {
       changes.push(`Telefone: "${hubOrder.phone || ''}" ➔ "${editStandardFields.phone}"`);
@@ -2896,7 +2936,9 @@ function OrdersTable({
                           {/* Client information */}
                           {(visibleColumns.has('ProcurarPor') || visibleColumns.has('CodigoCliente')) && (
                             <td className="px-2.5 py-1.5">
-                              <span className="block font-black text-slate-900 leading-tight text-xs">{order.clientName}</span>
+                              <span className="block font-black text-slate-900 leading-tight text-xs">
+                                {resolveOrderDisplayName(order.clientName, clientPartners, order.clientName)}
+                              </span>
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded font-extrabold uppercase inline-block leading-none">
                                   {order.region}
@@ -3098,11 +3140,12 @@ function OrdersTable({
                             );
                           }
 
-                          if (col === 'ProcurarPor' || col === 'CodigoCliente') {
+                          if (col === 'ProcurarPor' || col === 'CodigoCliente' || col === 'Cliente' || col === 'NomeFantasia') {
+                            const displayVal = resolveOrderDisplayName(cellVal, clientPartners, cellVal);
                             return (
-                              <td key={col} className="px-1.5 py-1 border-r border-slate-100 font-black text-slate-900 text-[10px] truncate max-w-[130px]" title={cellVal}>
+                              <td key={col} className="px-1.5 py-1 border-r border-slate-100 font-black text-slate-900 text-[10px] truncate max-w-[130px]" title={displayVal}>
                                 <span>
-                                  {cellVal}
+                                  {displayVal}
                                 </span>
                               </td>
                             );
@@ -3691,7 +3734,9 @@ function OrdersTable({
                             </div>
                             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                               <span className="text-[9px] font-bold text-slate-400 uppercase">Cliente Destino</span>
-                              <span className="block font-bold text-slate-800 text-xs mt-0.5 truncate">{hubOrder.clientName}</span>
+                              <span className="block font-bold text-slate-800 text-xs mt-0.5 truncate">
+                                {resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}
+                              </span>
                             </div>
                             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                               <span className="text-[9px] font-bold text-slate-400 uppercase">Região Logística</span>
@@ -3750,7 +3795,7 @@ function OrdersTable({
                               Parceiro: <span className="font-extrabold">{getPartnerDisplayName(hubOrder.partnerName)}</span>
                             </span>
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[10px] uppercase tracking-wider">
-                              Cliente: <span className="font-extrabold">{hubOrder.clientName}</span>
+                              Cliente: <span className="font-extrabold">{resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}</span>
                             </span>
                           </div>
                         </div>
@@ -3773,7 +3818,7 @@ function OrdersTable({
                               {getTimelineStepTime(1) ? `Registrado em ${getTimelineStepTime(1)}` : `Disparado em ${formatToBrazilianDate(hubOrder.date)}`}
                             </p>
                             <p className="text-xs text-slate-500 mt-1 max-w-md">
-                              Pedido recebido e catalogado na plataforma de <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong> para entrega ao destinatário <strong className="text-slate-700 font-bold">{hubOrder.clientName}</strong>.
+                              Pedido recebido e catalogado na plataforma de <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong> para entrega ao destinatário <strong className="text-slate-700 font-bold">{resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}</strong>.
                             </p>
                           </div>
                         </div>
@@ -3828,7 +3873,7 @@ function OrdersTable({
                                  <p className="text-xs text-slate-500 mt-1 max-w-md">
                                    {isActive ? (
                                      <>
-                                       O entregador iniciou o trajeto do parceiro <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong> em direção ao endereço de <strong className="text-slate-700 font-bold">{hubOrder.clientName}</strong> portando as vias fiscais.
+                                       O entregador iniciou o trajeto do parceiro <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong> em direção ao endereço de <strong className="text-slate-700 font-bold">{resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}</strong> portando as vias fiscais.
                                      </>
                                    ) : (
                                      `Aguardando saída da base do parceiro ${getPartnerDisplayName(hubOrder.partnerName)}.`
@@ -3860,10 +3905,10 @@ function OrdersTable({
                                  <p className="text-xs text-slate-500 mt-1 max-w-md">
                                    {isActive ? (
                                      <>
-                                       Entregador nas imediações do endereço de <strong className="text-slate-700 font-bold">{hubOrder.clientName}</strong> realizando contato com o recebedor.
+                                       Entregador nas imediações do endereço de <strong className="text-slate-700 font-bold">{resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}</strong> realizando contato com o recebedor.
                                      </>
                                    ) : (
-                                     `Aguardando aproximação geográfica ao endereço de ${hubOrder.clientName}.`
+                                     `Aguardando aproximação geográfica ao endereço de ${resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}.`
                                    )}
                                  </p>
                                </div>
@@ -3898,18 +3943,18 @@ function OrdersTable({
                                  <p className="text-xs text-slate-500 mt-1 max-w-md">
                                    {hubOrder.status === 'Concluído' ? (
                                      <>
-                                       Liquidação concluída do pedido do parceiro <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong>. O recebedor <strong className="text-slate-700 font-bold">{hubOrder.clientName}</strong> assinou o recibo do protocolo de entrega.
+                                       Liquidação concluída do pedido do parceiro <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong>. O recebedor <strong className="text-slate-700 font-bold">{resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}</strong> assinou o recibo do protocolo de entrega.
                                      </>
                                    ) : hubOrder.status === 'Cancelado' ? (
                                      <>
-                                       O pedido do parceiro <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong> destinado a <strong className="text-slate-700 font-bold">{hubOrder.clientName}</strong> foi cancelado pela central de atendimento.
+                                       O pedido do parceiro <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong> destinado a <strong className="text-slate-700 font-bold">{resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}</strong> foi cancelado pela central de atendimento.
                                      </>
                                    ) : hubOrder.status === 'Ocorrência' ? (
                                      <>
-                                       Impossibilidade de entrega ao destinatário <strong className="text-slate-700 font-bold">{hubOrder.clientName}</strong> do pedido de <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong>. Ocorrência em tratativa operacional.
+                                       Impossibilidade de entrega ao destinatário <strong className="text-slate-700 font-bold">{resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}</strong> do pedido de <strong className="text-slate-700 font-bold">{getPartnerDisplayName(hubOrder.partnerName)}</strong>. Ocorrência em tratativa operacional.
                                      </>
                                    ) : (
-                                     `Aguardando entrega final e assinatura física/digital do destinatário ${hubOrder.clientName}.`
+                                     `Aguardando entrega final e assinatura física/digital do destinatário ${resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}.`
                                    )}
                                  </p>
                                </div>
@@ -4106,7 +4151,7 @@ function OrdersTable({
                                 {/* Destinatário */}
                                 <div className="space-y-0.5">
                                   <label className="text-[9px] font-bold text-slate-400 uppercase">Destinatário Final</label>
-                                  <p className="text-xs font-bold text-slate-700">{hubOrder.clientName}</p>
+                                  <p className="text-xs font-bold text-slate-700">{resolveOrderDisplayName(hubOrder.clientName, clientPartners, hubOrder.clientName)}</p>
                                 </div>
 
                                 {/* Endereço */}

@@ -35,6 +35,7 @@ import SafeMapWrapper from './SafeMapWrapper';
 import { getCoordinatesFromCep, getRegionGeoCoords, convertToGeoLat, convertToGeoLng, getRiderGeoCoords } from '../utils/locationUtils';
 import { saveMapCache, getMapCache, MapCachePayload } from '../utils/mapCacheService';
 import { fetchOsrmRoute, OsrmRouteResult } from '../utils/osrmService';
+import { getPartnerDisplayName, resolveOrderDisplayName } from '../utils/partnerUtils';
 import OrderQuickViewTooltip from './OrderQuickViewTooltip';
 
 interface MapContainerProps {
@@ -683,11 +684,11 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
                     <div className="space-y-1.5 text-[11px] leading-relaxed">
                       <p className="flex justify-between">
                         <span className="text-slate-400 font-semibold">Parceiro:</span> 
-                        <span className="font-bold text-slate-700 truncate max-w-[120px]">{order.partnerName}</span>
+                        <span className="font-bold text-slate-700 truncate max-w-[120px]">{getPartnerDisplayName(order.partnerName)}</span>
                       </p>
                       <p className="flex justify-between">
                         <span className="text-slate-400 font-semibold">Cliente:</span> 
-                        <span className="font-bold text-slate-700 truncate max-w-[120px]">{order.clientName}</span>
+                        <span className="font-bold text-slate-700 truncate max-w-[120px]">{resolveOrderDisplayName(order.clientName)}</span>
                       </p>
                       <p className="flex flex-col mt-0.5">
                         <span className="text-slate-400 font-semibold">Endereço de Destino:</span> 
@@ -1223,7 +1224,7 @@ export default function MapContainer({ riders, orders, selectedRiderId, setSelec
                                   </span>
                                 </div>
                                 <div className="text-slate-500 font-medium truncate mt-0.5 leading-tight">
-                                  {order.clientName} • {order.address}
+                                  {resolveOrderDisplayName(order.clientName)} • {order.address}
                                 </div>
                               </div>
                             </div>

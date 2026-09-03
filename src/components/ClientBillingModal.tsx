@@ -11,6 +11,7 @@ import autoTable from 'jspdf-autotable';
 import { Order, ClientPartner, OrderStatus, DeliveryRider } from '../types';
 import { formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { getOrderFreightValue } from '../utils/billingUtils';
+import { resolveOrderDisplayName } from '../utils/partnerUtils';
 import { compareOrdersByCep } from '../utils/addressUtils';
 import { 
   X, 
@@ -223,7 +224,7 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
         return {
           'Nº do Pedido': order.id.replace('ped-', '') || order.id,
           'Data': formatToBrazilianDate(order.date),
-          'Cliente': order.clientName,
+          'Cliente': resolveOrderDisplayName(order.clientName, clientPartners, order.clientName),
           'Endereço': order.address,
           'CEP': order.cep || 'N/A',
           'Valor Pedido (R$)': order.value,
@@ -292,7 +293,7 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
         return [
           order.id.replace('ped-', '') || order.id,
           formatToBrazilianDate(order.date),
-          order.clientName,
+          resolveOrderDisplayName(order.clientName, clientPartners, order.clientName),
           order.address,
           order.cep || 'N/A',
           orderFreight.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -791,7 +792,7 @@ export const ClientBillingModal: React.FC<ClientBillingModalProps> = ({
                               {formatToBrazilianDate(order.date)}
                             </td>
                             <td className="px-4 py-3 text-slate-600 font-semibold truncate max-w-[180px]">
-                              {order.clientName}
+                              {resolveOrderDisplayName(order.clientName, clientPartners, order.clientName)}
                             </td>
                             <td className="px-4 py-3 text-slate-500 font-medium truncate max-w-[320px]" title={order.address}>
                               {order.address}

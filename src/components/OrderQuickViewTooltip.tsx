@@ -29,6 +29,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { Order, DeliveryRider } from '../types';
+import { getPartnerDisplayName, resolveOrderDisplayName } from '../utils/partnerUtils';
 import { getOrderContactInfo, generateWhatsappUrl } from '../utils/notificationUtils';
 
 interface OrderQuickViewTooltipProps {
@@ -195,7 +196,7 @@ export const OrderQuickViewTooltip: React.FC<OrderQuickViewTooltipProps> = ({
                   {order.partnerName && (
                     <span className="text-[10px] text-amber-300 font-bold truncate flex items-center gap-1">
                       <Building2 size={11} className="shrink-0" />
-                      <span className="truncate">{order.partnerName}</span>
+                      <span className="truncate">{getPartnerDisplayName(order.partnerName)}</span>
                     </span>
                   )}
                 </div>
@@ -285,7 +286,7 @@ export const OrderQuickViewTooltip: React.FC<OrderQuickViewTooltipProps> = ({
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
                     <User size={13} className="text-slate-400 shrink-0" />
                     <span className="font-extrabold text-slate-100 text-xs truncate">
-                      {order.clientName || 'Cliente Consumidor'}
+                      {resolveOrderDisplayName(order.clientName, undefined, order.clientName || 'Cliente Consumidor')}
                     </span>
                   </div>
 
@@ -294,7 +295,7 @@ export const OrderQuickViewTooltip: React.FC<OrderQuickViewTooltipProps> = ({
                     {contact.hasPhone && (
                       <>
                         <a
-                          href={generateWhatsappUrl(contact.cleanPhoneDigits, `Olá ${order.clientName}, referente à entrega do seu pedido #${order.id}:`)}
+                          href={generateWhatsappUrl(contact.cleanPhoneDigits, `Olá ${resolveOrderDisplayName(order.clientName, undefined, order.clientName || 'Cliente')}, referente à entrega do seu pedido #${order.id}:`)}
                           target="_blank"
                           rel="noreferrer"
                           className="p-1 rounded bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white transition-all"

@@ -31,6 +31,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Order, ClientPartner, DeliveryRider, FinancialTransaction } from '../types';
 import { getSaoPauloISODate, getSaoPauloTime, formatToBrazilianDate, extractISODateFromTimestamp } from '../utils/dateUtils';
+import { resolveOrderDisplayName, getPartnerDisplayName } from '../utils/partnerUtils';
 
 export interface NormalizedBackupData {
   exportType?: string;
@@ -1171,8 +1172,8 @@ export default function BackupRestoreByPeriod({
                     <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3 font-bold font-mono text-blue-700">{order.id}</td>
                       <td className="p-3 text-slate-600 whitespace-nowrap">{formatToBrazilianDate(order.date || order.createdAt)}</td>
-                      <td className="p-3 text-slate-800 font-bold max-w-xs truncate">{order.clientName}</td>
-                      <td className="p-3 text-slate-600">{order.partnerName}</td>
+                      <td className="p-3 text-slate-800 font-bold max-w-xs truncate">{resolveOrderDisplayName(order.clientName)}</td>
+                      <td className="p-3 text-slate-600">{getPartnerDisplayName(order.partnerName)}</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
                           order.status === 'Concluído' ? 'bg-emerald-100 text-emerald-800' :

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { X, Eraser, CheckCircle2, FileSignature, User, FileText, Palette, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Order } from '../types';
+import { resolveOrderDisplayName } from '../utils/partnerUtils';
 
 interface SignatureCanvasModalProps {
   isOpen: boolean;
@@ -175,7 +176,7 @@ export const SignatureCanvasModal: React.FC<SignatureCanvasModalProps> = ({
                   Assinatura Eletrônica em Canvas
                 </h3>
                 <p className="text-xs text-blue-100 font-medium">
-                  Pedido #{order.id} • {order.clientName}
+                  Pedido #{order.id} • {resolveOrderDisplayName(order.clientName)}
                 </p>
               </div>
             </div>

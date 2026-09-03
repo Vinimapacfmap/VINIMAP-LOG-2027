@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Order, DeliveryRider } from '../types';
+import { resolveOrderDisplayName } from '../utils/partnerUtils';
 import { 
   Zap, 
   Clock, 
@@ -306,7 +307,7 @@ export default function LiveHealthScore({ orders, riders }: LiveHealthScoreProps
                       >
                         <div>
                           <div className="font-bold text-amber-900">{order.id.toUpperCase()}</div>
-                          <div className="text-[10px] text-slate-400 font-semibold">{order.clientName} ({order.region})</div>
+                          <div className="text-[10px] text-slate-400 font-semibold">{resolveOrderDisplayName(order.clientName)} ({order.region})</div>
                         </div>
                         <div className="text-right">
                           <span className="px-2 py-0.5 text-[9px] font-black bg-amber-100 text-amber-800 rounded-full">

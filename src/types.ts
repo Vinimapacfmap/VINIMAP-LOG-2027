@@ -105,41 +105,68 @@ export interface ClientPartner {
 export function isMatchingClientCode(partnerIdOrCode: any, targetId: any, targetCodigo?: any): boolean {
   if (partnerIdOrCode === undefined || partnerIdOrCode === null) return false;
   const p1 = String(partnerIdOrCode).trim().toLowerCase();
-  const tId = String(targetId || '').trim().toLowerCase();
+  const tId = targetId ? String(targetId).trim().toLowerCase() : '';
   const tCode = targetCodigo ? String(targetCodigo).trim().toLowerCase() : '';
   
-  if (!p1 || !tId) return false;
-  if (p1 === tId || (tCode && p1 === tCode)) return true;
+  if (!p1) return false;
+  if (!tId && !tCode) return false;
   
-  const norm = (s: string) => s.replace(/[-_]/g, '');
-  const nP1 = norm(p1);
-  const nTId = norm(tId);
-  const nTCode = norm(tCode);
+  // 1. Direct equality
+  if ((tId && p1 === tId) || (tCode && p1 === tCode)) return true;
   
-  if (nP1 === nTId || (nTCode && nP1 === nTCode)) return true;
+  // 2. Alphanumeric normalized equality
+  const clean = (s: string) => s.replace(/[^a-z0-9]/g, '');
+  const nP1 = clean(p1);
+  const nTId = clean(tId);
+  const nTCode = clean(tCode);
   
-  const getParts = (s: string) => {
-    const match = s.match(/\d+$/);
-    const num = match ? parseInt(match[0], 10) : NaN;
-    const letters = s.replace(/\d+$/, '').replace(/[^a-z]/g, '');
-    return { letters, num };
+  if (nP1 && ((nTId && nP1 === nTId) || (nTCode && nP1 === nTCode))) return true;
+  
+  // 3. Substring matching if substantial length
+  if (nP1.length >= 4) {
+    if (nTId && nTId.length >= 4 && (nP1.includes(nTId) || nTId.includes(nP1))) return true;
+    if (nTCode && nTCode.length >= 4 && (nP1.includes(nTCode) || nTCode.includes(nP1))) return true;
+  }
+  
+  // 4. Pattern extraction for CL1-009, CL1-010, CL1-011, CL1-012, CL-010, 010, etc.
+  const extractCode = (s: string) => {
+    if (!s) return null;
+    const str = String(s).trim().toLowerCase();
+    const isClient = /cl|ci|cliente/i.test(str) || !/pa|pr/i.test(str);
+
+    // Specific match for CL1-009, CL1-010, CL-010, CLI-010, PARCEIRO-010
+    const m1 = str.match(/^(?:cliente|cli|cl|ci|pa|pr|parceiro)\s*(?:1\s*[-_]|[-_\s])?\s*0*([0-9]+)$/i);
+    if (m1 && m1[1]) return { num: parseInt(m1[1], 10), isClient };
+
+    // Pure digits: "10", "010", "009", "9"
+    const mDigits = str.match(/^0*([0-9]+)$/);
+    if (mDigits && mDigits[1]) return { num: parseInt(mDigits[1], 10), isClient };
+
+    // Name ending with code: "Cliente 10", "Ponto 10"
+    const mTrailing = str.match(/[-_\s]0*([0-9]+)$/);
+    if (mTrailing && mTrailing[1]) return { num: parseInt(mTrailing[1], 10), isClient };
+
+    // Fallback: all numbers in string, if CL1-010, last number is 10
+    const allDigits = str.match(/\d+/g);
+    if (allDigits && allDigits.length > 0) {
+      return { num: parseInt(allDigits[allDigits.length - 1], 10), isClient };
+    }
+    return null;
   };
-  
+
   try {
-    const partsP1 = getParts(p1);
-    const partsTId = getParts(tId);
+    const cP1 = extractCode(p1);
+    const cTId = extractCode(tId);
+    const cTCode = extractCode(tCode);
     
-    const isP1Client = partsP1.letters.startsWith('cl') || partsP1.letters.startsWith('ci');
-    const isTIdClient = partsTId.letters.startsWith('cl') || partsTId.letters.startsWith('ci');
-    const isP1Partner = partsP1.letters.startsWith('pa') || partsP1.letters.startsWith('pr');
-    const isTIdPartner = partsTId.letters.startsWith('pa') || partsTId.letters.startsWith('pr');
-    
-    if (isP1Client && isTIdClient && partsP1.num === partsTId.num) return true;
-    if (isP1Partner && isTIdPartner && partsP1.num === partsTId.num) return true;
+    if (cP1 && !isNaN(cP1.num)) {
+      if (cTId && !isNaN(cTId.num) && cP1.num === cTId.num) return true;
+      if (cTCode && !isNaN(cTCode.num) && cP1.num === cTCode.num) return true;
+    }
   } catch (e) {
     // ignore
   }
-  
+
   return false;
 }
 

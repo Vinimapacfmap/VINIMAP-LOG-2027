@@ -46,6 +46,7 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import { Order, DeliveryRider, ClientPartner, isMatchingClientCode } from '../types';
+import { getPartnerDisplayName, resolveOrderDisplayName } from '../utils/partnerUtils';
 import { getSaoPauloTime, getSaoPauloDate, getSaoPauloDateTimeShort, formatToBrazilianDate, getSaoPauloISODate } from '../utils/dateUtils';
 import { hasOrderCompletionEvidence } from '../utils/orderConsistency';
 import { calculateRiderCommissionForOrder } from '../utils/billingUtils';
@@ -936,16 +937,21 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
     if (lowerCol === 'endereco') {
       return order.address || order.rawData?.Endereco || order.rawData?.endereco || '';
     }
-    if (lowerCol === 'procurarpor' || lowerCol === 'nome do cliente') {
-      return order.clientName || order.rawData?.ProcurarPor || order.rawData?.procurarpor || '';
+    if (lowerCol === 'procurarpor' || lowerCol === 'nome do cliente' || lowerCol === 'destinatario' || lowerCol === 'destinatário') {
+      const candidate = order.clientName || order.rawData?.ProcurarPor || order.rawData?.procurarpor || '';
+      return resolveOrderDisplayName(candidate, clientPartners, candidate);
     }
-    if (lowerCol === 'codigocliente' || lowerCol === 'estabelecimento') {
-      const cp = clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente));
-      return cp ? cp.name : (order.partnerName || 'BK-0912');
+    if (lowerCol === 'codigocliente' || lowerCol === 'estabelecimento' || lowerCol === 'cliente' || lowerCol === 'parceiro') {
+      return getPartnerDisplayName(order.partnerName || order.clientName, clientPartners);
     }
     if (lowerCol === 'nomefantasia') {
-      const cp = clientPartners?.find(c => isMatchingClientCode(order.partnerName, c.id, c.codigoCliente));
-      return cp ? cp.name : (order.rawData?.NomeFantasia || order.rawData?.nomefantasia || order.partnerName || 'Parceiro');
+      const rawName = order.rawData?.NomeFantasia || order.rawData?.nomefantasia;
+      if (rawName) {
+        const resolved = getPartnerDisplayName(rawName, clientPartners);
+        if (resolved && resolved !== 'Parceiro Geral') return resolved;
+        return String(rawName);
+      }
+      return getPartnerDisplayName(order.partnerName || order.clientName, clientPartners);
     }
     if (lowerCol === 'valorentrega') {
       const baseFreight = order.rawData?.ValorEntrega || order.rawData?.valorentrega;
@@ -1750,8 +1756,12 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                         />
                         <div className="truncate">
                           <span className="font-extrabold text-slate-800 mr-2">{o.id}</span>
-                          <span className="text-slate-600 font-medium">{o.clientName}</span>
-                          <span className="text-[10px] text-slate-400 ml-2">({cp ? cp.name : o.partnerName})</span>
+                          <span className="text-slate-600 font-medium">
+                            {resolveOrderDisplayName(o.clientName, clientPartners, o.clientName)}
+                          </span>
+                          <span className="text-[10px] text-slate-400 ml-2">
+                            ({getPartnerDisplayName(o.partnerName || o.clientName, clientPartners)})
+                          </span>
                         </div>
                       </div>
 
@@ -2627,7 +2637,7 @@ export default function AlocarPedido({ orders, riders, clientPartners, onAllocat
                                             </span>
                                           )}
                                           <span className="text-[10px] text-indigo-300 font-normal truncate">
-                                            • {cp?.name || order.partnerName || 'Cliente Direto'}
+                                            • {getPartnerDisplayName(order.partnerName || order.clientName, clientPartners)}
                                           </span>
                                         </div>
                                         <div className="text-[10px] text-slate-400 truncate">

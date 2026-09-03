@@ -1739,8 +1739,9 @@ export default function App() {
             streetAddress += ` - ${bairro}`;
           }
         }
-        if (fillAddress && streetAddress) {
-          setNewClientAddr(streetAddress);
+        // Never overwrite address when editing an existing client or when address is already filled
+        if (fillAddress && streetAddress && !editingClient) {
+          setNewClientAddr(prev => (!prev || prev.trim() === '' ? streetAddress : prev));
         }
         setNewClientCidade(localidade);
         setNewClientEstado(uf);
@@ -1864,7 +1865,9 @@ export default function App() {
             const isMatch = (c.id && updatedEntry.id && String(c.id).toLowerCase() === String(updatedEntry.id).toLowerCase()) ||
                             (c.codigoCliente && updatedEntry.codigoCliente && String(c.codigoCliente).toLowerCase() === String(updatedEntry.codigoCliente).toLowerCase()) ||
                             (c.id && updatedEntry.codigoCliente && String(c.id).toLowerCase() === String(updatedEntry.codigoCliente).toLowerCase()) ||
-                            (c.codigoCliente && updatedEntry.id && String(c.codigoCliente).toLowerCase() === String(updatedEntry.id).toLowerCase());
+                            (c.codigoCliente && updatedEntry.id && String(c.codigoCliente).toLowerCase() === String(updatedEntry.id).toLowerCase()) ||
+                            isMatchingClientCode(c.id, updatedEntry.id, updatedEntry.codigoCliente) ||
+                            isMatchingClientCode(c.codigoCliente, updatedEntry.id, updatedEntry.codigoCliente);
             if (isMatch) {
               matched = true;
               return updatedEntry;
@@ -1873,6 +1876,9 @@ export default function App() {
           });
           const finalList = matched ? updated : [updatedEntry, ...updated];
           setCachedClientPartners(finalList);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('vinimap_client_partners_updated'));
+          }
           return finalList;
         });
 
@@ -6227,7 +6233,7 @@ export default function App() {
                                     onAddressFound={(data) => {
                                       const clean = (data.cep || '').replace(/\D/g, '');
                                       if (clean.length === 8) {
-                                        handleSearchCep(clean, !newClientAddr || newClientAddr.trim() === '');
+                                        handleSearchCep(clean, !editingClient && (!newClientAddr || newClientAddr.trim() === ''));
                                       }
                                     }}
                                     customError={cepSearchError || undefined}
