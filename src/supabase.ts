@@ -120,6 +120,75 @@ export function clearSupabaseLocalStorage(): void {
       localStorage.removeItem('SUPABASE_SERVICE_KEY');
     } catch (_) {}
   }
+  clearSupabaseRestrictedStatus();
+}
+
+/**
+ * Checks if Supabase project has been flagged as restricted (e.g. exceeded monthly egress quota)
+ */
+export function isSupabaseRestricted(): boolean {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      return window.sessionStorage.getItem('supabase_restricted') === 'true';
+    } catch (_) {}
+  }
+  return false;
+}
+
+export function getSupabaseRestrictedReason(): string | null {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      return window.sessionStorage.getItem('supabase_restricted_reason');
+    } catch (_) {}
+  }
+  return null;
+}
+
+export function markSupabaseRestricted(reason: string = 'exceed_egress_quota'): void {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem('supabase_restricted', 'true');
+      window.sessionStorage.setItem('supabase_restricted_reason', reason);
+      window.dispatchEvent(new CustomEvent('supabase-restricted-change', { detail: { isRestricted: true, reason } }));
+    } catch (_) {}
+  }
+}
+
+export function clearSupabaseRestrictedStatus(): void {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.removeItem('supabase_restricted');
+      window.sessionStorage.removeItem('supabase_restricted_reason');
+      window.dispatchEvent(new CustomEvent('supabase-restricted-change', { detail: { isRestricted: false } }));
+    } catch (_) {}
+  }
+}
+
+export function isSupabaseQuotaOrRestrictedError(err: any, status?: number): boolean {
+  if (status === 402) return true;
+  if (!err) return false;
+  const msg = typeof err === 'string' ? err : (err?.message || err?.details || err?.error_description || (typeof err === 'object' ? JSON.stringify(err) : ''));
+  const lower = String(msg).toLowerCase();
+  return (
+    lower.includes('exceed_egress_quota') ||
+    lower.includes('restricted due to the following violations') ||
+    lower.includes('payment required') ||
+    lower.includes('spend cap') ||
+    lower.includes('egress_quota') ||
+    (lower.includes('quota') && lower.includes('exceed')) ||
+    (lower.includes('service for this project is restricted'))
+  );
+}
+
+export function checkAndHandleSupabaseError(err: any, status?: number): boolean {
+  if (isSupabaseQuotaOrRestrictedError(err, status)) {
+    const msg = typeof err === 'string' 
+      ? err 
+      : (err?.message || 'Cota de tráfego (egress quota) excedida no Supabase.');
+    markSupabaseRestricted(msg);
+    return true;
+  }
+  return false;
 }
 
 const rawUrl = getRawSupabaseUrl();
@@ -196,12 +265,26 @@ export async function testSupabaseConnection(): Promise<SupabaseTestResult> {
     const { error, status } = await client.from('orders').select('id').limit(1);
 
     if (!error) {
+      clearSupabaseRestrictedStatus();
       console.log('[SupabaseDiagnostic:JSClient] Connected successfully.', { source, status });
       return {
         success: true,
         message: 'Conexão com o Supabase estabelecida e autenticada com sucesso!',
         code: '200_OK',
         clientSource: source,
+      };
+    }
+
+    // Check if project has exceeded egress quota (HTTP 402 / exceed_egress_quota)
+    if (isSupabaseQuotaOrRestrictedError(error, status)) {
+      const quotaReason = error.message || 'Cota de tráfego de saída (egress quota) excedida no Supabase.';
+      markSupabaseRestricted(quotaReason);
+      return {
+        success: false,
+        message: 'Projeto Supabase temporariamente restrito: Cota mensal de transferência de dados (egress) excedida no plano gratuito (HTTP 402).',
+        code: 'EXCEED_EGRESS_QUOTA',
+        clientSource: source,
+        details: 'Service restricted due to violations: exceed_egress_quota. O sistema está operando normalmente em modo de contingência com Firebase Firestore e armazenamento local. Para restabelecer o Supabase, o proprietário deve atualizar o plano ou desativar limites de gastos no painel do Supabase.',
       };
     }
 

@@ -1,4 +1,11 @@
-import { supabase, isSupabaseConfigured } from '../supabase';
+import { 
+  supabase, 
+  isSupabaseConfigured, 
+  isSupabaseRestricted, 
+  checkAndHandleSupabaseError, 
+  isSupabaseQuotaOrRestrictedError,
+  markSupabaseRestricted 
+} from '../supabase';
 import { 
   Order, 
   OrderStatus,
@@ -501,8 +508,7 @@ export function mapCompanyHubFromDb(row: any): CompanyHub {
 // ============================================================================
 
 export async function sbSaveOrder(order: Order) {
-  if (!isSupabaseConfigured || !supabase) {
-    console.log('[Supabase sbSaveOrder] Supabase not configured. Skipping remote write.');
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) {
     return;
   }
   try {
@@ -511,6 +517,11 @@ export async function sbSaveOrder(order: Order) {
     const { error } = await supabase.from('orders').upsert(dbOrder);
     if (!error) {
       console.log(`[Supabase sbSaveOrder] Order #${order.id} saved successfully to Supabase.`);
+      return;
+    }
+
+    if (checkAndHandleSupabaseError(error)) {
+      console.warn(`[Supabase sbSaveOrder] Supabase com cota excedida (exceed_egress_quota). Modo de contingência ativo.`);
       return;
     }
 
@@ -539,6 +550,7 @@ export async function sbSaveOrder(order: Order) {
 
     const { error: fallbackError } = await supabase.from('orders').upsert(baseOrder);
     if (fallbackError) {
+      if (checkAndHandleSupabaseError(fallbackError)) return;
       // Secondary fallback with minimum standard columns
       const minOrder = {
         id: dbOrder.id,
@@ -557,6 +569,7 @@ export async function sbSaveOrder(order: Order) {
       };
       const { error: minErr } = await supabase.from('orders').upsert(minOrder);
       if (minErr) {
+        checkAndHandleSupabaseError(minErr);
         console.warn(`[Supabase sbSaveOrder] Minimal upsert failed for order #${order.id}:`, minErr);
       } else {
         console.log(`[Supabase sbSaveOrder] Minimal fallback succeeded for order #${order.id}.`);
@@ -565,33 +578,40 @@ export async function sbSaveOrder(order: Order) {
       console.log(`[Supabase sbSaveOrder] Base fallback succeeded for order #${order.id}.`);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn(`[Supabase sbSaveOrder] Exception saving order #${order.id}:`, err);
   }
 }
 
 export async function sbDeleteOrder(orderId: string) {
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) return;
   try {
     console.log(`[Supabase sbDeleteOrder] Deleting order #${orderId}...`);
     const { error } = await supabase.from('orders').delete().eq('id', orderId);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn(`[Supabase sbDeleteOrder] Error deleting order #${orderId}:`, error);
     } else {
       console.log(`[Supabase sbDeleteOrder] Order #${orderId} deleted successfully.`);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn(`[Supabase sbDeleteOrder] Exception deleting order #${orderId}:`, err);
   }
 }
 
 export async function sbBulkSaveOrders(orders: Order[]): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase || !orders || orders.length === 0) return false;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted() || !orders || orders.length === 0) return false;
   try {
     const chunks = chunkArray(orders, 30);
     for (const chunk of chunks) {
       const dbOrders = chunk.map(mapOrderToDb);
       const { error } = await supabase.from('orders').upsert(dbOrders);
       if (error) {
+        if (checkAndHandleSupabaseError(error)) {
+          console.warn('[Supabase sbBulkSaveOrders] Cota excedida no Supabase (exceed_egress_quota). Abortando requisições.');
+          return false;
+        }
         // Fallback with base columns
         const baseOrders = dbOrders.map(dbOrder => ({
           id: dbOrder.id,
@@ -614,20 +634,21 @@ export async function sbBulkSaveOrders(orders: Order[]): Promise<boolean> {
         }));
         const { error: fallbackErr } = await supabase.from('orders').upsert(baseOrders);
         if (fallbackErr) {
+          checkAndHandleSupabaseError(fallbackErr);
           console.warn('[Supabase sbBulkSaveOrders] Fallback error saving orders chunk:', fallbackErr.message);
         }
       }
     }
     return true;
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn('[Supabase sbBulkSaveOrders] Exception saving orders in bulk:', err);
     return false;
   }
 }
 
 export async function sbSaveClientPartner(client: ClientPartner) {
-  if (!isSupabaseConfigured || !supabase) {
-    console.log('[Supabase sbSaveClientPartner] Supabase not configured. Skipping remote write.');
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) {
     return;
   }
   try {
@@ -635,12 +656,14 @@ export async function sbSaveClientPartner(client: ClientPartner) {
     const dbClient = mapClientPartnerToDb(client);
     const { error } = await supabase.from('client_partners').upsert(dbClient);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       // If column missing in schema cache, attempt fallback without newly added optional columns
       if (error.message?.includes('enable_completion_notifications') || error.message?.includes('column') || error.code === 'PGRST204' || error.code === '42703') {
         console.warn(`[Supabase sbSaveClientPartner] Missing column in schema cache, retrying without optional columns...`);
         const { enable_completion_notifications, cep_ranges_history, ...fallbackClient } = dbClient as any;
         const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackClient);
         if (retryErr) {
+          checkAndHandleSupabaseError(retryErr);
           console.warn(`[Supabase sbSaveClientPartner] Error saving client #${client.id} on retry:`, retryErr);
         }
         return;
@@ -650,28 +673,30 @@ export async function sbSaveClientPartner(client: ClientPartner) {
       console.log(`[Supabase sbSaveClientPartner] Client #${client.id} saved successfully.`);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn(`[Supabase sbSaveClientPartner] Exception saving client #${client.id}:`, err);
   }
 }
 
 export async function sbDeleteClientPartner(clientId: string) {
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) return;
   try {
     console.log(`[Supabase sbDeleteClientPartner] Deleting client #${clientId}...`);
     const { error } = await supabase.from('client_partners').delete().eq('id', clientId);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn(`[Supabase sbDeleteClientPartner] Error deleting client #${clientId}:`, error);
     } else {
       console.log(`[Supabase sbDeleteClientPartner] Client #${clientId} deleted successfully.`);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn(`[Supabase sbDeleteClientPartner] Exception deleting client #${clientId}:`, err);
   }
 }
 
 export async function sbSaveDeliveryRider(rider: DeliveryRider) {
-  if (!isSupabaseConfigured || !supabase) {
-    console.log('[Supabase sbSaveDeliveryRider] Supabase not configured. Skipping remote write.');
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) {
     return;
   }
   try {
@@ -679,33 +704,36 @@ export async function sbSaveDeliveryRider(rider: DeliveryRider) {
     const dbRider = mapDeliveryRiderToDb(rider);
     const { error } = await supabase.from('delivery_riders').upsert(dbRider);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn(`[Supabase sbSaveDeliveryRider] Error saving rider #${rider.id}:`, error);
     } else {
       console.log(`[Supabase sbSaveDeliveryRider] Rider #${rider.id} saved successfully.`);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn(`[Supabase sbSaveDeliveryRider] Exception saving rider #${rider.id}:`, err);
   }
 }
 
 export async function sbDeleteDeliveryRider(riderId: string) {
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) return;
   try {
     console.log(`[Supabase sbDeleteDeliveryRider] Deleting rider #${riderId}...`);
     const { error } = await supabase.from('delivery_riders').delete().eq('id', riderId);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn(`[Supabase sbDeleteDeliveryRider] Error deleting rider #${riderId}:`, error);
     } else {
       console.log(`[Supabase sbDeleteDeliveryRider] Rider #${riderId} deleted successfully.`);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn(`[Supabase sbDeleteDeliveryRider] Exception deleting rider #${riderId}:`, err);
   }
 }
 
 export async function sbSaveFinancialTransaction(tx: FinancialTransaction) {
-  if (!isSupabaseConfigured || !supabase) {
-    console.log('[Supabase sbSaveFinancialTransaction] Supabase not configured. Skipping remote write.');
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) {
     return;
   }
   try {
@@ -713,89 +741,103 @@ export async function sbSaveFinancialTransaction(tx: FinancialTransaction) {
     const dbTx = mapFinancialTransactionToDb(tx);
     const { error } = await supabase.from('financial_transactions').upsert(dbTx);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn(`[Supabase sbSaveFinancialTransaction] Error saving transaction #${tx.id}:`, error);
     } else {
       console.log(`[Supabase sbSaveFinancialTransaction] Transaction #${tx.id} saved successfully.`);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn(`[Supabase sbSaveFinancialTransaction] Exception saving transaction #${tx.id}:`, err);
   }
 }
 
 export async function sbDeleteFinancialTransaction(txId: string) {
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) return;
   try {
     const { error } = await supabase.from('financial_transactions').delete().eq('id', txId);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn('Supabase Error deleting financial transaction:', error);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn('Supabase Exception deleting financial transaction:', err);
   }
 }
 
 export async function sbBulkDeleteFinancialTransactions(txIds: string[]) {
-  if (!isSupabaseConfigured || !supabase || txIds.length === 0) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted() || txIds.length === 0) return;
   // Delete in batches of 200
   for (let i = 0; i < txIds.length; i += 200) {
     const chunk = txIds.slice(i, i + 200);
     try {
       const { error } = await supabase.from('financial_transactions').delete().in('id', chunk);
       if (error) {
+        if (checkAndHandleSupabaseError(error)) return;
         console.warn('Supabase Error bulk deleting financial transactions:', error);
       }
     } catch (err) {
+      checkAndHandleSupabaseError(err);
       console.warn('Supabase Exception bulk deleting financial transactions:', err);
     }
   }
 }
 
 export async function sbPurgeTable(tableName: string) {
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) return;
   try {
     const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn(`Supabase Error purging table ${tableName}:`, error);
     }
   } catch (e) {
+    checkAndHandleSupabaseError(e);
     console.warn(`Exception purging table ${tableName}:`, e);
   }
 }
 
 export async function sbSaveCompanyHub(hub: CompanyHub) {
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) return;
   try {
     const dbHub = mapCompanyHubToDb(hub);
     const { error } = await supabase.from('company_hubs').upsert(dbHub);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn('Supabase Error writing company hub:', error);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn('Supabase Exception writing company hub:', err);
   }
 }
 
 export async function sbDeleteCompanyHub(hubId: string) {
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) return;
   try {
     const { error } = await supabase.from('company_hubs').delete().eq('id', hubId);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn('Supabase Error deleting company hub:', error);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn('Supabase Exception deleting company hub:', err);
   }
 }
 
 export async function sbAddActivityLog(log: ActivityLog) {
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) return;
   try {
     const dbLog = mapActivityLogToDb(log);
     const { error } = await supabase.from('activity_logs').upsert(dbLog);
     if (error) {
+      if (checkAndHandleSupabaseError(error)) return;
       console.warn('Supabase Error writing log:', error);
     }
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn('Supabase Exception writing log:', err);
   }
 }
@@ -830,7 +872,11 @@ export async function syncAllStateToSupabase(data: {
   txs: FinancialTransaction[];
 }): Promise<SyncStats> {
   if (!isSupabaseConfigured || !supabase) {
-    throw new Error('Supabase is not configured yet. Set credentials in env/secrets.');
+    throw new Error('Supabase não está configurado. Configure as credenciais nas configurações.');
+  }
+
+  if (isSupabaseRestricted()) {
+    throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota - HTTP 402). O sistema está seguro e operacional via Firebase Firestore e armazenamento local.');
   }
 
   // 1. Sync Company Hubs in chunks
@@ -839,7 +885,12 @@ export async function syncAllStateToSupabase(data: {
     const hubChunks = chunkArray(dbHubs, 50);
     for (const chunk of hubChunks) {
       const { error } = await supabase.from('company_hubs').upsert(chunk);
-      if (error) throw new Error(`Error syncing company hubs: ${error.message}`);
+      if (error) {
+        if (checkAndHandleSupabaseError(error)) {
+          throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota). Dados preservados no Firestore e localmente.');
+        }
+        throw new Error(`Error syncing company hubs: ${error.message}`);
+      }
     }
   }
 
@@ -849,7 +900,12 @@ export async function syncAllStateToSupabase(data: {
     const riderChunks = chunkArray(dbRiders, 50);
     for (const chunk of riderChunks) {
       const { error } = await supabase.from('delivery_riders').upsert(chunk);
-      if (error) throw new Error(`Error syncing riders: ${error.message}`);
+      if (error) {
+        if (checkAndHandleSupabaseError(error)) {
+          throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota). Dados preservados no Firestore e localmente.');
+        }
+        throw new Error(`Error syncing riders: ${error.message}`);
+      }
     }
   }
 
@@ -860,6 +916,9 @@ export async function syncAllStateToSupabase(data: {
     for (const chunk of clientChunks) {
       const { error } = await supabase.from('client_partners').upsert(chunk);
       if (error) {
+        if (checkAndHandleSupabaseError(error)) {
+          throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota). Dados preservados no Firestore e localmente.');
+        }
         if (error.message?.includes('enable_completion_notifications') || error.message?.includes('column') || error.code === 'PGRST204' || error.code === '42703') {
           console.warn('[Supabase Sync] Missing column in client_partners schema cache, retrying chunk without optional columns...');
           const fallbackChunk = chunk.map(c => {
@@ -867,7 +926,12 @@ export async function syncAllStateToSupabase(data: {
             return rest;
           });
           const { error: retryErr } = await supabase.from('client_partners').upsert(fallbackChunk);
-          if (retryErr) throw new Error(`Error syncing client partners: ${retryErr.message}`);
+          if (retryErr) {
+            if (checkAndHandleSupabaseError(retryErr)) {
+              throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota). Dados preservados no Firestore e localmente.');
+            }
+            throw new Error(`Error syncing client partners: ${retryErr.message}`);
+          }
         } else {
           throw new Error(`Error syncing client partners: ${error.message}`);
         }
@@ -890,6 +954,9 @@ export async function syncAllStateToSupabase(data: {
     for (const chunk of orderChunks) {
       const { error } = await supabase.from('orders').upsert(chunk);
       if (error) {
+        if (checkAndHandleSupabaseError(error)) {
+          throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota). Dados preservados no Firestore e localmente.');
+        }
         console.warn('[Supabase Sync] Orders chunk upsert failed, retrying chunk with base columns fallback...', error.message);
         const baseChunk = chunk.map(dbO => ({
           id: dbO.id,
@@ -911,7 +978,12 @@ export async function syncAllStateToSupabase(data: {
           history: dbO.history
         }));
         const { error: retryErr } = await supabase.from('orders').upsert(baseChunk);
-        if (retryErr) throw new Error(`Error syncing orders: ${retryErr.message}`);
+        if (retryErr) {
+          if (checkAndHandleSupabaseError(retryErr)) {
+            throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota). Dados preservados no Firestore e localmente.');
+          }
+          throw new Error(`Error syncing orders: ${retryErr.message}`);
+        }
       }
     }
   }
@@ -922,7 +994,12 @@ export async function syncAllStateToSupabase(data: {
     const logChunks = chunkArray(dbLogs, 50);
     for (const chunk of logChunks) {
       const { error } = await supabase.from('activity_logs').upsert(chunk);
-      if (error) throw new Error(`Error syncing activity logs: ${error.message}`);
+      if (error) {
+        if (checkAndHandleSupabaseError(error)) {
+          throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota). Dados preservados no Firestore e localmente.');
+        }
+        throw new Error(`Error syncing activity logs: ${error.message}`);
+      }
     }
   }
 
@@ -932,7 +1009,12 @@ export async function syncAllStateToSupabase(data: {
     const txChunks = chunkArray(dbTxs, 50);
     for (const chunk of txChunks) {
       const { error } = await supabase.from('financial_transactions').upsert(chunk);
-      if (error) throw new Error(`Error syncing transactions: ${error.message}`);
+      if (error) {
+        if (checkAndHandleSupabaseError(error)) {
+          throw new Error('Projeto Supabase temporariamente restrito por cota de tráfego excedida (exceed_egress_quota). Dados preservados no Firestore e localmente.');
+        }
+        throw new Error(`Error syncing transactions: ${error.message}`);
+      }
     }
   }
 
@@ -952,7 +1034,7 @@ export interface TableSyncDiagnostic {
   description: string;
   localCount: number;
   remoteCount: number | null;
-  status: 'synced' | 'discrepancy' | 'missing_table' | 'permission_error' | 'column_mismatch' | 'error' | 'idle' | 'checking';
+  status: 'synced' | 'discrepancy' | 'missing_table' | 'permission_error' | 'column_mismatch' | 'quota_exceeded' | 'error' | 'idle' | 'checking';
   latencyMs?: number;
   errorMessage?: string;
   actionHint?: string;
@@ -1168,6 +1250,22 @@ export async function checkTableSyncStatus(
     if (error) {
       const errMsg = error.message || String(error);
       const errCode = error.code;
+
+      if (checkAndHandleSupabaseError(error) || isSupabaseQuotaOrRestrictedError(error)) {
+        return {
+          tableName,
+          label: info.label,
+          description: info.desc,
+          localCount,
+          remoteCount: null,
+          status: 'quota_exceeded',
+          latencyMs,
+          errorMessage: 'Cota de tráfego de saída (egress) excedida no Supabase (HTTP 402).',
+          actionHint: 'O projeto Supabase atingiu o limite mensal do plano gratuito. O sistema está em contingência local e Firestore.',
+          sqlFix: TABLE_SQL_FIXES[tableName],
+          lastChecked: nowStr
+        };
+      }
 
       // Table does not exist (Postgres code 42P01 or PostgREST PGRST204)
       if (
@@ -1465,11 +1563,18 @@ export async function fetchSingleTableFromSupabase(
   if (!isSupabaseConfigured || !supabase) {
     throw new Error('Supabase não está configurado.');
   }
+  if (isSupabaseRestricted()) {
+    throw new Error('Projeto Supabase temporariamente com cota de tráfego excedida (exceed_egress_quota - HTTP 402). Dados locais preservados.');
+  }
   const { data, error } = await safeQueryTable(tableName);
-  if (error) throw new Error(`Erro ao buscar dados de ${tableName}: ${error.message || error}`);
+  if (error) {
+    if (checkAndHandleSupabaseError(error)) {
+      throw new Error('Projeto Supabase temporariamente restrito por cota excedida (exceed_egress_quota).');
+    }
+    throw new Error(`Erro ao buscar dados de ${tableName}: ${error.message || error}`);
+  }
   return data || [];
 }
-
 
 export interface SupabaseLoadedState {
   hubs: CompanyHub[];
@@ -1482,18 +1587,29 @@ export interface SupabaseLoadedState {
 
 async function safeQueryTable(tableName: string) {
   try {
-    if (!supabase) return { data: [], error: null };
+    if (!supabase || isSupabaseRestricted()) return { data: [], error: null };
     const res = await supabase.from(tableName).select('*').limit(50000);
+    if (res.error) {
+      checkAndHandleSupabaseError(res.error, (res as any).status);
+    }
     return { data: res.data || [], error: res.error };
   } catch (err) {
+    checkAndHandleSupabaseError(err);
     console.warn(`[safeQueryTable] Exception fetching table ${tableName}:`, err);
     return { data: [], error: err };
   }
 }
 
 export async function fetchAllStateFromSupabase(): Promise<SupabaseLoadedState> {
-  if (!isSupabaseConfigured || !supabase) {
-    throw new Error('Supabase is not configured.');
+  if (!isSupabaseConfigured || !supabase || isSupabaseRestricted()) {
+    return {
+      hubs: [],
+      clients: [],
+      riders: [],
+      orders: [],
+      logs: [],
+      txs: []
+    };
   }
 
   try {

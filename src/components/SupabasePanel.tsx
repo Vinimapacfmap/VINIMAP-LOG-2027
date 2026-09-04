@@ -27,7 +27,14 @@ import {
   Filter,
   X
 } from 'lucide-react';
-import { isSupabaseConfigured, createCustomSupabaseClient } from '../supabase';
+import { 
+  isSupabaseConfigured, 
+  createCustomSupabaseClient,
+  isSupabaseRestricted,
+  markSupabaseRestricted,
+  clearSupabaseRestrictedStatus,
+  isSupabaseQuotaOrRestrictedError
+} from '../supabase';
 import { 
   syncAllStateToSupabase, 
   fetchAllStateFromSupabase,
@@ -213,6 +220,16 @@ export default function SupabasePanel({
   const [testingConn, setTestingConn] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [saveSuccessToast, setSaveSuccessToast] = useState<string | null>(null);
+  const [isProjectRestricted, setIsProjectRestricted] = useState<boolean>(() => isSupabaseRestricted());
+
+  useEffect(() => {
+    const handleRestrictedEvent = (e: any) => {
+      setIsProjectRestricted(!!e.detail?.restricted);
+    };
+    window.addEventListener('supabase-restricted-change', handleRestrictedEvent);
+    return () => window.removeEventListener('supabase-restricted-change', handleRestrictedEvent);
+  }, []);
+
   const [testDiagnostic, setTestDiagnostic] = useState<{
     status: 'success' | 'warning' | 'error';
     title: string;
@@ -324,14 +341,29 @@ export default function SupabasePanel({
         [tableName]: res
       }));
     } catch (err: any) {
-      setTableDiagnostics(prev => ({
-        ...prev,
-        [tableName]: {
-          ...prev[tableName],
-          status: 'error',
-          errorMessage: err.message || String(err)
-        }
-      }));
+      const isQuota = isSupabaseQuotaOrRestrictedError(err);
+      if (isQuota) {
+        markSupabaseRestricted();
+        setIsProjectRestricted(true);
+        setTableDiagnostics(prev => ({
+          ...prev,
+          [tableName]: {
+            ...prev[tableName],
+            status: 'quota_exceeded',
+            errorMessage: 'Cota de egress do Supabase esgotada (HTTP 402 - exceed_egress_quota)',
+            actionHint: 'Modo de contingência ativo. Todos os dados permanecem salvos e seguros no Firestore e localmente.'
+          }
+        }));
+      } else {
+        setTableDiagnostics(prev => ({
+          ...prev,
+          [tableName]: {
+            ...prev[tableName],
+            status: 'error',
+            errorMessage: err.message || String(err)
+          }
+        }));
+      }
     }
   };
 
@@ -360,10 +392,18 @@ export default function SupabasePanel({
       // Re-check this table
       await handleCheckSingleTable(tableName);
     } catch (err: any) {
-      console.error(`[handleSyncSingleTable] Error syncing ${tableName}:`, err);
-      const rawMsg = err.message || String(err);
-      setErrorMsg(`Falha ao sincronizar tabela "${tableName}": ${rawMsg}`);
-      onAddLog(`Erro de sincronização na tabela ${tableName}: ${rawMsg}`, 'danger');
+      console.warn(`[handleSyncSingleTable] Notice syncing ${tableName}:`, err);
+      const isQuota = isSupabaseQuotaOrRestrictedError(err);
+      if (isQuota) {
+        markSupabaseRestricted();
+        setIsProjectRestricted(true);
+        setErrorMsg(`Cota de tráfego do Supabase excedida (exceed_egress_quota - HTTP 402). A tabela "${tableName}" está segura na contingência do Firebase Firestore e no armazenamento local.`);
+        onAddLog(`Supabase com cota mensal excedida ao sincronizar ${tableName}. Contingência local/Firestore preserva todos os dados.`, 'warning');
+      } else {
+        const rawMsg = err.message || String(err);
+        setErrorMsg(`Falha ao sincronizar tabela "${tableName}": ${rawMsg}`);
+        onAddLog(`Erro de sincronização na tabela ${tableName}: ${rawMsg}`, 'danger');
+      }
     } finally {
       setTableSyncingMap(prev => ({ ...prev, [tableName]: false }));
     }
@@ -436,6 +476,8 @@ export default function SupabasePanel({
       const { data, error } = await testClient.from('orders').select('id, client_name, status').limit(1);
 
       if (!error) {
+        clearSupabaseRestrictedStatus();
+        setIsProjectRestricted(false);
         setTestDiagnostic({
           status: 'success',
           title: 'Conexão e Permissões RLS Validadas na Tabela de Pedidos (orders)!',
@@ -444,7 +486,16 @@ export default function SupabasePanel({
         });
       } else {
         const errMsg = error.message || String(error);
-        if (
+        if (isSupabaseQuotaOrRestrictedError(error)) {
+          markSupabaseRestricted();
+          setIsProjectRestricted(true);
+          setTestDiagnostic({
+            status: 'warning',
+            title: 'Cota de Tráfego do Supabase Esgotada (HTTP 402 - exceed_egress_quota)',
+            message: 'O projeto Supabase atingiu o limite de transferência de dados (egress quota) do plano. O serviço remoto está temporariamente suspenso pelo Supabase.',
+            actionHint: 'O ViniMap ativou automaticamente o modo de contingência no Firebase Firestore e no armazenamento local: seu painel continua 100% operacional sem perda de dados.'
+          });
+        } else if (
           errMsg.includes('does not exist') || 
           errMsg.includes('Could not find') || 
           error.code === 'PGRST204' || 
@@ -799,15 +850,23 @@ NOTIFY pgrst, 'reload schema';`;
       await handleCheckAllTables();
     } catch (err: any) {
       console.warn(err);
-      const rawMsg = err.message || String(err);
-      if (rawMsg.includes('schema cache') || rawMsg.includes('Could not find the table') || rawMsg.includes('Could not find') || rawMsg.includes('column')) {
-        setErrorMsg(`Estrutura de tabelas/colunas incompleta no Supabase (${rawMsg}). Por favor, copie e execute o código SQL atualizado (ao lado) no "SQL Editor" do Supabase para alinhar todas as colunas e permissões.`);
-      } else if (rawMsg.includes('row-level security policy') || rawMsg.includes('RLS')) {
-        setErrorMsg(`Erro de permissão (RLS) no Supabase (${rawMsg}). Execute o script SQL ao lado no "SQL Editor" para desabilitar o RLS e conceder permissões.`);
+      const isQuota = isSupabaseQuotaOrRestrictedError(err);
+      if (isQuota) {
+        markSupabaseRestricted();
+        setIsProjectRestricted(true);
+        setErrorMsg('Cota de transferência (egress quota) do Supabase esgotada (HTTP 402). O sistema está operando no modo de contingência Firestore/Local. Todos os seus dados estão preservados.');
+        onAddLog('Supabase atingiu o limite mensal de cota (exceed_egress_quota). Modo de contingência Firestore/Local ativo e dados seguros.', 'warning');
       } else {
-        setErrorMsg(`Falha ao sincronizar dados com o Supabase: ${rawMsg}`);
+        const rawMsg = err.message || String(err);
+        if (rawMsg.includes('schema cache') || rawMsg.includes('Could not find the table') || rawMsg.includes('Could not find') || rawMsg.includes('column')) {
+          setErrorMsg(`Estrutura de tabelas/colunas incompleta no Supabase (${rawMsg}). Por favor, copie e execute o código SQL atualizado (ao lado) no "SQL Editor" do Supabase para alinhar todas as colunas e permissões.`);
+        } else if (rawMsg.includes('row-level security policy') || rawMsg.includes('RLS')) {
+          setErrorMsg(`Erro de permissão (RLS) no Supabase (${rawMsg}). Execute o script SQL ao lado no "SQL Editor" para desabilitar o RLS e conceder permissões.`);
+        } else {
+          setErrorMsg(`Falha ao sincronizar dados com o Supabase: ${rawMsg}`);
+        }
+        onAddLog(`Erro de sincronização Supabase: ${rawMsg}`, 'danger');
       }
-      onAddLog(`Erro de sincronização Supabase: ${rawMsg}`, 'danger');
     } finally {
       setSyncing(false);
     }
@@ -844,8 +903,16 @@ NOTIFY pgrst, 'reload schema';`;
       await handleCheckAllTables();
     } catch (err: any) {
       console.warn(err);
-      setErrorMsg(err.message || 'Falha ao obter dados do Supabase. Verifique se as tabelas foram criadas usando as migrations fornecidas.');
-      onAddLog(`Erro ao carregar dados do Supabase: ${err.message || err}`, 'danger');
+      const isQuota = isSupabaseQuotaOrRestrictedError(err);
+      if (isQuota) {
+        markSupabaseRestricted();
+        setIsProjectRestricted(true);
+        setErrorMsg('Cota de transferência (egress quota) do Supabase esgotada (HTTP 402). O dashboard continua carregado e operando com dados do Firestore e cache local.');
+        onAddLog('Supabase atingiu o limite mensal de cota (exceed_egress_quota). Estado ativo preservado via contingência.', 'warning');
+      } else {
+        setErrorMsg(err.message || 'Falha ao obter dados do Supabase. Verifique se as tabelas foram criadas usando as migrations fornecidas.');
+        onAddLog(`Erro ao carregar dados do Supabase: ${err.message || err}`, 'danger');
+      }
     } finally {
       setFetching(false);
     }
@@ -933,6 +1000,13 @@ NOTIFY pgrst, 'reload schema';`;
             <span>Erro</span>
           </span>
         );
+      case 'quota_exceeded':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-300">
+            <AlertCircle size={12} className="text-amber-600 shrink-0" />
+            <span>Cota Excedida (HTTP 402)</span>
+          </span>
+        );
       default:
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-slate-100 text-slate-600 border border-slate-200">
@@ -945,6 +1019,63 @@ NOTIFY pgrst, 'reload schema';`;
 
   return (
     <div className="space-y-6" id="supabase-panel-component">
+      {/* Contingency Mode Banner when Supabase is restricted due to quota */}
+      {isProjectRestricted && (
+        <div className="p-4 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border border-amber-300/90 rounded-2xl shadow-xs space-y-3" id="supabase-quota-contingency-banner">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-amber-500/10 text-amber-700 rounded-xl shrink-0 mt-0.5">
+                <ShieldAlert size={22} className="text-amber-600" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-black text-amber-900 tracking-tight">
+                    Modo de Contingência Ativo: Cota de Egress do Supabase Excedida (HTTP 402)
+                  </h4>
+                  <span className="px-2 py-0.5 bg-amber-200/60 text-amber-900 text-[10px] font-mono font-bold rounded-md">
+                    exceed_egress_quota
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed max-w-3xl">
+                  O projeto Supabase atingiu o limite mensal de transferência de dados do plano gratuito. 
+                  Para não interromper sua operação, o ViniMap ativou a <b>contingência contínua via Firebase Firestore</b> e <b>armazenamento local (IndexedDB)</b>. 
+                  Todos os pedidos, clientes, entregadores e rotas continuam 100% seguros e operacionais.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                clearSupabaseRestrictedStatus();
+                setIsProjectRestricted(false);
+                handleTestConnection(supabaseUrl, supabaseKey);
+              }}
+              disabled={testingConn}
+              className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white text-xs font-bold rounded-xl transition-all shadow-xs shrink-0 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={testingConn ? 'animate-spin' : ''} />
+              <span>{testingConn ? 'Verificando Cota...' : 'Tentar Reconectar Supabase'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2.5 border-t border-amber-200/80 text-[11px] text-amber-900 font-medium">
+            <div className="flex items-center gap-2 bg-white/60 px-3 py-1.5 rounded-lg border border-amber-200/50">
+              <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+              <span><b>Firebase Firestore:</b> 100% Ativo e Sincronizado</span>
+            </div>
+            <div className="flex items-center gap-2 bg-white/60 px-3 py-1.5 rounded-lg border border-amber-200/50">
+              <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+              <span><b>Local Cache / IndexedDB:</b> 100% Persistente</span>
+            </div>
+            <div className="flex items-center gap-2 bg-white/60 px-3 py-1.5 rounded-lg border border-amber-200/50">
+              <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+              <span><b>Central de Pedidos:</b> Zero Perda de Dados</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast Notification */}
       {statusToast && (
         <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 shadow-md animate-fadeIn ${

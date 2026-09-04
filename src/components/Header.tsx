@@ -44,7 +44,7 @@ interface HeaderProps {
   onSyncSupabase?: () => Promise<void> | void;
   isSyncingSupabase?: boolean;
   lastSupabaseSyncTime?: string;
-  supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
+  supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error' | 'restricted';
   orders?: Order[];
   riders?: DeliveryRider[];
   clientPartners?: ClientPartner[];
@@ -427,6 +427,8 @@ export default function Header({
             title={
               isSyncingSupabase
                 ? 'Sincronizando dados com o Supabase...'
+                : supabaseSyncStatus === 'restricted'
+                ? 'Projeto Supabase temporariamente restrito por cota de tráfego (exceed_egress_quota - HTTP 402). Contingência local e Firestore ativas com 100% de integridade.'
                 : lastSupabaseSyncTime
                 ? `Última sincronização com Supabase: ${lastSupabaseSyncTime}. Clique para sincronizar novamente.`
                 : 'Sincronizar todos os dados do painel com o Supabase imediatamente'
@@ -434,6 +436,8 @@ export default function Header({
             className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border shadow-3xs transition-all cursor-pointer shrink-0 group ${
               isSyncingSupabase
                 ? 'bg-amber-50 text-amber-700 border-amber-200/80 cursor-wait'
+                : supabaseSyncStatus === 'restricted'
+                ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
                 : supabaseSyncStatus === 'synced'
                 ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200/80'
                 : supabaseSyncStatus === 'error'
@@ -444,6 +448,8 @@ export default function Header({
           >
             {isSyncingSupabase ? (
               <RefreshCw size={13} className="animate-spin text-amber-600 shrink-0" />
+            ) : supabaseSyncStatus === 'restricted' ? (
+              <AlertTriangle size={13} className="text-amber-600 shrink-0" />
             ) : supabaseSyncStatus === 'synced' ? (
               <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
             ) : supabaseSyncStatus === 'error' ? (
@@ -455,6 +461,8 @@ export default function Header({
             <span className="hidden md:inline">
               {isSyncingSupabase
                 ? 'Sincronizando...'
+                : supabaseSyncStatus === 'restricted'
+                ? 'Supabase (Cota Excedida)'
                 : supabaseSyncStatus === 'synced'
                 ? 'Sincronizado'
                 : supabaseSyncStatus === 'error'
@@ -464,6 +472,9 @@ export default function Header({
 
             {supabaseSyncStatus === 'synced' && !isSyncingSupabase && (
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0" />
+            )}
+            {supabaseSyncStatus === 'restricted' && !isSyncingSupabase && (
+              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full shrink-0" />
             )}
             {isSyncingSupabase && (
               <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping shrink-0" />

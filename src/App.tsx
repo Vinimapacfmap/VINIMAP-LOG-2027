@@ -58,7 +58,7 @@ import { RevenueByPartnerChart } from './components/RevenueByPartnerChart';
 import { FinancialRepassesSummaryPanel } from './components/FinancialRepassesSummaryPanel';
 import { INITIAL_FINANCIAL_TRANSACTIONS } from './data/financialMock';
 import { AdminLogin } from './components/AdminLogin';
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, isSupabaseRestricted, markSupabaseRestricted, isSupabaseQuotaOrRestrictedError } from './supabase';
 import { fetchAllStateFromSupabase, syncAllStateToSupabase } from './lib/supabaseService';
 import { FinancialTransaction } from './types';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -563,7 +563,19 @@ export default function App() {
   // Supabase Immediate Manual Sync State & Handler
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
   const [lastSupabaseSyncTime, setLastSupabaseSyncTime] = useState<string>('');
-  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error' | 'restricted'>(() => isSupabaseRestricted() ? 'restricted' : 'idle');
+
+  useEffect(() => {
+    const handleRestrictedChange = (e: any) => {
+      if (e.detail?.restricted) {
+        setSupabaseSyncStatus('restricted');
+      } else {
+        setSupabaseSyncStatus('idle');
+      }
+    };
+    window.addEventListener('supabase-restricted-change', handleRestrictedChange);
+    return () => window.removeEventListener('supabase-restricted-change', handleRestrictedChange);
+  }, []);
 
   const handleSyncSupabase = useCallback(async () => {
     setIsSyncingSupabase(true);
@@ -589,15 +601,28 @@ export default function App() {
       };
       dbAddActivityLog(newLog);
     } catch (err: any) {
-      console.error('Erro na sincronização manual com Supabase:', err);
-      setSupabaseSyncStatus('error');
-      const newLog: ActivityLog = {
-        id: `log-sb-err-${Date.now()}`,
-        time: getSaoPauloTime(),
-        message: `Erro ao sincronizar com Supabase: ${err.message || 'Falha de conexão'}`,
-        type: 'danger'
-      };
-      dbAddActivityLog(newLog);
+      console.warn('Aviso na sincronização manual com Supabase:', err);
+      const isQuota = isSupabaseQuotaOrRestrictedError(err);
+      if (isQuota) {
+        markSupabaseRestricted();
+        setSupabaseSyncStatus('restricted');
+        const newLog: ActivityLog = {
+          id: `log-sb-quota-${Date.now()}`,
+          time: getSaoPauloTime(),
+          message: `Supabase temporariamente com cota de tráfego esgotada (exceed_egress_quota - HTTP 402). Modo de contingência Firestore/Local ativo e dados seguros.`,
+          type: 'warning'
+        };
+        dbAddActivityLog(newLog);
+      } else {
+        setSupabaseSyncStatus('error');
+        const newLog: ActivityLog = {
+          id: `log-sb-err-${Date.now()}`,
+          time: getSaoPauloTime(),
+          message: `Erro ao sincronizar com Supabase: ${err.message || 'Falha de conexão'}`,
+          type: 'danger'
+        };
+        dbAddActivityLog(newLog);
+      }
     } finally {
       setIsSyncingSupabase(false);
     }
